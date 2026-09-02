@@ -473,61 +473,61 @@ const handleDelete = async () => {
 </script>
 
 <template>
-  <div class="max-w-[1400px] mx-auto space-y-6">
+  <div class="max-w-[1400px] mx-auto space-y-4 sm:space-y-6 animate-in fade-in duration-500 pb-16">
     <!-- Header -->
-    <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden transition-all duration-300">
-      <div class="px-8 py-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div class="flex items-center gap-4">
-          <div class="p-4 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl text-indigo-600 dark:text-indigo-400">
-            <Users :size="32" />
+    <div class="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden transition-all duration-300">
+      <div class="px-4 sm:px-8 py-6 sm:py-10 flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
+        <div class="flex items-center gap-3 sm:gap-4">
+          <div class="p-3 sm:p-4 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl text-indigo-600 dark:text-indigo-400 shrink-0">
+            <Users :size="26" class="sm:w-8 sm:h-8" />
           </div>
           <div>
-            <h1 class="text-2xl font-black text-slate-900 dark:text-white leading-tight">Usuarios de la Plataforma</h1>
-            <p class="text-slate-500 dark:text-slate-400 font-medium">Control administrativo de cuentas de usuarios registrados.</p>
+            <h1 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white leading-tight">Usuarios de la Plataforma</h1>
+            <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium mt-0.5">Control administrativo de cuentas de usuarios registrados.</p>
           </div>
         </div>
 
         <button 
           @click="openCreateUserModal" 
-          class="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white px-6 py-3.5 rounded-2xl font-black shadow-lg shadow-indigo-500/20 transition-all cursor-pointer text-sm"
+          class="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white px-5 sm:px-6 py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl font-black shadow-lg shadow-indigo-500/20 transition-all cursor-pointer text-xs sm:text-sm self-stretch sm:self-start md:self-auto"
         >
-          <UserPlus :size="18" />
+          <UserPlus :size="16" class="sm:w-4.5 sm:h-4.5" />
           <span>Crear Usuario</span>
         </button>
       </div>
     </div>
 
     <!-- KPIs Row -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
       <StatCard title="Total Filtrados" :value="stats.total">
         <template #icon>
-          <Users :size="20" class="text-indigo-600 dark:text-indigo-400" />
+          <Users :size="18" class="sm:w-5 sm:h-5 text-indigo-600 dark:text-indigo-400" />
         </template>
       </StatCard>
 
       <StatCard title="Activos" :value="stats.activos">
         <template #icon>
-          <UserCheck :size="20" class="text-emerald-600 dark:text-emerald-400" />
+          <UserCheck :size="18" class="sm:w-5 sm:h-5 text-emerald-600 dark:text-emerald-400" />
         </template>
       </StatCard>
 
       <StatCard title="Baneados" :value="stats.baneados">
         <template #icon>
-          <Ban :size="20" class="text-red-600 dark:text-red-400" />
+          <Ban :size="18" class="sm:w-5 sm:h-5 text-red-600 dark:text-red-400" />
         </template>
       </StatCard>
 
       <StatCard title="Suspendidos" :value="stats.suspendidos">
         <template #icon>
-          <ShieldAlert :size="20" class="text-orange-600 dark:text-orange-400" />
+          <ShieldAlert :size="18" class="sm:w-5 sm:h-5 text-orange-600 dark:text-orange-400" />
         </template>
       </StatCard>
     </div>
 
 
     <!-- Filters and Table -->
-    <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden transition-all duration-300">
-      <div class="p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/20 dark:bg-slate-800/20 flex flex-col md:flex-row gap-3">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden transition-all duration-300">
+      <div class="p-3.5 sm:p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/20 dark:bg-slate-800/20 flex flex-col md:flex-row gap-2.5 sm:gap-3">
         <!-- Search bar -->
         <div class="relative flex-1">
           <Search class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" :size="16" />
@@ -535,13 +535,13 @@ const handleDelete = async () => {
             v-model="search" 
             type="text" 
             placeholder="Buscar por nombre, apellido, correo..."
-            class="w-full bg-slate-50 dark:bg-slate-800/50 border-none rounded-xl py-3 pl-11 pr-4 text-sm font-medium outline-none text-slate-900 dark:text-white"
+            class="w-full bg-slate-50 dark:bg-slate-800/50 border-none rounded-xl py-2.5 sm:py-3 pl-10 sm:pl-11 pr-4 text-xs sm:text-sm font-medium outline-none text-slate-900 dark:text-white"
           />
         </div>
 
-        <div class="flex flex-wrap gap-3">
+        <div class="flex flex-wrap gap-2 sm:gap-3">
           <!-- Role selector -->
-          <select v-model="selectedRole" class="bg-slate-50 dark:bg-slate-800/50 rounded-xl px-4 py-3 text-sm font-bold border-none outline-none text-slate-700 dark:text-slate-200 cursor-pointer min-w-[140px]">
+          <select v-model="selectedRole" class="flex-1 sm:flex-initial bg-slate-50 dark:bg-slate-800/50 rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-bold border-none outline-none text-slate-700 dark:text-slate-200 cursor-pointer min-w-[130px]">
             <option value="">Todos los roles</option>
             <option value="directivo">Directivos</option>
             <option value="docente">Docentes</option>
@@ -551,7 +551,7 @@ const handleDelete = async () => {
           </select>
 
           <!-- State selector -->
-          <select v-model="selectedEstado" class="bg-slate-50 dark:bg-slate-800/50 rounded-xl px-4 py-3 text-sm font-bold border-none outline-none text-slate-700 dark:text-slate-200 cursor-pointer min-w-[140px]">
+          <select v-model="selectedEstado" class="flex-1 sm:flex-initial bg-slate-50 dark:bg-slate-800/50 rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-bold border-none outline-none text-slate-700 dark:text-slate-200 cursor-pointer min-w-[130px]">
             <option value="">Todos los estados</option>
             <option value="ACTIVO">Activos</option>
             <option value="SUSPENDIDO">Suspendidos</option>
@@ -560,7 +560,7 @@ const handleDelete = async () => {
           </select>
 
           <!-- School selector -->
-          <select v-model="selectedSchool" class="bg-slate-50 dark:bg-slate-800/50 rounded-xl px-4 py-3 text-sm font-bold border-none outline-none text-slate-700 dark:text-slate-200 cursor-pointer max-w-[200px]">
+          <select v-model="selectedSchool" class="w-full sm:w-auto bg-slate-50 dark:bg-slate-800/50 rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-bold border-none outline-none text-slate-700 dark:text-slate-200 cursor-pointer max-w-full sm:max-w-[200px]">
             <option value="">Todas las instituciones</option>
             <option v-for="school in schools" :key="school.id_colegio" :value="school.id_colegio">{{ school.nombre }}</option>
           </select>
@@ -568,7 +568,7 @@ const handleDelete = async () => {
       </div>
 
       <!-- User Table -->
-      <div class="p-4">
+      <div class="p-2 sm:p-4">
         <SkeletonTable v-if="loading" :rows="6" :cols="5" />
 
         <EmptyState 
@@ -584,54 +584,54 @@ const handleDelete = async () => {
         <DataTable v-else>
           <template #header>
             <tr>
-              <th class="p-4">Usuario</th>
-              <th class="p-4">Rol</th>
-              <th class="p-4">Institución</th>
-              <th class="p-4">Estado</th>
-              <th class="p-4 text-center">Acciones</th>
+              <th class="py-3 sm:py-4 px-3 sm:px-4">Usuario</th>
+              <th class="py-3 sm:py-4 px-3 sm:px-4">Rol</th>
+              <th class="py-3 sm:py-4 px-3 sm:px-4 hidden md:table-cell">Institución</th>
+              <th class="py-3 sm:py-4 px-3 sm:px-4">Estado</th>
+              <th class="py-3 sm:py-4 px-3 sm:px-4 text-center">Acciones</th>
             </tr>
           </template>
           <tr v-for="user in users" :key="user.id_usuario" class="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
 
-              <td class="p-4">
-                <div>
-                  <h4 class="font-bold text-slate-900 dark:text-white">{{ user.nombre }} {{ user.apellido || '' }}</h4>
-                  <p class="text-xs text-slate-500 font-mono flex items-center gap-1.5 mt-0.5"><Mail :size="12" /> {{ user.email }}</p>
+              <td class="py-3 sm:py-4 px-3 sm:px-4">
+                <div class="min-w-0">
+                  <h4 class="font-bold text-slate-900 dark:text-white text-xs sm:text-sm truncate">{{ user.nombre }} {{ user.apellido || '' }}</h4>
+                  <p class="text-[10px] sm:text-xs text-slate-500 font-mono flex items-center gap-1.5 mt-0.5 truncate"><Mail :size="12" class="shrink-0" /> <span class="truncate">{{ user.email }}</span></p>
                 </div>
               </td>
-              <td class="p-4">
+              <td class="py-3 sm:py-4 px-3 sm:px-4">
                 <div class="flex flex-wrap gap-1">
                   <span 
                     v-for="r in user.roles || [user.rol_nombre]" 
                     :key="r"
-                    class="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider whitespace-nowrap"
+                    class="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 px-1.5 sm:px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-black uppercase tracking-wider whitespace-nowrap"
                   >
                     {{ r }}
                   </span>
                 </div>
               </td>
-              <td class="p-4">
-                <span class="truncate max-w-[200px] block" :title="user.colegio_nombre || 'Global'">
+              <td class="py-3 sm:py-4 px-3 sm:px-4 hidden md:table-cell">
+                <span class="truncate max-w-[200px] block text-xs sm:text-sm text-slate-600 dark:text-slate-300 font-medium" :title="user.colegio_nombre || 'Global'">
                   {{ user.colegio_nombre || 'Global / Sin Asignar' }}
                 </span>
               </td>
-              <td class="p-4">
+              <td class="py-3 sm:py-4 px-3 sm:px-4">
                 <span 
                   :class="[
                     user.estado === 'ACTIVO' ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 dark:text-emerald-400' : '',
                     user.estado === 'SUSPENDIDO' ? 'text-orange-600 bg-orange-50 dark:bg-orange-950/20 dark:text-orange-400' : '',
                     user.estado === 'BANEADO' ? 'text-red-600 bg-red-50 dark:bg-red-950/20 dark:text-red-400' : '',
                     user.estado === 'ELIMINADO' ? 'text-slate-500 bg-slate-100 dark:bg-slate-800 dark:text-slate-400' : '',
-                    'px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider'
+                    'px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider inline-block'
                   ]"
                 >
                   {{ user.estado }}
                 </span>
               </td>
-              <td class="p-4">
-                <div class="flex items-center justify-center gap-1.5">
-                  <button @click="openDetails(user)" class="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/20 rounded-xl transition-all" title="Ver Detalle">
-                    <Eye :size="16" />
+              <td class="py-3 sm:py-4 px-3 sm:px-4">
+                <div class="flex items-center justify-center gap-1 sm:gap-1.5">
+                  <button @click="openDetails(user)" class="p-1.5 sm:p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/20 rounded-xl transition-all cursor-pointer" title="Ver Detalle">
+                    <Eye :size="15" class="sm:w-4 sm:h-4" />
                   </button>
 
                   <template v-if="user.estado !== 'ELIMINADO' && user.rol_nombre !== 'admin_general'">
@@ -639,41 +639,41 @@ const handleDelete = async () => {
                     <button 
                       v-if="user.estado !== 'ACTIVO'"
                       @click="updateStatus(user, 'ACTIVO')" 
-                      class="p-2 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 rounded-xl transition-all"
+                      class="p-1.5 sm:p-2 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 rounded-xl transition-all cursor-pointer"
                       title="Activar cuenta"
                     >
-                      <UserCheck :size="16" />
+                      <UserCheck :size="15" class="sm:w-4 sm:h-4" />
                     </button>
                     <button 
                       v-if="user.estado === 'ACTIVO'"
                       @click="updateStatus(user, 'SUSPENDIDO')" 
-                      class="p-2 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/20 rounded-xl transition-all"
+                      class="p-1.5 sm:p-2 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/20 rounded-xl transition-all cursor-pointer"
                       title="Suspender cuenta"
                     >
-                      <ShieldAlert :size="16" />
+                      <ShieldAlert :size="15" class="sm:w-4 sm:h-4" />
                     </button>
                     <button 
                       v-if="user.estado !== 'BANEADO'"
                       @click="openBan(user)" 
-                      class="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl transition-all"
+                      class="p-1.5 sm:p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl transition-all cursor-pointer"
                       title="Banear cuenta"
                     >
-                      <Ban :size="16" />
+                      <Ban :size="15" class="sm:w-4 sm:h-4" />
                     </button>
 
                     <!-- Reset Password -->
-                    <button @click="handleResetPassword(user)" class="p-2 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/20 rounded-xl transition-all" title="Restablecer Contraseña">
-                      <Key :size="16" />
+                    <button @click="handleResetPassword(user)" class="p-1.5 sm:p-2 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/20 rounded-xl transition-all cursor-pointer" title="Restablecer Contraseña">
+                      <Key :size="15" class="sm:w-4 sm:h-4" />
                     </button>
 
                     <!-- Force logout -->
-                    <button @click="handleForceLogout(user)" class="p-2 text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl transition-all" title="Forzar Cierre de Sesiones">
-                      <LogOut :size="16" />
+                    <button @click="handleForceLogout(user)" class="p-1.5 sm:p-2 text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl transition-all cursor-pointer" title="Forzar Cierre de Sesiones">
+                      <LogOut :size="15" class="sm:w-4 sm:h-4" />
                     </button>
 
                     <!-- Delete -->
-                    <button @click="openDeleteModal(user)" class="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl transition-all" title="Eliminar cuenta (requiere ticket de Directivo)">
-                      <Trash2 :size="16" />
+                    <button @click="openDeleteModal(user)" class="p-1.5 sm:p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl transition-all cursor-pointer" title="Eliminar cuenta (requiere ticket de Directivo)">
+                      <Trash2 :size="15" class="sm:w-4 sm:h-4" />
                     </button>
                   </template>
                 </div>
@@ -687,23 +687,23 @@ const handleDelete = async () => {
     <!-- Modals -->
     <Teleport to="body">
       <!-- Details Modal -->
-      <div v-if="showDetailsModal && selectedUser" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div v-if="showDetailsModal && selectedUser" class="fixed inset-0 z-[100] flex items-center justify-center p-3.5 sm:p-4">
         <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" @click="showDetailsModal = false"></div>
-        <div class="relative w-full max-w-xl bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
-          <div class="p-8 space-y-6">
-            <div class="flex justify-between items-start border-b border-slate-100 dark:border-slate-800 pb-4">
-              <div>
-                <h2 class="text-2xl font-black text-slate-900 dark:text-white">{{ selectedUser.nombre }} {{ selectedUser.apellido || '' }}</h2>
-                <span class="text-xs text-indigo-500 font-extrabold uppercase mt-1 tracking-wider block">ID de Cuenta: #{{ selectedUser.id_usuario }}</span>
+        <div class="relative w-full max-w-xl bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[32px] shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden max-h-[90dvh] flex flex-col">
+          <div class="p-5 sm:p-8 space-y-4 sm:space-y-6 overflow-y-auto flex-1">
+            <div class="flex justify-between items-start border-b border-slate-100 dark:border-slate-800 pb-3.5 sm:pb-4 gap-2">
+              <div class="min-w-0 flex-1">
+                <h2 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white truncate">{{ selectedUser.nombre }} {{ selectedUser.apellido || '' }}</h2>
+                <span class="text-[10px] sm:text-xs text-indigo-500 font-extrabold uppercase mt-1 tracking-wider block">ID de Cuenta: #{{ selectedUser.id_usuario }}</span>
               </div>
-              <span class="px-3 py-1 rounded-full text-xs font-black bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400 uppercase tracking-widest">{{ selectedUser.estado }}</span>
+              <span class="px-2.5 sm:px-3 py-1 rounded-full text-[10px] sm:text-xs font-black bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400 uppercase tracking-widest shrink-0">{{ selectedUser.estado }}</span>
             </div>
 
             <!-- Profile Info: Read Only -->
-            <div v-if="!editingCredentials" class="grid grid-cols-2 gap-4 text-sm font-semibold text-slate-600 dark:text-slate-400">
-              <p class="flex items-center gap-2"><Mail :size="14" class="text-slate-400" /> <span class="font-medium text-slate-900 dark:text-white">{{ selectedUser.email }}</span></p>
+            <div v-if="!editingCredentials" class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-400">
+              <p class="flex items-center gap-2 truncate"><Mail :size="14" class="text-slate-400 shrink-0" /> <span class="font-medium text-slate-900 dark:text-white truncate">{{ selectedUser.email }}</span></p>
               <div class="flex items-center gap-2 flex-wrap">
-                <Shield :size="14" class="text-slate-400" /> 
+                <Shield :size="14" class="text-slate-400 shrink-0" /> 
                 <span>Roles:</span>
                 <div class="flex flex-wrap gap-1">
                   <span 
@@ -715,30 +715,30 @@ const handleDelete = async () => {
                   </span>
                 </div>
               </div>
-              <p class="flex items-center gap-2"><School :size="14" class="text-slate-400" /> Colegio: <span class="font-medium text-slate-900 dark:text-white">{{ selectedUser.colegio_nombre || 'Global (Administración)' }}</span></p>
-              <p class="flex items-center gap-2"><Calendar :size="14" class="text-slate-400" /> Creación: <span class="font-medium text-slate-900 dark:text-white">{{ new Date(selectedUser.fecha_creacion).toLocaleDateString() }}</span></p>
-              <p v-if="selectedUser.tipo_documento && selectedUser.documento" class="col-span-2 flex items-center gap-2">
-                <Clipboard :size="14" class="text-slate-400" /> 
+              <p class="flex items-center gap-2 truncate"><School :size="14" class="text-slate-400 shrink-0" /> <span class="truncate">Colegio: <span class="font-medium text-slate-900 dark:text-white">{{ selectedUser.colegio_nombre || 'Global (Administración)' }}</span></span></p>
+              <p class="flex items-center gap-2"><Calendar :size="14" class="text-slate-400 shrink-0" /> Creación: <span class="font-medium text-slate-900 dark:text-white">{{ new Date(selectedUser.fecha_creacion).toLocaleDateString() }}</span></p>
+              <p v-if="selectedUser.tipo_documento && selectedUser.documento" class="col-span-1 sm:col-span-2 flex items-center gap-2">
+                <Clipboard :size="14" class="text-slate-400 shrink-0" /> 
                 <span>Identificación: </span>
                 <span class="font-bold text-slate-900 dark:text-white">{{ selectedUser.tipo_documento }} #{{ selectedUser.documento }}</span>
               </p>
             </div>
 
             <!-- Profile Info: Edit Mode -->
-            <div v-else class="space-y-4 bg-slate-50 dark:bg-slate-800/40 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
-              <h3 class="text-xs font-black text-slate-850 dark:text-white uppercase tracking-wider border-b pb-2">Modificar Datos Críticos</h3>
-              <div class="grid grid-cols-2 gap-4">
+            <div v-else class="space-y-3.5 sm:space-y-4 bg-slate-50 dark:bg-slate-800/40 p-3.5 sm:p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
+              <h3 class="text-xs font-black text-slate-800 dark:text-white uppercase tracking-wider border-b pb-2">Modificar Datos Críticos</h3>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div class="space-y-1">
                   <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Nombre</label>
-                  <input v-model="editableNombre" type="text" class="w-full bg-white dark:bg-slate-850 px-3 py-2 text-xs rounded-xl border border-slate-255 dark:border-slate-700 outline-none text-slate-800 dark:text-white font-bold" />
+                  <input v-model="editableNombre" type="text" class="w-full bg-white dark:bg-slate-800 px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 outline-none text-slate-800 dark:text-white font-bold" />
                 </div>
                 <div class="space-y-1">
                   <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Apellido</label>
-                  <input v-model="editableApellido" type="text" class="w-full bg-white dark:bg-slate-850 px-3 py-2 text-xs rounded-xl border border-slate-255 dark:border-slate-700 outline-none text-slate-800 dark:text-white font-bold" />
+                  <input v-model="editableApellido" type="text" class="w-full bg-white dark:bg-slate-800 px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 outline-none text-slate-800 dark:text-white font-bold" />
                 </div>
                 <div class="space-y-1">
-                  <label class="text-[10px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-widest ml-1">Tipo de Documento</label>
-                  <select v-model="editableTipoDoc" class="w-full bg-white dark:bg-slate-850 px-3 py-2 text-xs rounded-xl border border-slate-255 dark:border-slate-700 outline-none text-slate-805 dark:text-white font-bold">
+                  <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Tipo de Documento</label>
+                  <select v-model="editableTipoDoc" class="w-full bg-white dark:bg-slate-800 px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 outline-none text-slate-800 dark:text-white font-bold cursor-pointer">
                     <option value="CC">Cédula de Ciudadanía (CC)</option>
                     <option value="TI">Tarjeta de Identidad (TI)</option>
                     <option value="CE">Cédula de Extranjería (CE)</option>
@@ -748,15 +748,15 @@ const handleDelete = async () => {
                 </div>
                 <div class="space-y-1">
                   <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Documento</label>
-                  <input v-model="editableDocumento" type="text" class="w-full bg-white dark:bg-slate-850 px-3 py-2 text-xs rounded-xl border border-slate-255 dark:border-slate-700 outline-none text-slate-800 dark:text-white font-mono font-bold" />
+                  <input v-model="editableDocumento" type="text" class="w-full bg-white dark:bg-slate-800 px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 outline-none text-slate-800 dark:text-white font-mono font-bold" />
                 </div>
               </div>
 
               <!-- Roles checkbox list -->
               <div class="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                 <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1 block">Roles Asignados</label>
-                <div class="flex flex-wrap gap-4 px-1 py-1">
-                  <label v-for="roleKey in ['DIRECTIVO', 'DOCENTE', 'PADRE']" :key="roleKey" class="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-350 cursor-pointer">
+                <div class="flex flex-wrap gap-3 sm:gap-4 px-1 py-1">
+                  <label v-for="roleKey in ['DIRECTIVO', 'DOCENTE', 'PADRE']" :key="roleKey" class="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer">
                     <input type="checkbox" :value="roleKey" v-model="editableRoles" class="rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500 w-4 h-4" />
                     <span>{{ roleKey === 'PADRE' ? 'PADRE / ACUDIENTE' : roleKey }}</span>
                   </label>
@@ -764,8 +764,8 @@ const handleDelete = async () => {
               </div>
             </div>
 
-            <!-- Modificar credentials ticket authorization panel (Solo para Directivos, Docentes y Padres) -->
-            <div v-if="!editingCredentials && selectedUser.estado !== 'ELIMINADO' && selectedUser.rol_nombre !== 'admin_general' && selectedUser.rol_nombre !== 'estudiante' && !(selectedUser.roles || []).includes('admin_general') && !(selectedUser.roles || []).includes('estudiante')" class="bg-indigo-50/20 dark:bg-slate-800/20 p-4 rounded-2xl border border-dashed border-indigo-200/50 dark:border-slate-800/80 space-y-3">
+            <!-- Modificar credentials ticket authorization panel -->
+            <div v-if="!editingCredentials && selectedUser.estado !== 'ELIMINADO' && selectedUser.rol_nombre !== 'admin_general' && selectedUser.rol_nombre !== 'estudiante' && !(selectedUser.roles || []).includes('admin_general') && !(selectedUser.roles || []).includes('estudiante')" class="bg-indigo-50/20 dark:bg-slate-800/20 p-3.5 sm:p-4 rounded-2xl border border-dashed border-indigo-200/50 dark:border-slate-800/80 space-y-2.5 sm:space-y-3">
               <div class="flex items-center justify-between">
                 <span class="text-xs font-black text-slate-700 dark:text-slate-300">¿Deseas modificar nombres, documentos o roles?</span>
               </div>
@@ -778,12 +778,12 @@ const handleDelete = async () => {
                   v-model="ticketCodeVerification"
                   type="text"
                   placeholder="Código de ticket (Ej: TKT-1B3X9H7Z)"
-                  class="flex-1 bg-white dark:bg-slate-850 px-3 py-2 border border-slate-200 dark:border-slate-750 text-xs font-semibold text-slate-700 dark:text-slate-200 rounded-xl outline-none"
+                  class="flex-1 bg-white dark:bg-slate-800 px-3 py-2 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 rounded-xl outline-none"
                 />
                 <button 
                   @click="verifyTicketAndEnableEdit"
                   :disabled="verifyingTicket || !ticketCodeVerification.trim()"
-                  class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50 flex items-center justify-center gap-1.5 transition-all shrink-0"
+                  class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50 flex items-center justify-center gap-1.5 transition-all shrink-0 cursor-pointer"
                 >
                   <Loader2 v-if="verifyingTicket" class="w-3 h-3 animate-spin" />
                   Habilitar Edición
@@ -794,7 +794,7 @@ const handleDelete = async () => {
             </div>
 
             <!-- Aviso exclusivo para Estudiantes -->
-            <div v-else-if="!editingCredentials && (selectedUser.rol_nombre === 'estudiante' || (selectedUser.roles || []).includes('estudiante'))" class="bg-amber-50/40 dark:bg-amber-950/20 p-4 rounded-2xl border border-amber-200/50 dark:border-amber-900/30 text-xs space-y-1">
+            <div v-else-if="!editingCredentials && (selectedUser.rol_nombre === 'estudiante' || (selectedUser.roles || []).includes('estudiante'))" class="bg-amber-50/40 dark:bg-amber-950/20 p-3.5 sm:p-4 rounded-2xl border border-amber-200/50 dark:border-amber-900/30 text-xs space-y-1">
               <span class="font-black text-amber-800 dark:text-amber-300 flex items-center gap-1.5 uppercase tracking-wider text-[11px]">
                 🛡️ Gestión Exclusiva por Matrícula
               </span>
@@ -804,7 +804,7 @@ const handleDelete = async () => {
             </div>
 
             <!-- Ban / Suspension Logs -->
-            <div v-if="selectedUser.estado === 'BANEADO' && selectedUser.motivo_baneo" class="bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/50 p-4 rounded-2xl text-xs space-y-2">
+            <div v-if="selectedUser.estado === 'BANEADO' && selectedUser.motivo_baneo" class="bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/50 p-3 sm:p-4 rounded-xl sm:rounded-2xl text-[11px] sm:text-xs space-y-1.5 sm:space-y-2">
               <h4 class="font-black text-red-600 dark:text-red-400 uppercase tracking-wider">Detalles del Baneo</h4>
               <p class="text-slate-600 dark:text-slate-400 font-bold">Baneado por: <span class="font-medium text-slate-900 dark:text-white">{{ selectedUser.baneado_por_email || 'Sistema' }}</span></p>
               <p v-if="selectedUser.fecha_baneo" class="text-slate-600 dark:text-slate-400 font-bold">Fecha: <span class="font-medium text-slate-900 dark:text-white">{{ new Date(selectedUser.fecha_baneo).toLocaleString() }}</span></p>
@@ -812,18 +812,18 @@ const handleDelete = async () => {
             </div>
 
             <!-- Footer actions -->
-            <div class="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800 mt-6">
+            <div class="flex justify-end gap-2.5 sm:gap-3 pt-3.5 sm:pt-4 border-t border-slate-100 dark:border-slate-800 mt-4 sm:mt-6">
               <template v-if="editingCredentials">
                 <button 
                   @click="cancelEdit" 
-                  class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl font-bold text-xs transition-all"
+                  class="px-4 sm:px-5 py-2 sm:py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl font-bold text-xs transition-all cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button 
                   @click="applyCredentialsChange" 
                   :disabled="applyingChange || !editableNombre.trim() || !editableApellido.trim() || !editableDocumento.trim() || editableRoles.length === 0"
-                  class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-md transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+                  class="px-4 sm:px-5 py-2 sm:py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-md transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <Loader2 v-if="applyingChange" class="w-3.5 h-3.5 animate-spin" />
                   Aplicar Cambios
@@ -832,7 +832,7 @@ const handleDelete = async () => {
               <button 
                 v-else
                 @click="showDetailsModal = false" 
-                class="px-6 py-3 bg-slate-900 dark:bg-white dark:text-slate-900 text-white rounded-2xl font-bold text-sm hover:translate-y-[-2px] transition-all"
+                class="w-full sm:w-auto px-5 sm:px-6 py-2.5 sm:py-3 bg-slate-900 dark:bg-white dark:text-slate-900 text-white rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm hover:translate-y-[-2px] transition-all cursor-pointer"
               >
                 Cerrar
               </button>
@@ -842,30 +842,30 @@ const handleDelete = async () => {
       </div>
 
       <!-- Ban Prompt Modal -->
-      <div v-if="showBanModal && selectedUser" class="fixed inset-0 z-[110] flex items-center justify-center p-4">
+      <div v-if="showBanModal && selectedUser" class="fixed inset-0 z-[110] flex items-center justify-center p-3.5 sm:p-4">
         <div class="absolute inset-0 bg-red-950/30 backdrop-blur-md" @click="showBanModal = false"></div>
-        <div class="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[32px] overflow-hidden shadow-2xl">
-          <div class="p-8 space-y-4">
-            <div class="w-16 h-16 bg-red-50 dark:bg-red-950/30 text-red-500 rounded-full flex items-center justify-center mx-auto">
-              <Ban :size="32" />
+        <div class="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[32px] overflow-hidden shadow-2xl">
+          <div class="p-5 sm:p-8 space-y-3.5 sm:space-y-4">
+            <div class="w-12 h-12 sm:w-16 sm:h-16 bg-red-50 dark:bg-red-950/30 text-red-500 rounded-full flex items-center justify-center mx-auto">
+              <Ban :size="28" class="sm:w-8 sm:h-8" />
             </div>
             <div class="text-center">
-              <h2 class="text-xl font-black text-slate-900 dark:text-white">Banear Cuenta</h2>
+              <h2 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white">Banear Cuenta</h2>
               <p class="text-slate-500 dark:text-slate-400 text-xs font-medium mt-1">Por favor escribe la razón por la cual deseas banear a {{ selectedUser.nombre }}. El usuario no podrá iniciar sesión.</p>
             </div>
             <textarea 
               v-model="banReason"
               placeholder="Indica detalladamente los motivos del baneo..."
               rows="4"
-              class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl p-4 text-xs font-bold outline-none text-slate-900 dark:text-white resize-none"
+              class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl sm:rounded-2xl p-3.5 sm:p-4 text-xs font-bold outline-none text-slate-900 dark:text-white resize-none"
             ></textarea>
           </div>
           
-          <div class="bg-slate-50 dark:bg-slate-800/50 p-6 flex gap-3 border-t border-slate-100 dark:border-slate-800">
-            <button @click="showBanModal = false" class="flex-1 px-6 py-3 rounded-xl font-bold text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 transition-all text-xs">Cancelar</button>
+          <div class="bg-slate-50 dark:bg-slate-800/50 p-4 sm:p-6 flex gap-2.5 sm:gap-3 border-t border-slate-100 dark:border-slate-800">
+            <button @click="showBanModal = false" class="flex-1 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-bold text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 transition-all text-xs cursor-pointer">Cancelar</button>
             <button 
               @click="handleBan"
-              class="flex-1 bg-red-500 text-white px-6 py-3 rounded-xl font-bold hover:bg-red-600 transition-all text-xs shadow-lg shadow-red-100 dark:shadow-none"
+              class="flex-1 bg-red-500 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-bold hover:bg-red-600 transition-all text-xs shadow-lg shadow-red-100 dark:shadow-none cursor-pointer"
             >
               Aplicar Baneo
             </button>
@@ -874,116 +874,114 @@ const handleDelete = async () => {
       </div>
 
       <!-- Password Reset Result Modal -->
-      <div v-if="showResetModal" class="fixed inset-0 z-[110] flex items-center justify-center p-4">
+      <div v-if="showResetModal" class="fixed inset-0 z-[110] flex items-center justify-center p-3.5 sm:p-4">
         <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" @click="showResetModal = false"></div>
-        <div class="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[32px] overflow-hidden shadow-2xl">
-          <div class="p-8 space-y-4">
-            <div class="w-16 h-16 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-500 rounded-full flex items-center justify-center mx-auto">
-              <Lock :size="32" />
+        <div class="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[32px] overflow-hidden shadow-2xl">
+          <div class="p-5 sm:p-8 space-y-3.5 sm:space-y-4">
+            <div class="w-12 h-12 sm:w-16 sm:h-16 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-500 rounded-full flex items-center justify-center mx-auto">
+              <Lock :size="28" class="sm:w-8 sm:h-8" />
             </div>
             <div class="text-center">
-              <h2 class="text-xl font-black text-slate-900 dark:text-white">Contraseña Restablecida</h2>
+              <h2 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white">Contraseña Restablecida</h2>
               <p class="text-slate-500 dark:text-slate-400 text-xs font-medium mt-1">Comparte de manera segura esta credencial temporal con el usuario:</p>
             </div>
             
-            <div v-if="resetting" class="text-center p-4 font-bold text-slate-400">Generando...</div>
-            <div v-else class="flex items-center justify-between bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-800/80 font-mono text-base font-black">
-              <span class="text-slate-900 dark:text-white select-all">{{ tempPassword }}</span>
-              <button @click="copyPassword" class="p-2 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 rounded-xl transition-all flex items-center gap-1">
+            <div v-if="resetting" class="text-center p-4 font-bold text-slate-400 text-xs sm:text-sm">Generando...</div>
+            <div v-else class="flex items-center justify-between bg-slate-50 dark:bg-slate-800 p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100 dark:border-slate-800/80 font-mono text-sm sm:text-base font-black">
+              <span class="text-slate-900 dark:text-white select-all truncate mr-2">{{ tempPassword }}</span>
+              <button @click="copyPassword" class="p-1.5 sm:p-2 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 rounded-xl transition-all flex items-center gap-1 shrink-0 cursor-pointer">
                 <component :is="copied ? Check : Clipboard" :size="16" />
                 <span class="text-[10px] font-sans font-bold uppercase tracking-wider">{{ copied ? 'Copiado!' : 'Copiar' }}</span>
               </button>
             </div>
           </div>
           
-          <div class="bg-slate-50 dark:bg-slate-800/50 p-6 flex justify-center border-t border-slate-100 dark:border-slate-800">
-            <button @click="showResetModal = false" class="w-full bg-slate-900 dark:bg-white dark:text-slate-900 text-white px-6 py-3 rounded-xl font-bold hover:translate-y-[-1px] transition-all text-xs">Aceptar y Cerrar</button>
+          <div class="bg-slate-50 dark:bg-slate-800/50 p-4 sm:p-6 flex justify-center border-t border-slate-100 dark:border-slate-800">
+            <button @click="showResetModal = false" class="w-full bg-slate-900 dark:bg-white dark:text-slate-900 text-white px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl font-bold hover:translate-y-[-1px] transition-all text-xs cursor-pointer">Aceptar y Cerrar</button>
           </div>
         </div>
       </div>
 
       <!-- Create User Modal -->
-      <div v-if="showCreateUserModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div v-if="showCreateUserModal" class="fixed inset-0 z-50 flex items-center justify-center p-3.5 sm:p-4">
         <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" @click="showCreateUserModal = false"></div>
-        <div class="relative w-full max-w-xl bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl overflow-hidden border border-slate-100 dark:border-slate-800 my-8 max-h-[90vh] flex flex-col">
-          <div class="px-8 pt-6 pb-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
+        <div class="relative w-full max-w-xl bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[32px] shadow-2xl overflow-hidden border border-slate-100 dark:border-slate-800 my-4 sm:my-8 max-h-[90dvh] flex flex-col">
+          <div class="px-5 sm:px-8 pt-5 sm:pt-6 pb-3.5 sm:pb-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50 shrink-0">
             <div>
-              <h2 class="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
-                <UserPlus :size="20" class="text-indigo-600 dark:text-indigo-400" />
+              <h2 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
+                <UserPlus :size="18" class="text-indigo-600 dark:text-indigo-400 sm:w-5 sm:h-5" />
                 Crear Nuevo Usuario
               </h2>
               <p class="text-slate-500 dark:text-slate-400 text-xs font-medium mt-0.5">Registra cuentas institucionales y globales en la plataforma.</p>
             </div>
-            <button @click="showCreateUserModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xl font-bold p-2">✕</button>
+            <button @click="showCreateUserModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg sm:text-xl font-bold p-2 cursor-pointer">✕</button>
           </div>
 
-          <div class="p-8 overflow-y-auto space-y-4">
-            <div v-if="createError" class="p-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/50 rounded-2xl text-xs font-bold text-red-600 dark:text-red-400">
+          <div class="p-4 sm:p-8 overflow-y-auto space-y-3.5 sm:space-y-4 flex-1">
+            <div v-if="createError" class="p-3 sm:p-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/50 rounded-xl sm:rounded-2xl text-xs font-bold text-red-600 dark:text-red-400">
               {{ createError }}
             </div>
 
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <!-- Rol -->
-              <div class="col-span-2 space-y-1.5">
+              <div class="col-span-1 sm:col-span-2 space-y-1">
                 <label class="text-xs font-black text-slate-700 dark:text-slate-300 ml-1">Rol de Usuario</label>
-                <select v-model="newUser.rol" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl p-3.5 font-bold outline-none text-sm text-slate-900 dark:text-white">
+                <select v-model="newUser.rol" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 font-bold outline-none text-xs sm:text-sm text-slate-900 dark:text-white cursor-pointer">
                   <option value="directivo">Directivo / Administrador de Colegio</option>
                   <option value="docente">Docente</option>
                   <option value="padre">Padre de Familia / Acudiente</option>
                   <option value="admin_general">Admin General (Superadmin)</option>
                 </select>
-                <p class="text-[11px] font-bold text-amber-700 dark:text-amber-400 mt-1.5 ml-1">
+                <p class="text-[10px] sm:text-[11px] font-bold text-amber-700 dark:text-amber-400 mt-1 ml-1">
                   ⚠️ Los estudiantes se registran únicamente a través del proceso oficial de Matrícula Institucional.
                 </p>
               </div>
 
               <!-- Institución Educativa -->
-              <div v-if="newUser.rol !== 'admin_general'" class="col-span-2 space-y-1.5">
+              <div v-if="newUser.rol !== 'admin_general'" class="col-span-1 sm:col-span-2 space-y-1">
                 <label class="text-xs font-black text-slate-700 dark:text-slate-300 ml-1">Institución Educativa (Colegio)</label>
-                <select v-model="newUser.id_colegio" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl p-3.5 font-bold outline-none text-sm text-slate-900 dark:text-white">
+                <select v-model="newUser.id_colegio" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 font-bold outline-none text-xs sm:text-sm text-slate-900 dark:text-white cursor-pointer">
                   <option value="">Selecciona un colegio</option>
                   <option v-for="school in schools" :key="school.id_colegio" :value="school.id_colegio">{{ school.nombre }}</option>
                 </select>
               </div>
 
-
-
               <!-- Nombres -->
-              <div class="space-y-1.5">
+              <div class="space-y-1">
                 <label class="text-xs font-black text-slate-700 dark:text-slate-300 ml-1">Nombres</label>
-                <input v-model="newUser.nombre" type="text" placeholder="Ej. Juan Carlos" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl p-3.5 font-bold outline-none text-sm text-slate-900 dark:text-white" />
+                <input v-model="newUser.nombre" type="text" placeholder="Ej. Juan Carlos" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 font-bold outline-none text-xs sm:text-sm text-slate-900 dark:text-white" />
               </div>
 
               <!-- Apellidos -->
-              <div class="space-y-1.5">
+              <div class="space-y-1">
                 <label class="text-xs font-black text-slate-700 dark:text-slate-300 ml-1">Apellidos</label>
-                <input v-model="newUser.apellido" type="text" placeholder="Ej. Pérez Gómez" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl p-3.5 font-bold outline-none text-sm text-slate-900 dark:text-white" />
+                <input v-model="newUser.apellido" type="text" placeholder="Ej. Pérez Gómez" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 font-bold outline-none text-xs sm:text-sm text-slate-900 dark:text-white" />
               </div>
 
               <!-- Email -->
-              <div class="col-span-2 space-y-1.5">
+              <div class="col-span-1 sm:col-span-2 space-y-1">
                 <div class="flex justify-between items-center">
                   <label class="text-xs font-black text-slate-700 dark:text-slate-300 ml-1">Correo Electrónico</label>
                   <span v-if="newUser.rol === 'estudiante'" class="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">(Opcional para Estudiantes)</span>
                 </div>
-                <input v-model="newUser.email" type="email" placeholder="ejemplo@academianeiva.edu.co" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl p-3.5 font-bold outline-none text-sm text-slate-900 dark:text-white" />
+                <input v-model="newUser.email" type="email" placeholder="ejemplo@academianeiva.edu.co" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 font-bold outline-none text-xs sm:text-sm text-slate-900 dark:text-white" />
               </div>
 
               <!-- Password -->
-              <div class="col-span-2 space-y-1.5">
+              <div class="col-span-1 sm:col-span-2 space-y-1">
                 <div class="flex justify-between items-center">
                   <label class="text-xs font-black text-slate-700 dark:text-slate-300 ml-1">Contraseña de Acceso</label>
-                  <button type="button" @click="generateRandomPassword" class="text-[11px] font-black text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 flex items-center gap-1">
+                  <button type="button" @click="generateRandomPassword" class="text-[10px] sm:text-[11px] font-black text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 flex items-center gap-1 cursor-pointer">
                     <RefreshCw :size="12" /> Generar Aleatoria
                   </button>
                 </div>
-                <input v-model="newUser.password" type="text" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl p-3.5 font-mono font-bold outline-none text-sm text-slate-900 dark:text-white" />
+                <input v-model="newUser.password" type="text" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 font-mono font-bold outline-none text-xs sm:text-sm text-slate-900 dark:text-white" />
               </div>
 
               <!-- Tipo Doc -->
-              <div class="space-y-1.5">
+              <div class="space-y-1">
                 <label class="text-xs font-black text-slate-700 dark:text-slate-300 ml-1">Tipo de Documento</label>
-                <select v-model="newUser.tipo_documento" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl p-3.5 font-bold outline-none text-sm text-slate-900 dark:text-white">
+                <select v-model="newUser.tipo_documento" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 font-bold outline-none text-xs sm:text-sm text-slate-900 dark:text-white cursor-pointer">
                   <option value="CC">Cédula de Ciudadanía (CC)</option>
                   <option value="TI">Tarjeta de Identidad (TI)</option>
                   <option value="CE">Cédula de Extranjería (CE)</option>
@@ -993,22 +991,22 @@ const handleDelete = async () => {
               </div>
 
               <!-- Documento -->
-              <div class="space-y-1.5">
+              <div class="space-y-1">
                 <label class="text-xs font-black text-slate-700 dark:text-slate-300 ml-1">Número de Documento</label>
-                <input v-model="newUser.documento" type="text" placeholder="Ej. 1075123456" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl p-3.5 font-bold outline-none text-sm text-slate-900 dark:text-white" />
+                <input v-model="newUser.documento" type="text" placeholder="Ej. 1075123456" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 font-bold outline-none text-xs sm:text-sm text-slate-900 dark:text-white" />
               </div>
 
               <!-- Telefono -->
-              <div class="col-span-2 space-y-1.5">
+              <div class="col-span-1 sm:col-span-2 space-y-1">
                 <label class="text-xs font-black text-slate-700 dark:text-slate-300 ml-1">Teléfono de Contacto</label>
-                <input v-model="newUser.telefono" type="text" placeholder="Ej. 3101234567" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-2xl p-3.5 font-bold outline-none text-sm text-slate-900 dark:text-white" />
+                <input v-model="newUser.telefono" type="text" placeholder="Ej. 3101234567" class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 font-bold outline-none text-xs sm:text-sm text-slate-900 dark:text-white" />
               </div>
             </div>
           </div>
 
-          <div class="p-6 bg-slate-50 dark:bg-slate-800/50 flex gap-3 border-t border-slate-100 dark:border-slate-800">
-            <button @click="showCreateUserModal = false" class="flex-1 px-4 py-3.5 rounded-2xl font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-sm">Cancelar</button>
-            <button @click="submitCreateUser" :disabled="creatingUser" class="flex-[2] bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white px-6 py-3.5 rounded-2xl font-black shadow-lg shadow-indigo-500/20 transition-all text-sm disabled:opacity-50 flex items-center justify-center gap-2">
+          <div class="p-4 sm:p-6 bg-slate-50 dark:bg-slate-800/50 flex gap-2.5 sm:gap-3 border-t border-slate-100 dark:border-slate-800 shrink-0">
+            <button @click="showCreateUserModal = false" class="flex-1 px-4 py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-xs sm:text-sm cursor-pointer">Cancelar</button>
+            <button @click="submitCreateUser" :disabled="creatingUser" class="flex-[2] bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white px-5 sm:px-6 py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl font-black shadow-lg shadow-indigo-500/20 transition-all text-xs sm:text-sm disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer">
               <Loader2 v-if="creatingUser" class="animate-spin" :size="18" />
               <span>{{ creatingUser ? 'Registrando...' : 'Confirmar y Crear Usuario' }}</span>
             </button>
@@ -1016,27 +1014,27 @@ const handleDelete = async () => {
         </div>
       </div>
       <!-- Soft-Delete Modal -->
-      <div v-if="showDeleteModal && userToDelete" class="fixed inset-0 z-[200] flex items-center justify-center p-4">
+      <div v-if="showDeleteModal && userToDelete" class="fixed inset-0 z-[200] flex items-center justify-center p-3.5 sm:p-4">
         <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" @click="showDeleteModal = false"></div>
-        <div class="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl border border-red-100 dark:border-red-900/40 overflow-hidden">
-          <div class="p-8 space-y-5">
+        <div class="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[32px] shadow-2xl border border-red-100 dark:border-red-900/40 overflow-hidden max-h-[90dvh] flex flex-col">
+          <div class="p-5 sm:p-8 space-y-3.5 sm:space-y-5 overflow-y-auto flex-1">
             <!-- Header -->
-            <div class="flex items-start gap-4">
-              <div class="p-3 bg-red-50 dark:bg-red-950/30 rounded-2xl text-red-600 dark:text-red-400 flex-shrink-0">
-                <Trash2 :size="24" />
+            <div class="flex items-start gap-3 sm:gap-4">
+              <div class="p-2.5 sm:p-3 bg-red-50 dark:bg-red-950/30 rounded-2xl text-red-600 dark:text-red-400 flex-shrink-0">
+                <Trash2 :size="20" class="sm:w-6 sm:h-6" />
               </div>
               <div>
-                <h2 class="text-xl font-black text-slate-900 dark:text-white">Baja Definitiva de Usuario</h2>
-                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                <h2 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white">Baja Definitiva de Usuario</h2>
+                <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
                   Estás a punto de eliminar la cuenta de <strong class="text-slate-800 dark:text-white">{{ userToDelete.nombre }} {{ userToDelete.apellido || '' }}</strong>. Esta acción requiere consentimiento del Directivo del colegio.
                 </p>
               </div>
             </div>
 
             <!-- Warnings -->
-            <div class="bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 rounded-2xl p-4 space-y-2 text-sm text-red-700 dark:text-red-400">
+            <div class="bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 rounded-xl sm:rounded-2xl p-3.5 sm:p-4 space-y-1.5 sm:space-y-2 text-xs sm:text-sm text-red-700 dark:text-red-400">
               <p class="font-black">⚠️ Atención — efectos irreversibles:</p>
-              <ul class="list-disc list-inside space-y-1 font-medium">
+              <ul class="list-disc list-inside space-y-0.5 sm:space-y-1 font-medium text-[11px] sm:text-xs">
                 <li>El usuario no podrá iniciar sesión.</li>
                 <li>Si es Estudiante: su matrícula activa se cancelará automáticamente.</li>
                 <li>La acción queda registrada en la auditoría de la sesión de supervisión activa.</li>
@@ -1045,41 +1043,41 @@ const handleDelete = async () => {
             </div>
 
             <!-- Ticket Code -->
-            <div class="space-y-1.5">
+            <div class="space-y-1">
               <label class="text-xs font-black text-slate-700 dark:text-slate-300 ml-1">Código de Ticket del Directivo <span class="text-red-500">*</span></label>
               <input
                 v-model="deleteTicketCode"
                 type="text"
                 placeholder="Ej. TKT-ABC123"
-                class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-red-400/50 rounded-2xl p-3.5 font-mono font-bold outline-none text-sm text-slate-900 dark:text-white uppercase"
+                class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-red-400/50 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 font-mono font-bold outline-none text-xs sm:text-sm text-slate-900 dark:text-white uppercase"
                 @input="deleteTicketCode = deleteTicketCode.toUpperCase()"
               />
-              <p class="text-[11px] text-slate-400 ml-1">El ticket debe haber sido creado por el Directivo del mismo colegio del usuario afectado.</p>
+              <p class="text-[10px] sm:text-[11px] text-slate-400 ml-1">El ticket debe haber sido creado por el Directivo del mismo colegio del usuario afectado.</p>
             </div>
 
             <!-- Motivo -->
-            <div class="space-y-1.5">
+            <div class="space-y-1">
               <label class="text-xs font-black text-slate-700 dark:text-slate-300 ml-1">Motivo de la baja <span class="text-slate-400">(opcional)</span></label>
               <textarea
                 v-model="deleteMotivo"
                 rows="2"
                 placeholder="Ej. Retiro voluntario del sistema solicitado por el Directivo."
-                class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-red-400/50 rounded-2xl p-3.5 font-medium outline-none text-sm text-slate-900 dark:text-white resize-none"
+                class="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-red-400/50 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 font-medium outline-none text-xs sm:text-sm text-slate-900 dark:text-white resize-none"
               />
             </div>
 
             <!-- Error -->
-            <div v-if="deleteError" class="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 rounded-2xl p-4 text-sm font-medium">
+            <div v-if="deleteError" class="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 rounded-xl sm:rounded-2xl p-3 sm:p-4 text-xs sm:text-sm font-medium">
               {{ deleteError }}
             </div>
           </div>
 
-          <div class="p-6 bg-slate-50 dark:bg-slate-800/50 flex gap-3 border-t border-slate-100 dark:border-slate-800">
-            <button @click="showDeleteModal = false" class="flex-1 px-4 py-3.5 rounded-2xl font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-sm">Cancelar</button>
+          <div class="p-4 sm:p-6 bg-slate-50 dark:bg-slate-800/50 flex gap-2.5 sm:gap-3 border-t border-slate-100 dark:border-slate-800 shrink-0">
+            <button @click="showDeleteModal = false" class="flex-1 px-4 py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-xs sm:text-sm cursor-pointer">Cancelar</button>
             <button
               @click="handleDelete"
               :disabled="deleting || !deleteTicketCode.trim()"
-              class="flex-[2] bg-red-600 hover:bg-red-700 active:scale-95 text-white px-6 py-3.5 rounded-2xl font-black shadow-lg shadow-red-500/20 transition-all text-sm disabled:opacity-50 flex items-center justify-center gap-2"
+              class="flex-[2] bg-red-600 hover:bg-red-700 active:scale-95 text-white px-5 sm:px-6 py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl font-black shadow-lg shadow-red-500/20 transition-all text-xs sm:text-sm disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
             >
               <Loader2 v-if="deleting" class="animate-spin" :size="18" />
               <Trash2 v-else :size="16" />

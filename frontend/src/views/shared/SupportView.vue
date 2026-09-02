@@ -573,24 +573,24 @@ const getObservationText = (obs: any) => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 sm:p-6 transition-colors duration-500 flex flex-col justify-center items-center">
+  <div class="min-h-screen bg-slate-50 dark:bg-slate-950 p-3 sm:p-6 transition-colors duration-500 flex flex-col justify-center items-center">
     
     <!-- 0. BLOCKED VIEW: When in Monitoring Mode -->
-    <div v-if="auth.isMonitoring" class="max-w-lg w-full bg-white dark:bg-slate-900 rounded-2xl p-8 border border-slate-200 dark:border-slate-800 shadow-xl text-center space-y-5">
-      <div class="w-16 h-16 bg-amber-50 dark:bg-amber-950/50 rounded-2xl flex items-center justify-center mx-auto text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900/50">
-        <ShieldAlert class="w-8 h-8" />
+    <div v-if="auth.isMonitoring" class="max-w-lg w-full bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl p-5 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-xl text-center space-y-4 sm:space-y-5">
+      <div class="w-12 h-12 sm:w-16 sm:h-16 bg-amber-50 dark:bg-amber-950/50 rounded-2xl flex items-center justify-center mx-auto text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900/50">
+        <ShieldAlert class="w-6 h-6 sm:w-8 sm:h-8" />
       </div>
       <div>
-        <h2 class="text-xl font-bold text-slate-900 dark:text-white">Soporte Técnico Bloqueado</h2>
+        <h2 class="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">Soporte Técnico Bloqueado</h2>
         <p class="text-xs font-semibold text-amber-600 dark:text-amber-400 mt-1">Modo Monitoreo Activo</p>
       </div>
-      <p class="text-sm text-slate-600 dark:text-slate-300">
+      <p class="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
         No está permitido crear ni enviar tickets de soporte técnico en nombre de un docente o acudiente mientras estás en Modo Monitoreo.
       </p>
       <div class="pt-2">
         <button
           @click="router.push('/dashboard')"
-          class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold text-xs transition-colors shadow-md"
+          class="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold text-xs transition-colors shadow-md cursor-pointer"
         >
           Volver al Dashboard
         </button>
@@ -598,21 +598,21 @@ const getObservationText = (obs: any) => {
     </div>
 
     <!-- 0.1 BLOCKED VIEW: When authenticated as Student -->
-    <div v-else-if="isStudent" class="max-w-lg w-full bg-white dark:bg-slate-900 rounded-2xl p-8 border border-slate-200 dark:border-slate-800 shadow-xl text-center space-y-5">
-      <div class="w-16 h-16 bg-amber-50 dark:bg-amber-950/50 rounded-2xl flex items-center justify-center mx-auto text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900/50">
-        <ShieldAlert class="w-8 h-8" />
+    <div v-else-if="isStudent" class="max-w-lg w-full bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl p-5 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-xl text-center space-y-4 sm:space-y-5">
+      <div class="w-12 h-12 sm:w-16 sm:h-16 bg-amber-50 dark:bg-amber-950/50 rounded-2xl flex items-center justify-center mx-auto text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900/50">
+        <ShieldAlert class="w-6 h-6 sm:w-8 sm:h-8" />
       </div>
       <div>
-        <h2 class="text-xl font-bold text-slate-900 dark:text-white">Módulo No Disponible para Estudiantes</h2>
+        <h2 class="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">Módulo No Disponible para Estudiantes</h2>
         <p class="text-xs font-semibold text-amber-600 dark:text-amber-400 mt-1">Canal de Soporte Restringido</p>
       </div>
-      <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
+      <p class="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
         Los estudiantes no tienen permisos para crear ni gestionar tickets de soporte técnico. Si presentas algún inconveniente con tus calificaciones, asistencias o acceso a la plataforma, por favor solicítale a tu acudiente que radique el ticket desde su cuenta o comunícate con la secretaría de tu institución educativa.
       </p>
       <div class="pt-2">
         <button
           @click="router.push('/dashboard')"
-          class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold text-xs transition-colors shadow-md cursor-pointer"
+          class="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold text-xs transition-colors shadow-md cursor-pointer"
         >
           Volver al Dashboard
         </button>
@@ -620,27 +620,27 @@ const getObservationText = (obs: any) => {
     </div>
 
     <!-- 1. STAFF VIEW: Tickets Management Dashboard -->
-    <div v-else-if="isStaff" class="w-full max-w-5xl bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-2xl p-6 sm:p-10 relative overflow-hidden transition-all duration-300">
+    <div v-else-if="isStaff" class="w-full max-w-5xl bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-2xl p-4 sm:p-10 relative overflow-hidden transition-all duration-300">
       
       <!-- Back button -->
       <button 
         @click="goBack" 
-        class="absolute top-8 left-8 flex items-center gap-2 text-xs font-black text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors uppercase tracking-widest"
+        class="absolute top-4 sm:top-8 left-4 sm:left-8 flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs font-black text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors uppercase tracking-widest cursor-pointer"
       >
-        <ArrowLeft :size="16" />
-        Regresar
+        <ArrowLeft :size="15" />
+        <span>Regresar</span>
       </button>
 
       <!-- Header -->
-      <div class="mt-8 mb-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div class="space-y-2">
+      <div class="mt-8 sm:mt-8 mb-6 sm:mb-10 flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6 pt-4 sm:pt-0">
+        <div class="space-y-1 sm:space-y-2">
           <div class="flex items-center gap-3">
-            <div class="w-12 h-12 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 rounded-2xl flex items-center justify-center shadow-inner">
-              <LifeBuoy class="w-6 h-6 animate-spin-slow" />
+            <div class="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 rounded-2xl flex items-center justify-center shadow-inner shrink-0">
+              <LifeBuoy class="w-5 h-5 sm:w-6 sm:h-6 animate-spin-slow" />
             </div>
             <div>
-              <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Bandeja de Soporte</h1>
-              <p class="text-xs text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">
+              <h1 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">Bandeja de Soporte</h1>
+              <p class="text-[10px] sm:text-xs text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">
                 Tickets recibidos de tu institución educativa
               </p>
             </div>
@@ -650,38 +650,38 @@ const getObservationText = (obs: any) => {
         <button 
           @click="fetchTickets" 
           :disabled="loading"
-          class="self-start md:self-auto flex items-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-750 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-bold transition-all disabled:opacity-50"
+          class="self-stretch sm:self-start md:self-auto flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-750 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-bold transition-all disabled:opacity-50 cursor-pointer"
         >
           <RefreshCw :size="14" :class="{'animate-spin': loading}" />
-          Refrescar
+          <span>Refrescar</span>
         </button>
       </div>
 
       <!-- Filters & Search Bar -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div class="md:col-span-2 flex gap-3">
-          <div class="flex-1 bg-slate-50 dark:bg-slate-800/40 px-4 py-3 rounded-2xl border border-slate-150/40 dark:border-slate-700/60 flex items-center gap-3">
-            <Filter class="text-slate-400 shrink-0" :size="18" />
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-2.5 sm:gap-4 mb-4 sm:mb-6">
+        <div class="md:col-span-2 flex flex-col sm:flex-row gap-2.5 sm:gap-3">
+          <div class="flex-1 bg-slate-50 dark:bg-slate-800/40 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl border border-slate-150/40 dark:border-slate-700/60 flex items-center gap-2 sm:gap-3">
+            <Filter class="text-slate-400 shrink-0" :size="16" />
             <input 
               v-model="searchQuery" 
               type="text" 
               placeholder="Buscar por código, asunto, remitente o correo..."
-              class="w-full bg-transparent border-none text-slate-850 dark:text-slate-200 placeholder-slate-400 focus:outline-none text-sm font-semibold"
+              class="w-full bg-transparent border-none text-slate-850 dark:text-slate-200 placeholder-slate-400 focus:outline-none text-xs sm:text-sm font-semibold"
             />
           </div>
           <button 
             v-if="auth.activeRole?.toUpperCase() === 'DIRECTIVO'"
             @click="toggleEscalatedFilter"
-            class="px-4 py-3 text-xs font-black uppercase tracking-widest rounded-2xl border transition-all shrink-0 flex items-center gap-2"
+            class="px-3 sm:px-4 py-2.5 sm:py-3 text-[10px] sm:text-xs font-black uppercase tracking-widest rounded-xl sm:rounded-2xl border transition-all shrink-0 flex items-center justify-center gap-2 cursor-pointer"
             :class="showEscalatedOnly ? 'bg-amber-600 border-amber-600 text-white shadow-md shadow-amber-100 dark:shadow-none' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-350 hover:bg-slate-100 dark:hover:bg-slate-750'"
           >
             <ShieldAlert :size="14" />
-            {{ showEscalatedOnly ? 'Ver Internos' : 'Ver Escalados' }}
+            <span>{{ showEscalatedOnly ? 'Ver Internos' : 'Ver Escalados' }}</span>
           </button>
         </div>
 
-        <div class="bg-slate-50 dark:bg-slate-800/40 px-4 py-2 rounded-2xl border border-slate-150/40 dark:border-slate-700/60 flex items-center gap-2">
-          <span class="text-[10px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-widest whitespace-nowrap ml-1">Estado:</span>
+        <div class="bg-slate-50 dark:bg-slate-800/40 px-3 sm:px-4 py-2 rounded-xl sm:rounded-2xl border border-slate-150/40 dark:border-slate-700/60 flex items-center gap-2">
+          <span class="text-[9px] sm:text-[10px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-widest whitespace-nowrap ml-1">Estado:</span>
           <select 
             v-model="filterStatus"
             class="w-full bg-transparent border-none text-xs font-bold text-slate-700 dark:text-slate-350 outline-none focus:ring-0 cursor-pointer"
@@ -696,40 +696,40 @@ const getObservationText = (obs: any) => {
       </div>
 
       <!-- Error status -->
-      <div v-if="errorMsg" class="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-2xl p-4 flex items-center gap-3 mb-6">
+      <div v-if="errorMsg" class="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-2xl p-3 sm:p-4 flex items-center gap-3 mb-4 sm:mb-6">
         <AlertCircle class="w-5 h-5 text-red-650 dark:text-red-405 shrink-0" />
         <p class="text-xs font-bold text-red-700 dark:text-red-405">{{ errorMsg }}</p>
       </div>
 
       <!-- Loading State -->
-      <div v-if="loading" class="flex flex-col items-center justify-center p-20 bg-slate-50/50 dark:bg-slate-800/10 border border-dashed border-slate-200 dark:border-slate-800 rounded-3xl transition-all">
-        <Loader2 class="w-10 h-10 text-indigo-600 dark:text-indigo-400 animate-spin mb-4" />
-        <p class="text-slate-550 dark:text-slate-400 font-bold text-sm">Consultando bandeja de soporte...</p>
+      <div v-if="loading" class="flex flex-col items-center justify-center p-12 sm:p-20 bg-slate-50/50 dark:bg-slate-800/10 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl transition-all">
+        <Loader2 class="w-8 h-8 sm:w-10 sm:h-10 text-indigo-600 dark:text-indigo-400 animate-spin mb-4" />
+        <p class="text-slate-550 dark:text-slate-400 font-bold text-xs sm:text-sm">Consultando bandeja de soporte...</p>
       </div>
 
       <!-- Empty state -->
-      <div v-else-if="filteredTickets.length === 0" class="bg-slate-50/30 dark:bg-slate-800/10 border border-dashed border-slate-200 dark:border-slate-800 rounded-[2rem] p-16 text-center shadow-inner transition-colors duration-300">
-        <LifeBuoy :size="60" class="mx-auto text-slate-200 dark:text-slate-750 mb-4" />
-        <h3 class="text-lg font-black text-slate-800 dark:text-slate-200">No se encontraron tickets</h3>
-        <p class="text-slate-500 max-w-xs mx-auto mt-2 text-xs font-semibold leading-relaxed">
+      <div v-else-if="filteredTickets.length === 0" class="bg-slate-50/30 dark:bg-slate-800/10 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-[2rem] p-10 sm:p-16 text-center shadow-inner transition-colors duration-300">
+        <LifeBuoy :size="48" class="sm:w-15 sm:h-15 mx-auto text-slate-200 dark:text-slate-750 mb-3 sm:mb-4" />
+        <h3 class="text-base sm:text-lg font-black text-slate-800 dark:text-slate-200">No se encontraron tickets</h3>
+        <p class="text-slate-500 max-w-xs mx-auto mt-1.5 sm:mt-2 text-xs font-semibold leading-relaxed">
           No hay solicitudes de soporte técnico registradas que coincidan con los filtros activos.
         </p>
       </div>
 
       <!-- Tickets list grid -->
-      <div v-else class="space-y-4">
+      <div v-else class="space-y-3 sm:space-y-4">
         <div 
           v-for="t in filteredTickets" 
-          :key="t.id_ticket"
-          class="p-6 bg-slate-50/50 dark:bg-slate-800/20 border border-slate-100 dark:border-slate-850 rounded-3xl hover:shadow-md transition-all duration-300"
+          :key="t.id_ticket" 
+          class="p-4 sm:p-6 bg-slate-50/50 dark:bg-slate-800/20 border border-slate-100 dark:border-slate-850 rounded-2xl sm:rounded-3xl hover:shadow-md transition-all duration-300"
         >
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800/50">
-            <div class="flex items-center gap-3">
-              <span class="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-300 border border-slate-200/40 dark:border-slate-700/60 rounded-xl font-mono text-xs font-black">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 pb-3 sm:pb-4 border-b border-slate-100 dark:border-slate-800/50">
+            <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+              <span class="px-2.5 sm:px-3 py-0.5 sm:py-1 bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-300 border border-slate-200/40 dark:border-slate-700/60 rounded-xl font-mono text-[11px] sm:text-xs font-black">
                 {{ getTicketCode(t) }}
               </span>
               <span 
-                class="px-2.5 py-1 text-[9px] font-black uppercase tracking-wider border rounded-full"
+                class="px-2 sm:px-2.5 py-0.5 sm:py-1 text-[8px] sm:text-[9px] font-black uppercase tracking-wider border rounded-full"
                 :class="getCategoryBadgeClass(t.tipo_incidencia)"
               >
                 {{ getCategoryLabel(t.tipo_incidencia) }}
@@ -737,13 +737,13 @@ const getObservationText = (obs: any) => {
             </div>
 
             <!-- Interactive state selector or static label for staff -->
-            <div class="flex items-center gap-2">
-              <span class="text-[10px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-widest">Estado:</span>
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="text-[9px] sm:text-[10px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest">Estado:</span>
               
               <!-- RN-005: Si está escalado y es un Directivo, o si el ticket está RESUELTO, mostrar solo texto plano -->
               <span 
                 v-if="t.estado === 'RESUELTO' || ((t.fecha_escalado || t.estado === 'ESCALADO') && auth.activeRole?.toUpperCase() === 'DIRECTIVO')"
-                class="px-3 py-1.5 text-xs font-black uppercase tracking-wider rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100/50 dark:bg-slate-800/80"
+                class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-black uppercase tracking-wider rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100/50 dark:bg-slate-800/80"
                 :class="{
                   'text-rose-600 dark:text-rose-455': t.estado === 'ABIERTO',
                   'text-amber-605 dark:text-amber-500': t.estado === 'EN_PROCESO',
@@ -759,7 +759,7 @@ const getObservationText = (obs: any) => {
                 v-else
                 v-model="t.estado"
                 @change="updateTicketStatus(t.id_ticket, t.estado)"
-                class="px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-750 text-xs font-black uppercase tracking-wider rounded-xl cursor-pointer focus:outline-none"
+                class="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-750 text-[11px] sm:text-xs font-black uppercase tracking-wider rounded-xl cursor-pointer focus:outline-none"
                 :class="{
                   'text-rose-600 dark:text-rose-455': t.estado === 'ABIERTO',
                   'text-amber-605 dark:text-amber-500': t.estado === 'EN_PROCESO',
@@ -777,7 +777,7 @@ const getObservationText = (obs: any) => {
               <button 
                 v-if="auth.activeRole?.toUpperCase() === 'DIRECTIVO' && t.tipo_incidencia === 'REINGRESO' && t.estado !== 'RESUELTO'"
                 @click="router.push(`/dashboard/gestion-reingresos?ticketId=${t.id_ticket}${t.id_estudiante ? '&studentId=' + t.id_estudiante : ''}`)"
-                class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md flex items-center gap-1.5"
+                class="px-3 sm:px-3.5 py-1 sm:py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
                 title="Abrir panel especializado de reingreso para este ticket"
               >
                 🔄 Procesar Reingreso
@@ -787,7 +787,7 @@ const getObservationText = (obs: any) => {
               <button 
                 v-if="auth.activeRole?.toUpperCase() === 'DIRECTIVO' && t.tipo_incidencia === 'MATRICULA_EXTRAORDINARIA' && t.estado !== 'RESUELTO'"
                 @click="openExtraordinaryModal(t)"
-                class="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md flex items-center gap-1.5"
+                class="px-3 sm:px-3.5 py-1 sm:py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
                 title="Autorizar Matrícula Extraordinaria para este ticket"
               >
                 ⚡ Autorizar Matrícula Extraordinaria
@@ -796,33 +796,30 @@ const getObservationText = (obs: any) => {
               <button 
                 v-if="auth.activeRole?.toUpperCase() === 'DIRECTIVO' && t.tipo_incidencia === 'REINGRESO' && t.estado !== 'RESUELTO'"
                 @click="handleNotifyNonExistent(t.id_ticket)"
-                class="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md flex items-center gap-1.5"
+                class="px-3 sm:px-3.5 py-1 sm:py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
                 title="Notificar por correo que el estudiante no fue hallado"
               >
                 ⚠️ Estudiante No Existe
               </button>
 
               <!-- RN-005: Botón de escalamiento interactivo o deshabilitado -->
-              <!-- Caso 1: Ya fue escalado (cualquier estado) -->
               <button 
                 v-if="auth.activeRole?.toUpperCase() === 'DIRECTIVO' && t.fecha_escalado"
                 disabled
-                class="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-200/50 dark:border-slate-750 rounded-xl text-xs font-black uppercase tracking-wider cursor-not-allowed transition-all"
+                class="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-200/50 dark:border-slate-750 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider cursor-not-allowed transition-all"
               >
                 Escalado
               </button>
-              <!-- Caso 2: Resuelto sin escalar -->
               <span 
                 v-else-if="auth.activeRole?.toUpperCase() === 'DIRECTIVO' && !t.fecha_escalado && t.estado === 'RESUELTO'"
-                class="px-3 py-1.5 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-800/50 rounded-xl text-xs font-black uppercase tracking-wider"
+                class="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-800/50 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider"
               >
                 No Escalado
               </span>
-              <!-- Caso 3: No resuelto y sin escalar → botón activo -->
               <button 
                 v-else-if="auth.activeRole?.toUpperCase() === 'DIRECTIVO' && !t.fecha_escalado"
                 @click="escalateTicketFrontend(t.id_ticket)"
-                class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all"
+                class="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all cursor-pointer"
               >
                 Escalar
               </button>
@@ -830,79 +827,79 @@ const getObservationText = (obs: any) => {
           </div>
 
           <!-- Description and details -->
-          <div class="py-4 space-y-3">
-            <h3 class="font-black text-slate-850 dark:text-slate-200 text-sm">{{ t.asunto }}</h3>
-            <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-semibold">
+          <div class="py-3 sm:py-4 space-y-2 sm:space-y-3">
+            <h3 class="font-black text-slate-850 dark:text-slate-200 text-xs sm:text-sm break-words">{{ t.asunto }}</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-semibold break-words">
               {{ t.descripcion }}
             </p>
 
             <!-- Ficha del Estudiante Seleccionado para Reingreso -->
-            <div v-if="t.estudiante_nombre" class="p-3.5 bg-emerald-500/10 dark:bg-emerald-950/20 border border-emerald-500/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-              <div>
-                <span class="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest block mb-0.5">🎓 Estudiante Seleccionado para Reingreso</span>
-                <span class="font-bold text-slate-800 dark:text-slate-100">{{ t.estudiante_nombre }} {{ t.estudiante_apellido }}</span>
-                <span class="text-slate-500 dark:text-slate-400 text-[11px] block font-mono">Doc: {{ t.estudiante_documento }} | Cód: {{ t.estudiante_codigo || 'N/A' }}</span>
+            <div v-if="t.estudiante_nombre" class="p-3 sm:p-3.5 bg-emerald-500/10 dark:bg-emerald-950/20 border border-emerald-500/30 rounded-xl sm:rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+              <div class="min-w-0">
+                <span class="text-[9px] sm:text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest block mb-0.5">🎓 Estudiante Seleccionado para Reingreso</span>
+                <span class="font-bold text-slate-800 dark:text-slate-100 truncate block">{{ t.estudiante_nombre }} {{ t.estudiante_apellido }}</span>
+                <span class="text-slate-500 dark:text-slate-400 text-[10px] sm:text-[11px] block font-mono">Doc: {{ t.estudiante_documento }} | Cód: {{ t.estudiante_codigo || 'N/A' }}</span>
               </div>
-              <span class="px-2.5 py-1 text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-lg self-start sm:self-auto">
+              <span class="px-2.5 py-1 text-[9px] sm:text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-lg self-start sm:self-auto shrink-0">
                 Estado: {{ t.estudiante_estado || 'RETIRADO' }}
               </span>
             </div>
           </div>
 
           <!-- Sender Snapshot Info -->
-          <div class="pt-4 border-t border-slate-100 dark:border-slate-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs font-bold text-slate-655 dark:text-slate-400">
-            <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <div class="pt-3 sm:pt-4 border-t border-slate-100 dark:border-slate-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 text-[11px] sm:text-xs font-bold text-slate-655 dark:text-slate-400">
+            <div class="flex flex-wrap items-center gap-x-3 sm:gap-x-4 gap-y-1.5 sm:gap-y-2 min-w-0">
               <div class="flex items-center gap-1.5">
-                <User :size="13" class="text-slate-400" />
-                <span>{{ t.nombre_remitente }}</span>
+                <User :size="13" class="text-slate-400 shrink-0" />
+                <span class="truncate">{{ t.nombre_remitente }}</span>
               </div>
-              <div class="flex items-center gap-1.5">
-                <Mail :size="13" class="text-slate-400" />
-                <a :href="`mailto:${t.correo_remitente}`" class="hover:text-indigo-500 transition-colors">{{ t.correo_remitente }}</a>
+              <div class="flex items-center gap-1.5 min-w-0">
+                <Mail :size="13" class="text-slate-400 shrink-0" />
+                <a :href="`mailto:${t.correo_remitente}`" class="hover:text-indigo-500 transition-colors truncate">{{ t.correo_remitente }}</a>
               </div>
               <div v-if="t.telefono" class="flex items-center gap-1.5">
-                <Phone :size="13" class="text-slate-400" />
+                <Phone :size="13" class="text-slate-400 shrink-0" />
                 <span>{{ t.telefono }}</span>
               </div>
             </div>
 
-            <div class="flex items-center gap-1.5 text-[10px] text-slate-400">
+            <div class="flex items-center gap-1.5 text-[10px] text-slate-400 shrink-0">
               <Clock :size="12" />
               <span>{{ formatDate(t.fecha_creacion) }}</span>
             </div>
           </div>
 
           <!-- Observation Logs -->
-          <div v-if="t.observaciones && t.observaciones.length > 0" class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800/40 space-y-3">
+          <div v-if="t.observaciones && t.observaciones.length > 0" class="mt-3.5 sm:mt-4 pt-3.5 sm:pt-4 border-t border-slate-100 dark:border-slate-800/40 space-y-2 sm:space-y-3">
             <span class="text-[9px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-widest">Historial de Observaciones:</span>
             <div class="space-y-2">
-              <div v-for="(obs, idx) in t.observaciones" :key="idx" class="p-3 bg-indigo-50/10 dark:bg-slate-850/40 rounded-2xl border border-slate-150/40 dark:border-slate-800/10">
+              <div v-for="(obs, idx) in t.observaciones" :key="idx" class="p-2.5 sm:p-3 bg-indigo-50/10 dark:bg-slate-850/40 rounded-xl sm:rounded-2xl border border-slate-150/40 dark:border-slate-800/10">
                 <div class="flex items-center justify-between text-[9px] text-slate-400 font-bold mb-1">
-                  <span>{{ getObservationAuthor(obs) }}</span>
-                  <span>{{ formatDate(getObservationDate(obs)) }}</span>
+                  <span class="truncate">{{ getObservationAuthor(obs) }}</span>
+                  <span class="shrink-0 ml-2">{{ formatDate(getObservationDate(obs)) }}</span>
                 </div>
-                <p class="text-xs text-slate-655 dark:text-slate-350 font-semibold italic whitespace-pre-line">"{{ getObservationText(obs) }}"</p>
+                <p class="text-xs text-slate-655 dark:text-slate-350 font-semibold italic whitespace-pre-line break-words">"{{ getObservationText(obs) }}"</p>
               </div>
             </div>
           </div>
 
           <!-- Observations Input (Only visible when ticket is not RESUELTO) -->
-          <div v-if="t.estado !== 'RESUELTO'" class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800/40 space-y-2">
+          <div v-if="t.estado !== 'RESUELTO'" class="mt-3.5 sm:mt-4 pt-3.5 sm:pt-4 border-t border-slate-100 dark:border-slate-800/40 space-y-2">
             <span class="text-[9px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-widest">Agregar Nota de Observación:</span>
-            <div class="flex flex-col sm:flex-row gap-3">
+            <div class="flex flex-col sm:flex-row gap-2.5 sm:gap-3">
               <textarea 
                 v-model="observationsInputs[t.id_ticket]" 
                 placeholder="Escribe una observación para este ticket..."
                 rows="2"
-                class="w-full p-3 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-750 text-xs font-semibold text-slate-700 dark:text-slate-200 rounded-xl focus:border-indigo-500 outline-none resize-none transition-all"
+                class="w-full p-2.5 sm:p-3 bg-white dark:bg-slate-855 border border-slate-200 dark:border-slate-750 text-xs font-semibold text-slate-700 dark:text-slate-200 rounded-xl focus:border-indigo-500 outline-none resize-none transition-all"
               ></textarea>
               <button 
-                @click="saveObservation(t.id_ticket)"
+                @click="saveObservation(t.id_ticket)" 
                 :disabled="submittingObs[t.id_ticket] || !observationsInputs[t.id_ticket]?.trim()"
-                class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center shrink-0"
+                class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center shrink-0 cursor-pointer"
               >
                 <Loader2 v-if="submittingObs[t.id_ticket]" class="w-3 h-3 animate-spin mr-1" />
-                Guardar
+                <span>Guardar</span>
               </button>
             </div>
           </div>
@@ -914,57 +911,57 @@ const getObservationText = (obs: any) => {
     <div 
       v-else 
       :class="showTrackingMode ? 'max-w-5xl' : 'max-w-2xl'"
-      class="w-full bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-2xl p-6 sm:p-10 relative overflow-hidden transition-all duration-300"
+      class="w-full bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-2xl p-4 sm:p-10 relative overflow-hidden transition-all duration-300"
     >
       
       <!-- Back button -->
       <button 
         @click="goBack" 
-        class="absolute top-8 left-8 flex items-center gap-2 text-xs font-black text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors uppercase tracking-widest"
+        class="absolute top-4 sm:top-8 left-4 sm:left-8 flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs font-black text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors uppercase tracking-widest cursor-pointer"
       >
-        <ArrowLeft :size="16" />
-        Regresar
+        <ArrowLeft :size="15" />
+        <span>Regresar</span>
       </button>
 
       <!-- Toggle Tracking/Contact switch -->
       <button 
         @click="showTrackingMode = !showTrackingMode; trackingTicketData = null; trackingError = ''" 
-        class="absolute top-8 right-8 flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+        class="absolute top-4 sm:top-8 right-4 sm:right-8 flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer"
       >
-        {{ showTrackingMode ? 'Ir al Formulario' : 'Ver mis tickets / Seguimiento' }}
+        <span>{{ showTrackingMode ? 'Ir al Formulario' : 'Ver mis tickets / Seguimiento' }}</span>
       </button>
 
       <!-- Seguimiento de Ticket -->
-      <div v-if="showTrackingMode" class="mt-8 space-y-6">
+      <div v-if="showTrackingMode" class="mt-8 sm:mt-8 space-y-4 sm:space-y-6 pt-4 sm:pt-0">
         
         <!-- Caso A: Usuario Autenticado (Docente/Padre) -->
-        <div v-if="auth.isAuthenticated" class="space-y-6">
-          <div class="text-center max-w-md mx-auto space-y-2">
-            <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Mis Tickets de Soporte</h1>
+        <div v-if="auth.isAuthenticated" class="space-y-4 sm:space-y-6">
+          <div class="text-center max-w-md mx-auto space-y-1.5 sm:space-y-2">
+            <h1 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">Mis Tickets de Soporte</h1>
             <p class="text-xs text-slate-500 dark:text-slate-400 font-semibold">
               Consulta el estado de tus solicitudes creadas o escribe una respuesta a las observaciones del colegio.
             </p>
           </div>
 
           <!-- Si hay tickets, mostrar el split panel -->
-          <div v-if="myTickets && myTickets.length > 0" class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          <div v-if="myTickets && myTickets.length > 0" class="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-8 items-start">
             <!-- Columna Izquierda: Listado de Tickets -->
-            <div class="lg:col-span-5 space-y-4">
+            <div class="lg:col-span-5 space-y-3 sm:space-y-4">
               <!-- Buscador por Código o Palabra clave -->
-              <div class="bg-slate-50 dark:bg-slate-800/40 px-3 py-2 rounded-2xl border border-slate-150/40 dark:border-slate-700/65 flex items-center gap-2">
+              <div class="bg-slate-50 dark:bg-slate-800/40 px-3 py-2 rounded-xl sm:rounded-2xl border border-slate-150/40 dark:border-slate-700/65 flex items-center gap-2">
                 <input 
-                  v-model="trackingCodeInput"
-                  type="text"
+                  v-model="trackingCodeInput" 
+                  type="text" 
                   placeholder="Buscar por código (ej: TKT-...) o asunto..."
                   class="w-full bg-transparent border-none text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none placeholder-slate-400"
                 />
               </div>
 
               <!-- Filtro de Estados -->
-              <div class="bg-slate-50 dark:bg-slate-800/40 px-3 py-2 rounded-2xl border border-slate-150/40 dark:border-slate-700/65 flex items-center gap-2">
+              <div class="bg-slate-50 dark:bg-slate-800/40 px-3 py-2 rounded-xl sm:rounded-2xl border border-slate-150/40 dark:border-slate-700/65 flex items-center gap-2">
                 <span class="text-[9px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-widest whitespace-nowrap ml-1">Filtrar Estado:</span>
                 <select 
-                  v-model="myTicketsFilter"
+                  v-model="myTicketsFilter" 
                   class="w-full bg-transparent border-none text-xs font-bold text-slate-700 dark:text-slate-350 outline-none focus:ring-0 cursor-pointer"
                 >
                   <option value="TODOS">Todos mis tickets</option>
@@ -976,21 +973,21 @@ const getObservationText = (obs: any) => {
               </div>
 
               <!-- Lista de Tickets -->
-              <div class="space-y-3 max-h-[480px] overflow-y-auto pr-1">
+              <div class="space-y-2.5 sm:space-y-3 max-h-[380px] sm:max-h-[480px] overflow-y-auto pr-1">
                 <div 
-                  v-for="t in filteredMyTickets"
-                  :key="t.id_ticket"
-                  @click="selectMyTicket(t)"
-                  class="p-4 rounded-2xl border cursor-pointer transition-all text-left space-y-2"
+                  v-for="t in filteredMyTickets" 
+                  :key="t.id_ticket" 
+                  @click="selectMyTicket(t)" 
+                  class="p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border cursor-pointer transition-all text-left space-y-1.5 sm:space-y-2"
                   :class="trackingTicketData && trackingTicketData.id_ticket === t.id_ticket
                     ? 'bg-indigo-50/30 dark:bg-indigo-950/20 border-indigo-500/50 shadow-md'
                     : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800/60 hover:border-slate-200 dark:hover:border-slate-700'"
                 >
-                  <div class="flex items-center justify-between">
-                    <span class="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-750 dark:text-slate-300 rounded-lg font-mono text-[10px] font-black">
+                  <div class="flex items-center justify-between gap-1">
+                    <span class="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-750 dark:text-slate-300 rounded-lg font-mono text-[10px] font-black truncate">
                       {{ t.codigo_ticket || getTicketCode(t) }}
                     </span>
-                    <div class="flex items-center gap-1.5">
+                    <div class="flex items-center gap-1.5 shrink-0">
                       <span v-if="t.fecha_escalado" class="px-1.5 py-0.5 bg-indigo-50 dark:bg-indigo-950/40 text-[9px] font-black text-indigo-600 dark:text-indigo-400 rounded-md">Escalado</span>
                       <span 
                         class="px-1.5 py-0.5 text-[9px] font-black uppercase rounded-md"
@@ -1013,7 +1010,7 @@ const getObservationText = (obs: any) => {
                   </div>
                 </div>
                 
-                <div v-if="filteredMyTickets.length === 0" class="p-8 bg-slate-50/50 dark:bg-slate-800/10 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl text-center">
+                <div v-if="filteredMyTickets.length === 0" class="p-6 sm:p-8 bg-slate-50/50 dark:bg-slate-800/10 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl text-center">
                   <p class="text-[11px] text-slate-400 font-bold italic">No se encontraron tickets con este filtro.</p>
                 </div>
               </div>
@@ -1021,18 +1018,18 @@ const getObservationText = (obs: any) => {
 
             <!-- Columna Derecha: Detalle de Ticket Seleccionado -->
             <div class="lg:col-span-7">
-              <div v-if="trackingTicketData" class="p-6 bg-slate-50/50 dark:bg-slate-800/20 border border-slate-100 dark:border-slate-850 rounded-[2rem] space-y-6 shadow-inner animate-in fade-in duration-300">
+              <div v-if="trackingTicketData" class="p-4 sm:p-6 bg-slate-50/50 dark:bg-slate-800/20 border border-slate-100 dark:border-slate-850 rounded-2xl sm:rounded-[2rem] space-y-4 sm:space-y-6 shadow-inner animate-in fade-in duration-300">
                 
                 <!-- DETALLE DEL TICKET -->
-                <div class="pb-4 border-b border-slate-100 dark:border-slate-800/50 flex items-center justify-between">
-                  <span class="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-300 border border-slate-200/40 dark:border-slate-700/60 rounded-xl font-mono text-xs font-black">
+                <div class="pb-3 sm:pb-4 border-b border-slate-100 dark:border-slate-800/50 flex flex-wrap items-center justify-between gap-2">
+                  <span class="px-2.5 sm:px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-300 border border-slate-200/40 dark:border-slate-700/60 rounded-xl font-mono text-xs font-black">
                     {{ trackingTicketData.codigo_ticket || `TKT-${new Date(trackingTicketData.fecha_creacion).getFullYear()}-${String(trackingTicketData.id_ticket).padStart(5, '0')}` }}
                   </span>
                   
-                  <div class="flex items-center gap-2">
-                    <span class="text-[10px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest">Estado:</span>
+                  <div class="flex items-center gap-1.5 sm:gap-2">
+                    <span class="text-[9px] sm:text-[10px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest">Estado:</span>
                     <span 
-                      class="px-3 py-1 text-[10px] font-black uppercase tracking-wider border rounded-full"
+                      class="px-2.5 sm:px-3 py-0.5 sm:py-1 text-[9px] sm:text-[10px] font-black uppercase tracking-wider border rounded-full"
                       :class="{
                         'bg-rose-50 border-rose-100 text-rose-700': trackingTicketData.estado === 'ABIERTO',
                         'bg-amber-50 border-amber-100 text-amber-700': trackingTicketData.estado === 'EN_PROCESO',
@@ -1047,19 +1044,19 @@ const getObservationText = (obs: any) => {
                   </div>
                 </div>
 
-                <div class="space-y-3">
+                <div class="space-y-2.5 sm:space-y-3">
                   <div>
                     <span class="text-[9px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest">Asunto:</span>
-                    <p class="font-black text-slate-850 dark:text-slate-200 text-sm mt-0.5">{{ trackingTicketData.asunto }}</p>
+                    <p class="font-black text-slate-850 dark:text-slate-200 text-xs sm:text-sm mt-0.5 break-words">{{ trackingTicketData.asunto }}</p>
                   </div>
                   <div>
                     <span class="text-[9px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest">Descripción de la Incidencia:</span>
-                    <p class="text-xs text-slate-655 dark:text-slate-400 leading-relaxed mt-0.5 whitespace-pre-line">{{ trackingTicketData.descripcion }}</p>
+                    <p class="text-xs text-slate-655 dark:text-slate-400 leading-relaxed mt-0.5 whitespace-pre-line break-words">{{ trackingTicketData.descripcion }}</p>
                   </div>
-                  <div class="grid grid-cols-2 gap-4 pt-2">
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 pt-1 sm:pt-2">
                     <div>
                       <span class="text-[9px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest">Colegio:</span>
-                      <p class="text-xs font-black text-slate-700 dark:text-slate-300 mt-0.5">{{ trackingTicketData.colegio_nombre || 'General / Público' }}</p>
+                      <p class="text-xs font-black text-slate-700 dark:text-slate-300 mt-0.5 truncate">{{ trackingTicketData.colegio_nombre || 'General / Público' }}</p>
                     </div>
                     <div>
                       <span class="text-[9px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest">Fecha de Creación:</span>
@@ -1068,83 +1065,83 @@ const getObservationText = (obs: any) => {
                   </div>
 
                   <!-- Ficha del Estudiante Seleccionado para Reingreso (Para el Acudiente) -->
-                  <div v-if="trackingTicketData.estudiante_nombre" class="p-4 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/50 rounded-2xl space-y-1">
+                  <div v-if="trackingTicketData.estudiante_nombre" class="p-3 sm:p-4 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/50 rounded-xl sm:rounded-2xl space-y-1">
                     <span class="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest block">🎓 Estudiante Seleccionado para Reingreso:</span>
-                    <p class="text-xs font-black text-slate-850 dark:text-slate-100">
+                    <p class="text-xs font-black text-slate-850 dark:text-slate-100 truncate">
                       {{ trackingTicketData.estudiante_nombre }} {{ trackingTicketData.estudiante_apellido }}
                     </p>
-                    <p class="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                    <p class="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 font-mono">
                       Documento: {{ trackingTicketData.estudiante_documento }} | Código: {{ trackingTicketData.estudiante_codigo || 'N/A' }} | Estado: {{ trackingTicketData.estudiante_estado || 'RETIRADO' }}
                     </p>
                   </div>
                 </div>
 
                 <!-- Observaciones del Colegio -->
-                <div class="pt-6 border-t border-slate-100 dark:border-slate-800/50 space-y-4">
+                <div class="pt-4 sm:pt-6 border-t border-slate-100 dark:border-slate-800/50 space-y-3 sm:space-y-4">
                   <h3 class="text-xs font-black text-slate-850 dark:text-white uppercase tracking-wider">Observaciones del Colegio</h3>
                   
-                  <div v-if="!trackingTicketData.observaciones || trackingTicketData.observaciones.length === 0" class="p-6 bg-slate-100/40 dark:bg-slate-800/10 border border-dashed border-slate-250 dark:border-slate-800 rounded-2xl text-center">
+                  <div v-if="!trackingTicketData.observaciones || trackingTicketData.observaciones.length === 0" class="p-4 sm:p-6 bg-slate-100/40 dark:bg-slate-800/10 border border-dashed border-slate-250 dark:border-slate-800 rounded-2xl text-center">
                     <p class="text-[11px] text-slate-400 font-semibold italic">El colegio aún no ha registrado notas u observaciones en esta solicitud.</p>
                   </div>
-                  <div v-else class="space-y-3">
+                  <div v-else class="space-y-2 sm:space-y-3">
                     <div 
                       v-for="(obs, idx) in trackingTicketData.observaciones" 
                       :key="idx" 
-                      class="p-4 bg-white dark:bg-slate-850 border border-slate-150/40 dark:border-slate-800 rounded-2xl shadow-sm"
+                      class="p-3 sm:p-4 bg-white dark:bg-slate-850 border border-slate-150/40 dark:border-slate-800 rounded-xl sm:rounded-2xl shadow-sm"
                     >
-                      <div class="flex items-center justify-between text-[9px] text-slate-400 font-bold mb-2">
-                        <span>{{ getObservationAuthor(obs) }}</span>
-                        <span>{{ formatDate(getObservationDate(obs)) }}</span>
+                      <div class="flex items-center justify-between text-[9px] text-slate-400 font-bold mb-1 sm:mb-2">
+                        <span class="truncate">{{ getObservationAuthor(obs) }}</span>
+                        <span class="shrink-0 ml-2">{{ formatDate(getObservationDate(obs)) }}</span>
                       </div>
-                      <p class="text-xs text-slate-700 dark:text-slate-350 font-semibold italic whitespace-pre-line">"{{ getObservationText(obs) }}"</p>
+                      <p class="text-xs text-slate-700 dark:text-slate-350 font-semibold italic whitespace-pre-line break-words">"{{ getObservationText(obs) }}"</p>
                     </div>
                   </div>
 
                   <!-- Visitor Response Block -->
-                  <div v-if="canVisitorRespond" class="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800/50 space-y-3">
+                  <div v-if="canVisitorRespond" class="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-slate-100 dark:border-slate-800/50 space-y-2.5 sm:space-y-3">
                     <span class="text-[9px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest block ml-1">Enviar una respuesta a este ticket:</span>
-                    <div class="flex flex-col sm:flex-row gap-3">
+                    <div class="flex flex-col sm:flex-row gap-2.5 sm:gap-3">
                       <textarea 
                         v-model="visitorResponseInput" 
                         placeholder="Escribe tu respuesta aquí..."
                         rows="2"
-                        class="w-full p-3 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 rounded-2xl focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 outline-none resize-none transition-all"
+                        class="w-full p-2.5 sm:p-3 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 rounded-xl sm:rounded-2xl focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 outline-none resize-none transition-all"
                       ></textarea>
                       <button 
-                        @click="submitVisitorResponse"
+                        @click="submitVisitorResponse" 
                         :disabled="submittingVisitorObs || !visitorResponseInput.trim()"
-                        class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-750 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center shrink-0"
+                        class="px-4 sm:px-5 py-2 sm:py-2.5 bg-indigo-600 hover:bg-indigo-750 text-white rounded-xl sm:rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center shrink-0 cursor-pointer"
                       >
                         <Loader2 v-if="submittingVisitorObs" class="w-3.5 h-3.5 animate-spin mr-1.5" />
-                        Enviar
+                        <span>Enviar</span>
                       </button>
                     </div>
                   </div>
-                  <div v-else-if="trackingTicketData.estado !== 'RESUELTO'" class="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800/50 text-center">
-                    <p class="text-[10px] text-slate-400 dark:text-slate-550 font-bold italic leading-relaxed">
+                  <div v-else-if="trackingTicketData.estado !== 'RESUELTO'" class="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-slate-100 dark:border-slate-800/50 text-center">
+                    <p class="text-[10px] text-slate-450 dark:text-slate-550 font-bold italic leading-relaxed">
                       Debes esperar a que el personal del colegio o el administrador responda tu mensaje antes de poder enviar otra respuesta.
                     </p>
                   </div>
                 </div>
 
               </div>
-              <div v-else class="p-16 bg-slate-50/30 dark:bg-slate-800/10 border border-dashed border-slate-200 dark:border-slate-800 rounded-3xl text-center flex flex-col items-center justify-center min-h-[350px]">
-                <LifeBuoy class="w-10 h-10 text-slate-350 dark:text-slate-650 mb-3 animate-bounce" />
+              <div v-else class="p-8 sm:p-16 bg-slate-50/30 dark:bg-slate-800/10 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl text-center flex flex-col items-center justify-center min-h-[260px] sm:min-h-[350px]">
+                <LifeBuoy class="w-8 h-8 sm:w-10 sm:h-10 text-slate-350 dark:text-slate-650 mb-3 animate-bounce" />
                 <p class="text-xs text-slate-400 font-bold italic">Selecciona uno de tus tickets del listado para ver su historial de observaciones y enviar respuestas.</p>
               </div>
             </div>
           </div>
 
           <!-- Si no tiene tickets, mostrar mensaje vacío -->
-          <div v-else class="p-12 bg-slate-50/30 dark:bg-slate-800/10 border border-dashed border-slate-200 dark:border-slate-800 rounded-3xl text-center flex flex-col items-center justify-center">
-            <LifeBuoy class="w-12 h-12 text-slate-250 dark:text-slate-700 mb-4" />
-            <h3 class="text-sm font-black text-slate-600 dark:text-slate-400">Aún no tienes tickets de soporte</h3>
-            <p class="text-[11px] text-slate-400 dark:text-slate-500 font-semibold mt-1 max-w-xs mx-auto leading-relaxed">
+          <div v-else class="p-8 sm:p-12 bg-slate-50/30 dark:bg-slate-800/10 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl text-center flex flex-col items-center justify-center">
+            <LifeBuoy class="w-10 h-10 sm:w-12 sm:h-12 text-slate-250 dark:text-slate-700 mb-3 sm:mb-4" />
+            <h3 class="text-xs sm:text-sm font-black text-slate-600 dark:text-slate-400">Aún no tienes tickets de soporte</h3>
+            <p class="text-[10px] sm:text-[11px] text-slate-400 dark:text-slate-500 font-semibold mt-1 max-w-xs mx-auto leading-relaxed">
               Cuando envíes una solicitud de soporte, podrás consultar su estado y responder a las observaciones del colegio desde aquí.
             </p>
             <button 
               @click="showTrackingMode = false"
-              class="mt-4 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all"
+              class="mt-3 sm:mt-4 px-4 sm:px-5 py-2 sm:py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl sm:rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer"
             >
               Crear un Ticket
             </button>
@@ -1152,55 +1149,55 @@ const getObservationText = (obs: any) => {
         </div>
 
         <!-- Caso B: Visitante Anónimo (Buscador Clásico) -->
-        <div v-else class="space-y-6">
-          <div class="text-center max-w-md mx-auto space-y-3">
-            <div class="w-16 h-16 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 rounded-2xl flex items-center justify-center mx-auto shadow-inner animate-pulse">
-              <LifeBuoy class="w-8 h-8" />
+        <div v-else class="space-y-4 sm:space-y-6">
+          <div class="text-center max-w-md mx-auto space-y-2 sm:space-y-3">
+            <div class="w-12 h-12 sm:w-16 sm:h-16 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 rounded-2xl flex items-center justify-center mx-auto shadow-inner animate-pulse">
+              <LifeBuoy class="w-6 h-6 sm:w-8 sm:h-8" />
             </div>
-            <h1 class="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Seguimiento de Ticket</h1>
-            <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed font-semibold">
+            <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">Seguimiento de Ticket</h1>
+            <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-relaxed font-semibold">
               Ingresa el código alfanumérico de tu ticket para consultar su estado actual y las observaciones del colegio.
             </p>
           </div>
 
           <!-- Search Bar -->
-          <div class="max-w-md mx-auto space-y-4">
-            <div class="flex gap-3">
+          <div class="max-w-md mx-auto space-y-3 sm:space-y-4">
+            <div class="flex flex-col sm:flex-row gap-2.5 sm:gap-3">
               <input 
-                v-model="trackingCodeInput"
-                type="text"
+                v-model="trackingCodeInput" 
+                type="text" 
                 placeholder="Ej: TKT-1B3X9H7Z"
-                class="w-full px-4 py-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none"
+                class="w-full px-3.5 sm:px-4 py-3 sm:py-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none"
                 @keyup.enter="fetchTrackingTicket"
               />
               <button 
-                @click="fetchTrackingTicket"
+                @click="fetchTrackingTicket" 
                 :disabled="searchingTracking || !trackingCodeInput.trim()"
-                class="px-6 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0 shadow-md"
+                class="px-5 sm:px-6 py-3 sm:py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl sm:rounded-2xl font-black text-xs uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 shrink-0 shadow-md cursor-pointer"
               >
                 <Loader2 v-if="searchingTracking" class="w-4 h-4 animate-spin" />
-                Buscar
+                <span>Buscar</span>
               </button>
             </div>
 
-            <div v-if="trackingError" class="bg-rose-50 dark:bg-rose-950/20 border border-rose-200 text-rose-700 dark:text-rose-455 rounded-2xl p-4 flex items-center gap-3">
+            <div v-if="trackingError" class="bg-rose-50 dark:bg-rose-950/20 border border-rose-200 text-rose-700 dark:text-rose-455 rounded-2xl p-3 sm:p-4 flex items-center gap-3">
               <AlertCircle class="w-5 h-5 text-rose-600 shrink-0" />
               <p class="text-xs font-bold">{{ trackingError }}</p>
             </div>
           </div>
 
           <!-- Ficha de resultados del buscador -->
-          <div v-if="trackingTicketData" class="max-w-xl mx-auto p-6 bg-slate-50/50 dark:bg-slate-800/20 border border-slate-100 dark:border-slate-850 rounded-[2rem] space-y-6 shadow-inner animate-in fade-in duration-300">
+          <div v-if="trackingTicketData" class="max-w-xl mx-auto p-4 sm:p-6 bg-slate-50/50 dark:bg-slate-800/20 border border-slate-100 dark:border-slate-850 rounded-2xl sm:rounded-[2rem] space-y-4 sm:space-y-6 shadow-inner animate-in fade-in duration-300">
             <!-- DETALLE DEL TICKET -->
-            <div class="pb-4 border-b border-slate-100 dark:border-slate-800/50 flex items-center justify-between">
-              <span class="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-850 dark:text-slate-300 border border-slate-200/40 dark:border-slate-700/60 rounded-xl font-mono text-xs font-black">
+            <div class="pb-3 sm:pb-4 border-b border-slate-100 dark:border-slate-800/50 flex flex-wrap items-center justify-between gap-2">
+              <span class="px-2.5 sm:px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-850 dark:text-slate-300 border border-slate-200/40 dark:border-slate-700/60 rounded-xl font-mono text-xs font-black">
                 {{ trackingTicketData.codigo_ticket || `TKT-${new Date(trackingTicketData.fecha_creacion).getFullYear()}-${String(trackingTicketData.id_ticket).padStart(5, '0')}` }}
               </span>
               
-              <div class="flex items-center gap-2">
-                <span class="text-[10px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest">Estado:</span>
+              <div class="flex items-center gap-1.5 sm:gap-2">
+                <span class="text-[9px] sm:text-[10px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest">Estado:</span>
                 <span 
-                  class="px-3 py-1 text-[10px] font-black uppercase tracking-wider border rounded-full"
+                  class="px-2.5 sm:px-3 py-0.5 sm:py-1 text-[9px] sm:text-[10px] font-black uppercase tracking-wider border rounded-full"
                   :class="{
                     'bg-rose-50 border-rose-100 text-rose-700': trackingTicketData.estado === 'ABIERTO',
                     'bg-amber-50 border-amber-100 text-amber-700': trackingTicketData.estado === 'EN_PROCESO',
@@ -1215,19 +1212,19 @@ const getObservationText = (obs: any) => {
               </div>
             </div>
 
-            <div class="space-y-3">
+            <div class="space-y-2.5 sm:space-y-3">
               <div>
                 <span class="text-[9px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest">Asunto:</span>
-                <p class="font-black text-slate-850 dark:text-slate-200 text-sm mt-0.5">{{ trackingTicketData.asunto }}</p>
+                <p class="font-black text-slate-850 dark:text-slate-200 text-xs sm:text-sm mt-0.5 break-words">{{ trackingTicketData.asunto }}</p>
               </div>
               <div>
                 <span class="text-[9px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest">Descripción de la Incidencia:</span>
-                <p class="text-xs text-slate-655 dark:text-slate-400 leading-relaxed mt-0.5 whitespace-pre-line">{{ trackingTicketData.descripcion }}</p>
+                <p class="text-xs text-slate-655 dark:text-slate-400 leading-relaxed mt-0.5 whitespace-pre-line break-words">{{ trackingTicketData.descripcion }}</p>
               </div>
-              <div class="grid grid-cols-2 gap-4 pt-2">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 pt-1 sm:pt-2">
                 <div>
                   <span class="text-[9px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest">Colegio:</span>
-                  <p class="text-xs font-black text-slate-700 dark:text-slate-300 mt-0.5">{{ trackingTicketData.colegio_nombre || 'General / Público' }}</p>
+                  <p class="text-xs font-black text-slate-700 dark:text-slate-300 mt-0.5 truncate">{{ trackingTicketData.colegio_nombre || 'General / Público' }}</p>
                 </div>
                 <div>
                   <span class="text-[9px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest">Fecha de Creación:</span>
@@ -1237,48 +1234,48 @@ const getObservationText = (obs: any) => {
             </div>
 
             <!-- Observaciones del Colegio -->
-            <div class="pt-6 border-t border-slate-100 dark:border-slate-800/50 space-y-4">
+            <div class="pt-4 sm:pt-6 border-t border-slate-100 dark:border-slate-800/50 space-y-3 sm:space-y-4">
               <h3 class="text-xs font-black text-slate-850 dark:text-white uppercase tracking-wider">Observaciones del Colegio</h3>
               
-              <div v-if="!trackingTicketData.observaciones || trackingTicketData.observaciones.length === 0" class="p-6 bg-slate-100/40 dark:bg-slate-800/10 border border-dashed border-slate-250 dark:border-slate-800 rounded-2xl text-center">
+              <div v-if="!trackingTicketData.observaciones || trackingTicketData.observaciones.length === 0" class="p-4 sm:p-6 bg-slate-100/40 dark:bg-slate-800/10 border border-dashed border-slate-250 dark:border-slate-800 rounded-2xl text-center">
                 <p class="text-[11px] text-slate-400 font-semibold italic">El colegio aún no ha registrado notas u observaciones en esta solicitud.</p>
               </div>
-              <div v-else class="space-y-3">
+              <div v-else class="space-y-2 sm:space-y-3">
                 <div 
                   v-for="(obs, idx) in trackingTicketData.observaciones" 
                   :key="idx" 
-                  class="p-4 bg-white dark:bg-slate-850 border border-slate-150/40 dark:border-slate-800 rounded-2xl shadow-sm"
+                  class="p-3 sm:p-4 bg-white dark:bg-slate-850 border border-slate-150/40 dark:border-slate-800 rounded-xl sm:rounded-2xl shadow-sm"
                 >
-                  <div class="flex items-center justify-between text-[9px] text-slate-400 font-bold mb-2">
-                    <span>{{ getObservationAuthor(obs) }}</span>
-                    <span>{{ formatDate(getObservationDate(obs)) }}</span>
+                  <div class="flex items-center justify-between text-[9px] text-slate-400 font-bold mb-1 sm:mb-2">
+                    <span class="truncate">{{ getObservationAuthor(obs) }}</span>
+                    <span class="shrink-0 ml-2">{{ formatDate(getObservationDate(obs)) }}</span>
                   </div>
-                  <p class="text-xs text-slate-700 dark:text-slate-350 font-semibold italic whitespace-pre-line">"{{ getObservationText(obs) }}"</p>
+                  <p class="text-xs text-slate-700 dark:text-slate-350 font-semibold italic whitespace-pre-line break-words">"{{ getObservationText(obs) }}"</p>
                 </div>
               </div>
 
               <!-- Visitor Response Block -->
-              <div v-if="canVisitorRespond" class="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800/50 space-y-3">
+              <div v-if="canVisitorRespond" class="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-slate-100 dark:border-slate-800/50 space-y-2.5 sm:space-y-3">
                 <span class="text-[9px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-widest block ml-1">Enviar una respuesta a este ticket:</span>
-                <div class="flex flex-col sm:flex-row gap-3">
+                <div class="flex flex-col sm:flex-row gap-2.5 sm:gap-3">
                   <textarea 
                     v-model="visitorResponseInput" 
                     placeholder="Escribe tu respuesta aquí..."
                     rows="2"
-                    class="w-full p-3 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 rounded-2xl focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 outline-none resize-none transition-all"
+                    class="w-full p-2.5 sm:p-3 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 rounded-xl sm:rounded-2xl focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 outline-none resize-none transition-all"
                   ></textarea>
                   <button 
                     @click="submitVisitorResponse" 
                     :disabled="submittingVisitorObs || !visitorResponseInput.trim()"
-                    class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center shrink-0"
+                    class="px-4 sm:px-5 py-2 sm:py-2.5 bg-indigo-600 hover:bg-indigo-750 text-white rounded-xl sm:rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center shrink-0 cursor-pointer"
                   >
                     <Loader2 v-if="submittingVisitorObs" class="w-3.5 h-3.5 animate-spin mr-1.5" />
-                    Enviar
+                    <span>Enviar</span>
                   </button>
                 </div>
               </div>
-              <div v-else-if="trackingTicketData.estado !== 'RESUELTO'" class="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800/50 text-center">
-                <p class="text-[10px] text-slate-450 dark:text-slate-500 font-bold italic leading-relaxed">
+              <div v-else-if="trackingTicketData.estado !== 'RESUELTO'" class="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-slate-100 dark:border-slate-800/50 text-center">
+                <p class="text-[10px] text-slate-450 dark:text-slate-550 font-bold italic leading-relaxed">
                   Debes esperar a que el personal del colegio o el administrador responda tu mensaje antes de poder enviar otra respuesta.
                 </p>
               </div>
@@ -1288,74 +1285,74 @@ const getObservationText = (obs: any) => {
       </div>
 
       <!-- Main UI form flow -->
-      <div v-else-if="!generatedTicketCode" class="mt-8 space-y-8">
-        <div class="text-center max-w-md mx-auto space-y-3">
-          <div class="w-16 h-16 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
-            <LifeBuoy class="w-8 h-8 animate-pulse" />
+      <div v-else-if="!generatedTicketCode" class="mt-8 sm:mt-8 space-y-6 sm:space-y-8 pt-4 sm:pt-0">
+        <div class="text-center max-w-md mx-auto space-y-2 sm:space-y-3">
+          <div class="w-12 h-12 sm:w-16 sm:h-16 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+            <LifeBuoy class="w-6 h-6 sm:w-8 sm:h-8 animate-pulse" />
           </div>
-          <h1 class="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Soporte Técnico</h1>
-          <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed font-semibold">
+          <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">Soporte Técnico</h1>
+          <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-relaxed font-semibold">
             ¿Tienes inconvenientes con la plataforma? Envíanos una solicitud y nuestro equipo te responderá al correo electrónico a la brevedad.
           </p>
         </div>
 
-        <form @submit.prevent="handleSubmit" class="space-y-6">
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <form @submit.prevent="handleSubmit" class="space-y-4 sm:space-y-6">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
             <!-- Nombre -->
-            <div class="space-y-2">
+            <div class="space-y-1.5">
               <label class="text-[10px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-widest ml-1">Tu Nombre Completo *</label>
               <div class="relative">
                 <input 
-                  v-model="name"
+                  v-model="name" 
                   type="text" 
                   required
                   placeholder="Ej. Juan Pérez"
                   :disabled="auth.isAuthenticated"
-                  class="w-full pl-11 pr-4 py-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none disabled:opacity-60"
+                  class="w-full pl-10 sm:pl-11 pr-4 py-3 sm:py-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none disabled:opacity-60"
                 />
-                <User class="w-5 h-5 text-slate-400 absolute left-4 top-4" />
+                <User class="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 absolute left-3.5 sm:left-4 top-3.5 sm:top-4" />
               </div>
             </div>
 
             <!-- Correo -->
-            <div class="space-y-2">
+            <div class="space-y-1.5">
               <label class="text-[10px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-widest ml-1">Tu Correo Electrónico *</label>
               <div class="relative">
                 <input 
-                  v-model="email"
+                  v-model="email" 
                   type="email" 
                   required
                   placeholder="ejemplo@correo.com"
                   :disabled="auth.isAuthenticated"
-                  class="w-full pl-11 pr-4 py-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none disabled:opacity-60"
+                  class="w-full pl-10 sm:pl-11 pr-4 py-3 sm:py-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none disabled:opacity-60"
                 />
-                <Mail class="w-5 h-5 text-slate-400 absolute left-4 top-4" />
+                <Mail class="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 absolute left-3.5 sm:left-4 top-3.5 sm:top-4" />
               </div>
             </div>
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
             <!-- Teléfono -->
-            <div class="space-y-2">
+            <div class="space-y-1.5">
               <label class="text-[10px] font-bold text-slate-455 dark:text-slate-500 uppercase tracking-widest ml-1">Teléfono / Celular (Opcional)</label>
               <div class="relative">
                 <input 
-                  v-model="phone"
+                  v-model="phone" 
                   type="tel" 
                   placeholder="Ej. +57 300 123 4567"
-                  class="w-full pl-11 pr-4 py-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none"
+                  class="w-full pl-10 sm:pl-11 pr-4 py-3 sm:py-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none"
                 />
-                <Phone class="w-5 h-5 text-slate-400 absolute left-4 top-4" />
+                <Phone class="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 absolute left-3.5 sm:left-4 top-3.5 sm:top-4" />
               </div>
             </div>
 
             <!-- Tipo Incidencia -->
-            <div class="space-y-2">
+            <div class="space-y-1.5">
               <label class="text-[10px] font-bold text-slate-455 dark:text-slate-500 uppercase tracking-widest ml-1">Tipo de Incidencia *</label>
               <div class="relative">
                 <select 
-                  v-model="category"
-                  class="w-full pl-11 pr-4 py-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none cursor-pointer"
+                  v-model="category" 
+                  class="w-full pl-10 sm:pl-11 pr-4 py-3 sm:py-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none cursor-pointer"
                 >
                   <option value="TECNICO">Problema Técnico / Error de Plataforma</option>
                   <option value="REINGRESO">Solicitud de Reingreso Estudiantil</option>
@@ -1364,28 +1361,28 @@ const getObservationText = (obs: any) => {
                   <option value="AUTENTICACION">Problemas de Inicio de Sesión / Contraseña</option>
                   <option value="SOPORTE">Sugerencias / Otro</option>
                 </select>
-                <HelpCircle class="w-5 h-5 text-slate-400 absolute left-4 top-4" />
+                <HelpCircle class="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 absolute left-3.5 sm:left-4 top-3.5 sm:top-4" />
               </div>
             </div>
           </div>
 
           <!-- Mini Tarjeta de Configuración de Reingreso (Para el Acudiente) -->
-          <div v-if="category === 'REINGRESO' && myChildren.length > 0" class="p-4 bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/60 rounded-2xl space-y-3.5 shadow-sm">
+          <div v-if="category === 'REINGRESO' && myChildren.length > 0" class="p-3.5 sm:p-4 bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/60 rounded-xl sm:rounded-2xl space-y-3 shadow-sm">
             <div class="flex items-center gap-2 border-b border-emerald-200/60 dark:border-emerald-800/40 pb-2">
               <span class="text-base">🎓</span>
               <div>
                 <h3 class="text-xs font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-300">Datos de Reingreso Estudiantil</h3>
-                <p class="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Asocia al alumno y selecciona el grado pretendido sin necesidad de escribirlo.</p>
+                <p class="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 font-medium">Asocia al alumno y selecciona el grado pretendido sin necesidad de escribirlo.</p>
               </div>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5 sm:gap-3">
               <!-- Selector de Estudiante -->
               <div class="space-y-1">
                 <label class="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 block">👤 Estudiante / Hijo a Reingresar *</label>
                 <select 
-                  v-model="selectedChildIdForTicket"
-                  class="w-full px-3 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-500 transition cursor-pointer shadow-sm"
+                  v-model="selectedChildIdForTicket" 
+                  class="w-full px-3 py-2 sm:py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-500 transition cursor-pointer shadow-sm"
                 >
                   <option v-for="child in myChildren" :key="child.id_estudiante" :value="child.id_estudiante">
                     {{ child.nombre }} {{ child.apellido }} (Doc: {{ child.documento || 'S/N' }}) — Estado: {{ child.estado || 'RETIRADO' }}
@@ -1397,8 +1394,8 @@ const getObservationText = (obs: any) => {
               <div class="space-y-1">
                 <label class="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 block">🎯 Grado Requerido / Pretendido</label>
                 <select 
-                  v-model="selectedPreferredGradeIdForTicket"
-                  class="w-full px-3 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-500 transition cursor-pointer shadow-sm"
+                  v-model="selectedPreferredGradeIdForTicket" 
+                  class="w-full px-3 py-2 sm:py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-500 transition cursor-pointer shadow-sm"
                 >
                   <option value="">-- Sugerencia Automática por Sistema --</option>
                   <option v-for="gr in catalogGrados" :key="gr.id_tipo_grado" :value="gr.id_tipo_grado">
@@ -1414,51 +1411,51 @@ const getObservationText = (obs: any) => {
           </div>
 
           <!-- Selector de Colegio (Solo para visitantes) -->
-          <div v-if="!auth.isAuthenticated" class="space-y-2">
+          <div v-if="!auth.isAuthenticated" class="space-y-1.5">
             <label class="text-[10px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-widest ml-1">Colegio de la Incidencia *</label>
             <div class="relative">
               <select 
-                v-model="selectedSchoolId"
+                v-model="selectedSchoolId" 
                 required
-                class="w-full pl-11 pr-4 py-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none cursor-pointer disabled:opacity-50"
+                class="w-full pl-10 sm:pl-11 pr-4 py-3 sm:py-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none cursor-pointer disabled:opacity-50"
                 :disabled="loadingSchools"
               >
                 <option :value="null" disabled>{{ loadingSchools ? 'Cargando colegios...' : 'Selecciona tu institución educativa' }}</option>
                 <option v-for="s in schools" :key="s.id_colegio" :value="s.id_colegio">{{ s.nombre }}</option>
               </select>
-              <School class="w-5 h-5 text-slate-400 absolute left-4 top-4" />
+              <School class="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 absolute left-3.5 sm:left-4 top-3.5 sm:top-4" />
             </div>
           </div>
 
           <!-- Asunto -->
-          <div class="space-y-2">
+          <div class="space-y-1.5">
             <label class="text-[10px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-widest ml-1">Asunto de la Solicitud *</label>
             <div class="relative">
               <input 
-                v-model="subject"
+                v-model="subject" 
                 type="text" 
                 required
                 placeholder="Breve resumen del problema..."
-                class="w-full pl-11 pr-4 py-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none"
+                class="w-full pl-10 sm:pl-11 pr-4 py-3 sm:py-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none"
               />
-              <FileText class="w-5 h-5 text-slate-400 absolute left-4 top-4" />
+              <FileText class="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 absolute left-3.5 sm:left-4 top-3.5 sm:top-4" />
             </div>
           </div>
 
           <!-- Descripción -->
-          <div class="space-y-2">
+          <div class="space-y-1.5">
             <label class="text-[10px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-widest ml-1">Descripción del Problema * (Mín. 10 caracteres)</label>
             <textarea 
-              v-model="description"
+              v-model="description" 
               required
               rows="4"
               placeholder="Explica de manera detallada lo que ocurre..."
-              class="w-full bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-[1.5rem] p-4 text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none resize-none"
+              class="w-full bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl sm:rounded-[1.5rem] p-3 sm:p-4 text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none resize-none"
             ></textarea>
           </div>
 
           <!-- Error Message -->
-          <div v-if="errorMsg" class="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-2xl p-4 flex items-center gap-3 animate-in fade-in duration-300">
+          <div v-if="errorMsg" class="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-2xl p-3 sm:p-4 flex items-center gap-3 animate-in fade-in duration-300">
             <AlertCircle class="w-5 h-5 text-red-655 dark:text-red-405 shrink-0" />
             <p class="text-xs font-bold text-red-700 dark:text-red-455">{{ errorMsg }}</p>
           </div>
@@ -1467,36 +1464,41 @@ const getObservationText = (obs: any) => {
           <button 
             type="submit" 
             :disabled="!isFormValid || submitting"
-            class="w-full py-4 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-indigo-150 dark:shadow-none disabled:opacity-50 disabled:cursor-not-allowed"
+            class="w-full py-3.5 sm:py-4 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white rounded-xl sm:rounded-2xl font-black text-xs uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-indigo-150 dark:shadow-none disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             <Loader2 v-if="submitting" class="w-4 h-4 animate-spin" />
             <Send v-else :size="16" />
-            {{ submitting ? 'Enviando...' : 'Enviar Ticket de Soporte' }}
+            <span>{{ submitting ? 'Enviando...' : 'Enviar Ticket de Soporte' }}</span>
           </button>
         </form>
       </div>
 
       <!-- Success screen flow -->
-      <div v-else class="mt-8 text-center space-y-8 animate-in zoom-in-95 duration-300">
-        <div class="w-20 h-20 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-650 dark:text-emerald-400 rounded-3xl flex items-center justify-center mx-auto shadow-inner">
-          <CheckCircle2 class="w-12 h-12" />
+      <div v-else class="mt-8 sm:mt-8 text-center space-y-6 sm:space-y-8 animate-in zoom-in-95 duration-300 pt-4 sm:pt-0">
+        <div class="w-16 h-16 sm:w-20 sm:h-20 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-650 dark:text-emerald-400 rounded-3xl flex items-center justify-center mx-auto shadow-inner">
+          <CheckCircle2 class="w-10 h-10 sm:w-12 sm:h-12" />
         </div>
-        <div class="space-y-3">
-          <h2 class="text-3xl font-black text-slate-900 dark:text-white tracking-tight">¡Ticket Creado con Éxito!</h2>
-          <p class="text-slate-500 dark:text-slate-400 text-sm max-w-sm mx-auto font-semibold leading-relaxed">
+        <div class="space-y-2.5 sm:space-y-3">
+          <h2 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">¡Ticket Creado con Éxito!</h2>
+          <p class="text-slate-500 dark:text-slate-400 text-xs sm:text-sm max-w-sm mx-auto font-semibold leading-relaxed">
             Hemos registrado tu reporte en la base de datos de soporte. Toma nota del número de seguimiento:
           </p>
-          <div class="inline-block bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-6 py-3 rounded-2xl font-mono text-lg font-black text-slate-800 dark:text-white tracking-wider shadow-inner">
+          <div class="inline-block bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-4 sm:px-6 py-2.5 sm:py-3 rounded-2xl font-mono text-base sm:text-lg font-black text-slate-800 dark:text-white tracking-wider shadow-inner">
             {{ generatedTicketCode }}
           </div>
-          <p class="text-xs text-slate-405 dark:text-slate-500 font-semibold pt-1">
+          <p class="text-[11px] sm:text-xs text-slate-405 dark:text-slate-500 font-semibold pt-1">
             Una copia de este ticket ha sido enviada al correo del administrador escolar.
           </p>
         </div>
 
         <button 
           @click="generatedTicketCode = null"
-          class="px-8 py-3.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-2xl font-bold text-xs uppercase tracking-widest transition-all"
+          class="w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-3.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl sm:rounded-2xl font-bold text-xs uppercase tracking-widest transition-all cursor-pointer"
+        >
+          Enviar Otro Reporte
+        </button>
+      </div>
+    </div>unded-2xl font-bold text-xs uppercase tracking-widest transition-all"
         >
           Enviar Otro Reporte
         </button>

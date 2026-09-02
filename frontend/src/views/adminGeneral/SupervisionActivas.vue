@@ -116,26 +116,26 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="max-w-[1400px] mx-auto space-y-6">
+  <div class="max-w-[1400px] mx-auto space-y-4 sm:space-y-6 animate-in fade-in duration-500 pb-16">
     <!-- Header -->
-    <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden transition-all duration-300">
-      <div class="px-8 py-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div class="flex items-center gap-4">
-          <div class="p-4 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl text-indigo-600 dark:text-indigo-400">
-            <ShieldAlert :size="32" />
+    <div class="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden transition-all duration-300">
+      <div class="px-4 sm:px-8 py-6 sm:py-10 flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
+        <div class="flex items-center gap-3 sm:gap-4">
+          <div class="p-3 sm:p-4 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl text-indigo-600 dark:text-indigo-400 shrink-0">
+            <ShieldAlert :size="26" class="sm:w-8 sm:h-8" />
           </div>
           <div>
-            <h1 class="text-2xl font-black text-slate-900 dark:text-white leading-tight">Supervisiones Activas</h1>
-            <p class="text-slate-500 dark:text-slate-400 font-medium">Visualiza las sesiones de auditoría en ejecución y el tiempo restante de acceso.</p>
+            <h1 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white leading-tight">Supervisiones Activas</h1>
+            <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium mt-0.5">Visualiza las sesiones de auditoría en ejecución y el tiempo restante de acceso.</p>
           </div>
         </div>
       </div>
     </div>
 
     <!-- Active list -->
-    <div class="space-y-4">
-      <div v-if="loading" class="h-64 flex items-center justify-center text-slate-400 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800">
-        <span class="animate-pulse font-bold">Cargando supervisiones activas...</span>
+    <div class="space-y-3 sm:space-y-4">
+      <div v-if="loading" class="h-64 flex items-center justify-center text-slate-400 bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800">
+        <span class="animate-pulse font-bold text-xs sm:text-sm">Cargando supervisiones activas...</span>
       </div>
 
       <EmptyState 
@@ -149,47 +149,47 @@ onUnmounted(() => {
       </EmptyState>
 
 
-      <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
         <div 
           v-for="sup in activeSupervisions" 
           :key="sup.id_auditoria"
-          class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between"
+          class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm flex flex-col justify-between"
         >
-          <div class="space-y-4">
-            <div class="flex justify-between items-start">
-              <div>
-                <h3 class="font-black text-slate-900 dark:text-white text-lg leading-tight">{{ sup.colegio_nombre }}</h3>
-                <p class="text-xs text-indigo-500 font-bold uppercase mt-0.5 tracking-wider">{{ sup.tipo_supervision === 'EDITOR' ? 'Modo Editor' : 'Solo Lectura' }}</p>
+          <div class="space-y-3 sm:space-y-4">
+            <div class="flex justify-between items-start gap-2">
+              <div class="min-w-0">
+                <h3 class="font-black text-slate-900 dark:text-white text-base sm:text-lg leading-tight truncate">{{ sup.colegio_nombre }}</h3>
+                <p class="text-[10px] sm:text-xs text-indigo-500 font-bold uppercase mt-0.5 tracking-wider truncate">{{ sup.tipo_supervision === 'EDITOR' ? 'Modo Editor' : 'Solo Lectura' }}</p>
               </div>
               
               <!-- Countdown timer badge -->
-              <span class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/60 font-mono">
-                <Clock :size="14" class="animate-spin" />
-                {{ timers[sup.id_auditoria] || 'Calculando...' }}
+              <span class="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-black bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/60 font-mono shrink-0">
+                <Clock :size="13" class="animate-spin shrink-0" />
+                <span>{{ timers[sup.id_auditoria] || 'Calculando...' }}</span>
               </span>
             </div>
 
             <!-- Justificación de entrada -->
-            <div class="text-xs space-y-1 bg-slate-50 dark:bg-slate-800/40 p-3 rounded-2xl border border-slate-100/50 dark:border-slate-800/50">
-              <span class="font-black text-slate-400 uppercase tracking-wider text-[10px]">Motivo de la Entrada</span>
-              <p class="font-medium text-slate-700 dark:text-slate-300 mt-1 leading-relaxed">{{ sup.motivo_entrada || sup.motivo_solicitud }}</p>
+            <div class="text-xs space-y-1 bg-slate-50 dark:bg-slate-800/40 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border border-slate-100/50 dark:border-slate-800/50">
+              <span class="font-black text-slate-400 uppercase tracking-wider text-[9px] sm:text-[10px]">Motivo de la Entrada</span>
+              <p class="font-medium text-slate-700 dark:text-slate-300 mt-1 leading-relaxed text-xs sm:text-sm break-words">{{ sup.motivo_entrada || sup.motivo_solicitud }}</p>
             </div>
 
             <!-- Details -->
-            <div class="grid grid-cols-2 gap-4 text-xs font-semibold text-slate-500 dark:text-slate-400 border-t border-slate-50 dark:border-slate-800/40 pt-4">
+            <div class="grid grid-cols-2 gap-2 sm:gap-4 text-xs font-semibold text-slate-500 dark:text-slate-400 border-t border-slate-50 dark:border-slate-800/40 pt-3 sm:pt-4">
               <p>Entrada: <span class="font-bold text-slate-900 dark:text-white">{{ new Date(sup.fecha_entrada).toLocaleTimeString() }}</span></p>
               <p>Duración Autorizada: <span class="font-bold text-slate-900 dark:text-white">{{ sup.duracion_maxima_minutos }} Minutos</span></p>
             </div>
           </div>
 
           <!-- Actions -->
-          <div class="flex justify-end border-t border-slate-50 dark:border-slate-800/50 pt-4 mt-6">
+          <div class="flex justify-end border-t border-slate-50 dark:border-slate-800/50 pt-3 sm:pt-4 mt-4 sm:mt-6">
             <button 
               @click="handleExit(sup)"
-              class="flex items-center gap-1.5 px-4 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md active:translate-y-[1px]"
+              class="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 sm:py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md active:translate-y-[1px] cursor-pointer"
             >
               <StopCircle :size="14" />
-              Finalizar Supervisión
+              <span>Finalizar Supervisión</span>
             </button>
           </div>
         </div>

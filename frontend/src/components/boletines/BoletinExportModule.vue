@@ -213,7 +213,7 @@ const handleExport = async () => {
     <button 
       @click="handleExport"
       :disabled="isLoading || isExporting"
-      class="w-full flex items-center justify-center gap-2 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+      class="w-full flex items-center justify-center gap-2 py-3 sm:py-4 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl sm:rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
     >
       <Loader2 v-if="isLoading || isExporting" class="w-4 h-4 animate-spin" />
       <FileDown v-else class="w-4 h-4" />

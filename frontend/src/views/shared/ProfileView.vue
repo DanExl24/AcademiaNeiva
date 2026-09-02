@@ -301,47 +301,47 @@ const goBack = () => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 sm:p-6 transition-colors duration-500 flex flex-col justify-center items-center">
-    <div class="w-full max-w-4xl bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-2xl p-6 sm:p-10 relative overflow-hidden transition-all duration-300">
+  <div class="min-h-screen bg-slate-50 dark:bg-slate-950 p-3 sm:p-6 transition-colors duration-500 flex flex-col justify-center items-center">
+    <div class="w-full max-w-4xl bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-2xl p-4 sm:p-10 relative overflow-hidden transition-all duration-300">
       
       <!-- Back button -->
       <button 
         @click="goBack" 
-        class="absolute top-8 left-8 flex items-center gap-2 text-xs font-black text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors uppercase tracking-widest"
+        class="absolute top-4 sm:top-8 left-4 sm:left-8 flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs font-black text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors uppercase tracking-widest cursor-pointer"
       >
-        <ArrowLeft :size="16" />
-        Regresar
+        <ArrowLeft :size="15" />
+        <span>Regresar</span>
       </button>
 
       <!-- Loader -->
-      <div v-if="loadingProfile" class="flex flex-col items-center justify-center p-20">
-        <Loader2 class="w-10 h-10 text-indigo-600 animate-spin mb-4" />
-        <p class="text-slate-500 font-bold text-sm">Cargando perfil de usuario...</p>
+      <div v-if="loadingProfile" class="flex flex-col items-center justify-center p-12 sm:p-20">
+        <Loader2 class="w-8 h-8 sm:w-10 sm:h-10 text-indigo-600 animate-spin mb-4" />
+        <p class="text-slate-500 font-bold text-xs sm:text-sm">Cargando perfil de usuario...</p>
       </div>
 
       <!-- Main Profile panel -->
-      <div v-else class="mt-8 space-y-8">
+      <div v-else class="mt-8 sm:mt-8 space-y-6 sm:space-y-8">
         
         <!-- Welcome banner -->
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-6 border-b border-slate-100 dark:border-slate-800/60">
-          <div class="flex items-center gap-4">
-            <div class="w-14 h-14 bg-indigo-55/60 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-2xl flex items-center justify-center font-black text-xl shadow-inner">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6 pt-4 sm:pt-0 pb-4 sm:pb-6 border-b border-slate-100 dark:border-slate-800/60">
+          <div class="flex items-center gap-3 sm:gap-4">
+            <div class="w-12 h-12 sm:w-14 sm:h-14 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-2xl flex items-center justify-center font-black text-lg sm:text-xl shadow-inner shrink-0">
               {{ profileData.nombre.charAt(0) }}{{ profileData.apellido.charAt(0) }}
             </div>
-            <div>
-              <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight">{{ profileData.nombre }} {{ profileData.apellido }}</h1>
-              <p class="text-xs text-slate-450 dark:text-slate-500 font-bold uppercase tracking-wider">
+            <div class="min-w-0">
+              <h1 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight truncate">{{ profileData.nombre }} {{ profileData.apellido }}</h1>
+              <p class="text-[10px] sm:text-xs text-slate-500 font-bold uppercase tracking-wider">
                 Rol activo: {{ activeRole }}
               </p>
             </div>
           </div>
 
           <!-- Action buttons based on Role -->
-          <div class="flex flex-wrap gap-3">
+          <div class="flex flex-wrap gap-2.5 sm:gap-3">
             <button 
               v-if="isDirectivo && !auth.isMonitoring"
               @click="openDirectivoModal"
-              class="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-md shadow-indigo-100 dark:shadow-none cursor-pointer"
+              class="w-full sm:w-auto px-4 sm:px-5 py-2.5 sm:py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-md shadow-indigo-100 dark:shadow-none cursor-pointer"
             >
               Contactar con Admin General
             </button>
@@ -350,7 +350,7 @@ const goBack = () => {
               v-if="isParentOrTeacher && !auth.isMonitoring"
               @click="handleRequestCredentialsChange"
               :disabled="submittingRequest"
-              class="px-5 py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+              class="w-full sm:w-auto px-4 sm:px-5 py-2.5 sm:py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer"
             >
               <Loader2 v-if="submittingRequest" class="w-4 h-4 animate-spin inline mr-1" />
               Pedir Cambio de Credenciales
@@ -359,46 +359,46 @@ const goBack = () => {
         </div>
 
         <!-- Monitoring Mode Read-Only Banner -->
-        <div v-if="auth.isMonitoring" class="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-2xl p-4 flex items-center gap-3">
+        <div v-if="auth.isMonitoring" class="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-2xl p-3 sm:p-4 flex items-center gap-3">
           <ShieldAlert class="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
-          <p class="text-xs font-bold text-amber-800 dark:text-amber-300">
+          <p class="text-xs font-bold text-amber-800 dark:text-amber-300 leading-snug">
             Modo Monitoreo — Visualizando información de la cuenta de {{ profileData?.nombre }} {{ profileData?.apellido }} en Solo Lectura.
           </p>
         </div>
 
         <!-- Success/Error global alerts -->
-        <div v-if="requestSuccess" class="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-250/30 text-emerald-800 dark:text-emerald-400 rounded-2xl p-4 flex items-center gap-3">
+        <div v-if="requestSuccess" class="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-250/30 text-emerald-800 dark:text-emerald-400 rounded-2xl p-3 sm:p-4 flex items-center gap-3">
           <CheckCircle2 class="w-5 h-5 text-emerald-600 shrink-0" />
-          <p class="text-xs font-bold">{{ requestSuccess }}</p>
+          <p class="text-xs font-bold leading-snug">{{ requestSuccess }}</p>
         </div>
-        <div v-if="requestError" class="bg-red-50 dark:bg-red-950/20 border border-red-200 text-red-700 dark:text-red-400 rounded-2xl p-4 flex items-center gap-3">
+        <div v-if="requestError" class="bg-red-50 dark:bg-red-950/20 border border-red-200 text-red-700 dark:text-red-400 rounded-2xl p-3 sm:p-4 flex items-center gap-3">
           <AlertCircle class="w-5 h-5 text-red-600 shrink-0" />
-          <p class="text-xs font-bold">{{ requestError }}</p>
+          <p class="text-xs font-bold leading-snug">{{ requestError }}</p>
         </div>
 
         <!-- Details Grid -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
           
           <!-- Column 1: Info and email change -->
-          <div class="space-y-6">
-            <h2 class="text-sm font-black text-slate-800 dark:text-white uppercase tracking-wider">Datos de Identificación</h2>
+          <div class="space-y-4 sm:space-y-6">
+            <h2 class="text-xs sm:text-sm font-black text-slate-800 dark:text-white uppercase tracking-wider">Datos de Identificación</h2>
             
-            <div class="space-y-4">
+            <div class="space-y-3.5 sm:space-y-4">
               <!-- Document info -->
-              <div class="p-4 bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-850 rounded-2xl grid grid-cols-2 gap-4">
+              <div class="p-3.5 sm:p-4 bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-850 rounded-2xl grid grid-cols-2 gap-3 sm:gap-4">
                 <div>
                   <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Tipo de Documento</span>
-                  <p class="text-xs font-black text-slate-800 dark:text-slate-200 mt-1">{{ profileData.tipo_documento || 'No Registrado' }}</p>
+                  <p class="text-xs font-black text-slate-800 dark:text-slate-200 mt-1 truncate">{{ profileData.tipo_documento || 'No Registrado' }}</p>
                 </div>
                 <div>
                   <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Número de Documento</span>
-                  <p class="text-xs font-black text-slate-800 dark:text-slate-200 mt-1">{{ profileData.documento || 'No Registrado' }}</p>
+                  <p class="text-xs font-black text-slate-800 dark:text-slate-200 mt-1 truncate">{{ profileData.documento || 'No Registrado' }}</p>
                 </div>
               </div>
 
               <!-- Phone form -->
-              <form @submit.prevent="handleUpdatePhone" class="space-y-3">
-                <div class="space-y-2">
+              <form @submit.prevent="handleUpdatePhone" class="space-y-2.5 sm:space-y-3">
+                <div class="space-y-1.5">
                   <div class="flex items-center justify-between">
                     <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Teléfono / Celular de Contacto</label>
                     <span v-if="isStudent" class="text-[10px] font-bold text-slate-400 italic">Opcional</span>
@@ -409,9 +409,9 @@ const goBack = () => {
                       type="text" 
                       placeholder="Ej. +57 300 123 4567"
                       :disabled="auth.isMonitoring"
-                      class="w-full pl-11 pr-4 py-3.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none disabled:opacity-75 disabled:cursor-not-allowed"
+                      class="w-full pl-10 sm:pl-11 pr-4 py-2.5 sm:py-3.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none disabled:opacity-75 disabled:cursor-not-allowed"
                     />
-                    <Phone class="w-5 h-5 text-slate-400 absolute left-4 top-3.5" />
+                    <Phone class="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 absolute left-3.5 sm:left-4 top-3 sm:top-3.5" />
                   </div>
                 </div>
 
@@ -422,19 +422,19 @@ const goBack = () => {
                   v-if="!auth.isMonitoring"
                   type="submit" 
                   :disabled="submittingPhone || phoneForm.telefono === (profileData.telefono || '')"
-                  class="px-5 py-3 bg-slate-900 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center gap-2 cursor-pointer"
+                  class="w-full sm:w-auto px-4 sm:px-5 py-2.5 sm:py-3 bg-slate-900 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Loader2 v-if="submittingPhone" class="w-3.5 h-3.5 animate-spin" />
-                  Guardar Teléfono
+                  <span>Guardar Teléfono</span>
                 </button>
               </form>
 
               <!-- Email change form (2-Step Verification) -->
-              <div class="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+              <div class="space-y-3.5 sm:space-y-4 pt-3.5 sm:pt-4 border-t border-slate-100 dark:border-slate-800">
                 
                 <!-- STEP 1: Enter New Email & Request Code -->
-                <form v-if="emailStep === 1" @submit.prevent="handleRequestEmailCode" class="space-y-3">
-                  <div class="space-y-2">
+                <form v-if="emailStep === 1" @submit.prevent="handleRequestEmailCode" class="space-y-2.5 sm:space-y-3">
+                  <div class="space-y-1.5">
                     <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Correo Electrónico</label>
                     <div class="relative">
                       <input 
@@ -442,9 +442,9 @@ const goBack = () => {
                         type="email" 
                         required
                         :disabled="auth.isMonitoring"
-                        class="w-full pl-11 pr-4 py-3.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none disabled:opacity-75 disabled:cursor-not-allowed"
+                        class="w-full pl-10 sm:pl-11 pr-4 py-2.5 sm:py-3.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none disabled:opacity-75 disabled:cursor-not-allowed"
                       />
-                      <Mail class="w-5 h-5 text-slate-400 absolute left-4 top-3.5" />
+                      <Mail class="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 absolute left-3.5 sm:left-4 top-3 sm:top-3.5" />
                     </div>
                   </div>
 
@@ -455,7 +455,7 @@ const goBack = () => {
                     v-if="!auth.isMonitoring"
                     type="submit" 
                     :disabled="submittingEmail || emailForm.email === profileData.email"
-                    class="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center gap-2 cursor-pointer"
+                    class="w-full sm:w-auto px-4 sm:px-5 py-2.5 sm:py-3 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <Loader2 v-if="submittingEmail" class="w-3.5 h-3.5 animate-spin" />
                     <span>Enviar Código de Verificación</span>
@@ -463,20 +463,20 @@ const goBack = () => {
                 </form>
 
                 <!-- STEP 2: Enter 6-Digit Code to Confirm -->
-                <form v-else-if="!auth.isMonitoring" @submit.prevent="handleVerifyEmailCode" class="p-4 bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200/60 dark:border-indigo-900/50 rounded-2xl space-y-4 animate-in fade-in duration-200">
-                  <div class="flex items-start gap-3">
+                <form v-else-if="!auth.isMonitoring" @submit.prevent="handleVerifyEmailCode" class="p-3.5 sm:p-4 bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200/60 dark:border-indigo-900/50 rounded-2xl space-y-3 sm:space-y-4 animate-in fade-in duration-200">
+                  <div class="flex items-start gap-2.5 sm:gap-3">
                     <div class="p-2 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 rounded-xl shrink-0 mt-0.5">
-                      <ShieldCheck class="w-5 h-5" />
+                      <ShieldCheck class="w-4 h-4 sm:w-5 sm:h-5" />
                     </div>
                     <div>
-                      <h4 class="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">Verificación de Seguridad</h4>
-                      <p class="text-xs font-semibold text-slate-600 dark:text-slate-300 mt-1">
+                      <h4 class="text-[11px] sm:text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">Verificación de Seguridad</h4>
+                      <p class="text-xs font-semibold text-slate-600 dark:text-slate-300 mt-1 break-words">
                         Hemos enviado un código de 6 dígitos a <span class="font-extrabold text-indigo-600 dark:text-indigo-400">{{ pendingNewEmail }}</span>. Revisa tu bandeja de entrada.
                       </p>
                     </div>
                   </div>
 
-                  <div class="space-y-2">
+                  <div class="space-y-1.5">
                     <label class="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest ml-1">Código de 6 dígitos</label>
                     <input 
                       v-model="verificationCode"
@@ -484,7 +484,7 @@ const goBack = () => {
                       maxlength="6"
                       placeholder="000000"
                       required
-                      class="w-full text-center tracking-[0.4em] font-black text-xl py-3.5 bg-white dark:bg-slate-900 border border-indigo-300 dark:border-indigo-700 rounded-xl text-indigo-700 dark:text-indigo-300 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      class="w-full text-center tracking-[0.3em] sm:tracking-[0.4em] font-black text-lg sm:text-xl py-2.5 sm:py-3.5 bg-white dark:bg-slate-900 border border-indigo-300 dark:border-indigo-700 rounded-xl text-indigo-700 dark:text-indigo-300 outline-none focus:ring-2 focus:ring-indigo-500/20"
                     />
                   </div>
 
@@ -495,7 +495,7 @@ const goBack = () => {
                     <button 
                       type="submit" 
                       :disabled="submittingCode || verificationCode.trim().length !== 6"
-                      class="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center gap-2 cursor-pointer shadow-sm"
+                      class="w-full sm:w-auto px-4 sm:px-5 py-2.5 sm:py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                     >
                       <Loader2 v-if="submittingCode" class="w-3.5 h-3.5 animate-spin" />
                       <span>Confirmar y Cambiar Correo</span>
@@ -505,7 +505,7 @@ const goBack = () => {
                       @click="handleRequestEmailCode"
                       type="button"
                       :disabled="submittingEmail"
-                      class="px-3.5 py-3 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold hover:bg-slate-50 transition cursor-pointer"
+                      class="flex-1 sm:flex-initial px-3 sm:px-3.5 py-2.5 sm:py-3 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold hover:bg-slate-50 transition cursor-pointer"
                     >
                       Reenviar
                     </button>
@@ -513,7 +513,7 @@ const goBack = () => {
                     <button 
                       @click="cancelEmailChange"
                       type="button"
-                      class="px-3.5 py-3 text-rose-600 hover:underline text-xs font-bold cursor-pointer ml-auto"
+                      class="flex-1 sm:flex-initial px-3 sm:px-3.5 py-2.5 sm:py-3 text-rose-600 hover:underline text-xs font-bold cursor-pointer text-center sm:text-left"
                     >
                       Cancelar
                     </button>
@@ -525,78 +525,78 @@ const goBack = () => {
           </div>
 
           <!-- Column 2: Password change -->
-          <div class="space-y-6">
-            <h2 class="text-sm font-black text-slate-800 dark:text-white uppercase tracking-wider">Cambiar Contraseña</h2>
+          <div class="space-y-4 sm:space-y-6">
+            <h2 class="text-xs sm:text-sm font-black text-slate-800 dark:text-white uppercase tracking-wider">Cambiar Contraseña</h2>
             
-            <div v-if="auth.isMonitoring" class="p-6 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-850 text-center space-y-2">
-              <Lock class="w-8 h-8 text-slate-400 mx-auto" />
+            <div v-if="auth.isMonitoring" class="p-4 sm:p-6 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-850 text-center space-y-2">
+              <Lock class="w-7 h-7 sm:w-8 sm:h-8 text-slate-400 mx-auto" />
               <p class="text-xs font-bold text-slate-600 dark:text-slate-300">Cambio de contraseña bloqueado en Modo Monitoreo.</p>
               <p class="text-[10px] text-slate-400 font-semibold">Solo el usuario propietario puede actualizar sus credenciales de acceso.</p>
             </div>
 
-            <form v-else @submit.prevent="handleUpdatePassword" class="space-y-4">
+            <form v-else @submit.prevent="handleUpdatePassword" class="space-y-3 sm:space-y-4">
               <!-- Actual -->
-              <div class="space-y-2">
+              <div class="space-y-1.5">
                 <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Contraseña Actual</label>
                 <div class="relative">
                   <input 
                     v-model="passwordForm.password_actual"
                     :type="showOldPass ? 'text' : 'password'" 
                     required
-                    class="w-full pl-11 pr-12 py-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none"
+                    class="w-full pl-10 sm:pl-11 pr-11 sm:pr-12 py-3 sm:py-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none"
                   />
-                  <Lock class="w-5 h-5 text-slate-400 absolute left-4 top-4" />
+                  <Lock class="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 absolute left-3.5 sm:left-4 top-3.5 sm:top-4" />
                   <button 
                     type="button" 
                     @click="showOldPass = !showOldPass" 
-                    class="absolute right-4 top-4 text-slate-400 hover:text-slate-655"
+                    class="absolute right-3.5 sm:right-4 top-3.5 sm:top-4 text-slate-400 hover:text-slate-600 cursor-pointer"
                   >
-                    <Eye v-if="!showOldPass" :size="20" />
-                    <EyeOff v-else :size="20" />
+                    <Eye v-if="!showOldPass" :size="18" />
+                    <EyeOff v-else :size="18" />
                   </button>
                 </div>
               </div>
 
               <!-- Nueva -->
-              <div class="space-y-2">
+              <div class="space-y-1.5">
                 <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Nueva Contraseña (Mín. 6 caracteres)</label>
                 <div class="relative">
                   <input 
                     v-model="passwordForm.nueva_password"
                     :type="showNewPass ? 'text' : 'password'" 
                     required
-                    class="w-full pl-11 pr-12 py-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none"
+                    class="w-full pl-10 sm:pl-11 pr-11 sm:pr-12 py-3 sm:py-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none"
                   />
-                  <KeyRound class="w-5 h-5 text-slate-400 absolute left-4 top-4" />
+                  <KeyRound class="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 absolute left-3.5 sm:left-4 top-3.5 sm:top-4" />
                   <button 
                     type="button" 
                     @click="showNewPass = !showNewPass" 
-                    class="absolute right-4 top-4 text-slate-400 hover:text-slate-655"
+                    class="absolute right-3.5 sm:right-4 top-3.5 sm:top-4 text-slate-400 hover:text-slate-600 cursor-pointer"
                   >
-                    <Eye v-if="!showNewPass" :size="20" />
-                    <EyeOff v-else :size="20" />
+                    <Eye v-if="!showNewPass" :size="18" />
+                    <EyeOff v-else :size="18" />
                   </button>
                 </div>
               </div>
 
               <!-- Confirmación -->
-              <div class="space-y-2">
+              <div class="space-y-1.5">
                 <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Confirmar Nueva Contraseña</label>
                 <div class="relative">
                   <input 
                     v-model="passwordForm.confirmar_password"
                     :type="showConfirmPass ? 'text' : 'password'" 
                     required
-                    class="w-full pl-11 pr-12 py-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none"
+                    class="w-full pl-10 sm:pl-11 pr-11 sm:pr-12 py-3 sm:py-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all outline-none"
                   />
-                  <KeyRound class="w-5 h-5 text-slate-400 absolute left-4 top-4" />
+                  <KeyRound class="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 absolute left-3.5 sm:left-4 top-3.5 sm:top-4" />
                   <button 
                     type="button" 
                     @click="showConfirmPass = !showConfirmPass" 
-                    class="absolute right-4 top-4 text-slate-400 hover:text-slate-655"
+                    class="absolute right-3.5 sm:right-4 top-3.5 sm:top-4 text-slate-400 hover:text-slate-600 cursor-pointer"
                   >
-                    <Eye v-if="!showConfirmPass" :size="20" />
-                    <EyeOff v-else :size="20" />
+                    <Eye v-if="!showConfirmPass" :size="18" />
+                    <EyeOff v-else :size="18" />
                   </button>
                 </div>
               </div>
@@ -607,10 +607,10 @@ const goBack = () => {
               <button 
                 type="submit" 
                 :disabled="submittingPassword || !passwordForm.nueva_password || passwordForm.nueva_password.length < 6"
-                class="px-6 py-3.5 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center gap-2"
+                class="w-full sm:w-auto px-5 sm:px-6 py-3 sm:py-3.5 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
               >
                 <Loader2 v-if="submittingPassword" class="w-3.5 h-3.5 animate-spin" />
-                Actualizar Contraseña
+                <span>Actualizar Contraseña</span>
               </button>
             </form>
           </div>
@@ -622,38 +622,38 @@ const goBack = () => {
     <!-- Directivo contact modal to Admin General (Ticket Escalado) -->
     <div 
       v-if="showDirectivoModal" 
-      class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4"
       @click.self="showDirectivoModal = false"
     >
-      <div class="w-full max-w-xl bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-150 dark:border-slate-800 p-8 shadow-2xl relative space-y-6 animate-in zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto">
+      <div class="w-full max-w-xl bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[2.5rem] border border-slate-150 dark:border-slate-800 p-5 sm:p-8 shadow-2xl relative space-y-4 sm:space-y-6 animate-in zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto">
         
         <!-- Header -->
-        <div class="flex items-start justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-5">
+        <div class="flex items-start justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4 sm:pb-5">
           <div class="space-y-1">
-            <div class="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 rounded-full text-[10px] font-black uppercase tracking-wider">
+            <div class="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-0.5 sm:py-1 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider">
               <ShieldAlert :size="12" />
               <span>Ticket Escalado de Soporte</span>
             </div>
-            <h3 class="text-xl font-black text-slate-850 dark:text-white tracking-tight">Contactar al Administrador General</h3>
+            <h3 class="text-lg sm:text-xl font-black text-slate-850 dark:text-white tracking-tight">Contactar al Administrador General</h3>
             <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">
               Tu solicitud será registrada con prioridad alta directamente en el panel de soporte del Administrador General.
             </p>
           </div>
           <button 
             @click="showDirectivoModal = false"
-            class="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+            class="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
           >
             ✕
           </button>
         </div>
 
-        <form @submit.prevent="handleContactAdminGeneral" class="space-y-4">
+        <form @submit.prevent="handleContactAdminGeneral" class="space-y-3.5 sm:space-y-4">
           
           <!-- Resumen del Remitente -->
-          <div class="p-4 bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 rounded-2xl grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+          <div class="p-3 sm:p-4 bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 rounded-xl sm:rounded-2xl grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 text-xs">
             <div>
               <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest block">Remitente</span>
-              <p class="font-bold text-slate-800 dark:text-slate-200 mt-0.5">{{ profileData?.nombre }} {{ profileData?.apellido }}</p>
+              <p class="font-bold text-slate-800 dark:text-slate-200 mt-0.5 truncate">{{ profileData?.nombre }} {{ profileData?.apellido }}</p>
               <p class="text-[11px] text-slate-500 font-medium truncate">{{ profileData?.email }}</p>
             </div>
             <div>
@@ -666,12 +666,12 @@ const goBack = () => {
           </div>
 
           <!-- Tipo de Incidencia -->
-          <div class="space-y-1.5">
+          <div class="space-y-1">
             <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Tipo de Incidencia / Categoría *</label>
             <select 
               v-model="directivoForm.tipo_incidencia"
               required
-              class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 focus:bg-white focus:border-indigo-500 outline-none transition-all cursor-pointer"
+              class="w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 focus:bg-white focus:border-indigo-500 outline-none transition-all cursor-pointer"
             >
               <option value="SOPORTE">SOPORTE — Solicitud / Consulta General de Plataforma</option>
               <option value="TECNICO">TÉCNICO — Falla Técnica / Error en el Sistema</option>
@@ -684,53 +684,53 @@ const goBack = () => {
           </div>
 
           <!-- Teléfono (Opcional) -->
-          <div class="space-y-1.5">
+          <div class="space-y-1">
             <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Teléfono de Contacto (Opcional)</label>
             <input 
               v-model="directivoForm.telefono"
               type="text" 
               placeholder="Ej. +57 300 123 4567"
-              class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 focus:bg-white focus:border-indigo-500 outline-none transition-all"
+              class="w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 focus:bg-white focus:border-indigo-500 outline-none transition-all"
             />
           </div>
 
           <!-- Asunto -->
-          <div class="space-y-1.5">
+          <div class="space-y-1">
             <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Asunto de la Solicitud *</label>
             <input 
               v-model="directivoForm.asunto"
               type="text" 
               required
               placeholder="Ej. Solicitud de ajuste de roles para usuario docente/directivo"
-              class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 focus:bg-white focus:border-indigo-500 outline-none transition-all"
+              class="w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 focus:bg-white focus:border-indigo-500 outline-none transition-all"
             />
           </div>
 
           <!-- Descripción -->
-          <div class="space-y-1.5">
+          <div class="space-y-1">
             <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Mensaje Detallado / Justificación *</label>
             <textarea 
               v-model="directivoForm.descripcion"
               required
               rows="4"
               placeholder="Describe detalladamente la situación, requerimiento o usuarios involucrados para que el Administrador General pueda gestionarlo..."
-              class="w-full p-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 focus:bg-white focus:border-indigo-500 outline-none resize-none transition-all"
+              class="w-full p-3 sm:p-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 focus:bg-white focus:border-indigo-500 outline-none resize-none transition-all"
             ></textarea>
           </div>
 
           <!-- Footer Buttons -->
-          <div class="flex items-center justify-end gap-3 pt-2">
+          <div class="flex items-center justify-end gap-2.5 sm:gap-3 pt-2">
             <button 
               type="button"
               @click="showDirectivoModal = false"
-              class="px-5 py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer"
+              class="px-4 sm:px-5 py-2.5 sm:py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer"
             >
               Cancelar
             </button>
             <button 
               type="submit" 
               :disabled="submittingDirectivoMessage || !directivoForm.asunto.trim() || !directivoForm.descripcion.trim()"
-              class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-indigo-100 dark:shadow-none cursor-pointer"
+              class="px-5 sm:px-6 py-2.5 sm:py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-indigo-100 dark:shadow-none cursor-pointer"
             >
               <Loader2 v-if="submittingDirectivoMessage" class="w-4 h-4 animate-spin" />
               <Send v-else :size="14" />

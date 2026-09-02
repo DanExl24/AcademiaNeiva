@@ -515,102 +515,102 @@ const handleImportPDF = async () => {
 </script>
 
 <template>
-  <div class="max-w-[1400px] mx-auto space-y-6">
+  <div class="max-w-[1400px] mx-auto space-y-4 sm:space-y-6 animate-in fade-in duration-500 pb-16">
     <!-- Header -->
-    <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden transition-all duration-300">
-      <div class="px-8 py-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div class="flex items-center gap-4">
-          <div class="p-4 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl text-indigo-600 dark:text-indigo-400">
-            <BookOpen :size="32" />
+    <div class="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden transition-all duration-300">
+      <div class="px-4 sm:px-8 py-6 sm:py-10 flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
+        <div class="flex items-center gap-3 sm:gap-4">
+          <div class="p-3 sm:p-4 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl text-indigo-600 dark:text-indigo-400 shrink-0">
+            <BookOpen :size="26" class="sm:w-8 sm:h-8" />
           </div>
           <div>
-            <h1 class="text-2xl font-black text-slate-900 dark:text-white leading-tight">Catálogo DBA Global</h1>
-            <p class="text-slate-500 dark:text-slate-400 font-medium">Derechos Básicos de Aprendizaje del Ministerio de Educación Nacional de Colombia.</p>
+            <h1 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white leading-tight">Catálogo DBA Global</h1>
+            <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium mt-0.5">Derechos Básicos de Aprendizaje del Ministerio de Educación Nacional de Colombia.</p>
           </div>
         </div>
         
-        <div class="flex gap-3">
-          <button @click="openAssignVersion" class="flex items-center gap-2 px-5 py-3 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-all">
-            <School :size="18" />
-            Asignar a Colegio
+        <div class="flex flex-wrap sm:flex-nowrap gap-2 sm:gap-3 w-full md:w-auto">
+          <button @click="openAssignVersion" class="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-5 py-2.5 sm:py-3 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold text-xs sm:text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer">
+            <School :size="16" class="sm:w-4.5 sm:h-4.5" />
+            <span>Asignar a Colegio</span>
           </button>
-          <button @click="openImportModal" class="flex items-center gap-2 px-5 py-3 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-305 rounded-xl font-bold text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-all">
-            <Upload :size="18" />
-            Importar PDF
+          <button @click="openImportModal" class="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-5 py-2.5 sm:py-3 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold text-xs sm:text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer">
+            <Upload :size="16" class="sm:w-4.5 sm:h-4.5" />
+            <span>Importar PDF</span>
           </button>
-          <button @click="openCreateDba" class="flex items-center gap-2 px-5 py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 dark:shadow-none">
-            <Plus :size="18" />
-            Nuevo DBA
+          <button @click="openCreateDba" class="w-full sm:w-auto flex items-center justify-center gap-1.5 sm:gap-2 px-4 sm:px-5 py-2.5 sm:py-3 bg-indigo-600 text-white rounded-xl font-bold text-xs sm:text-sm hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 dark:shadow-none cursor-pointer">
+            <Plus :size="16" class="sm:w-4.5 sm:h-4.5" />
+            <span>Nuevo DBA</span>
           </button>
         </div>
       </div>
     </div>
 
     <!-- KPIs Row -->
-    <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4">
       <!-- Total DBA -->
-      <div class="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-4">
-        <div class="p-3 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 rounded-2xl">
-          <Book :size="22" />
+      <div class="bg-white dark:bg-slate-900 p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-3 sm:gap-4">
+        <div class="p-2.5 sm:p-3 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 rounded-2xl shrink-0">
+          <Book :size="20" class="sm:w-5.5 sm:h-5.5" />
         </div>
-        <div>
-          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Total DBA</p>
-          <h3 class="text-xl font-black text-slate-900 dark:text-white font-mono mt-0.5">{{ stats.totalDba }}</h3>
+        <div class="min-w-0">
+          <p class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider truncate">Total DBA</p>
+          <h3 class="text-base sm:text-xl font-black text-slate-900 dark:text-white font-mono mt-0.5">{{ stats.totalDba }}</h3>
         </div>
       </div>
 
       <!-- Evidencias -->
-      <div class="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-4">
-        <div class="p-3 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 rounded-2xl">
-          <Layers :size="22" />
+      <div class="bg-white dark:bg-slate-900 p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-3 sm:gap-4">
+        <div class="p-2.5 sm:p-3 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 rounded-2xl shrink-0">
+          <Layers :size="20" class="sm:w-5.5 sm:h-5.5" />
         </div>
-        <div>
-          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Evidencias</p>
-          <h3 class="text-xl font-black text-slate-900 dark:text-white font-mono mt-0.5">{{ stats.totalEvidencias }}</h3>
+        <div class="min-w-0">
+          <p class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider truncate">Evidencias</p>
+          <h3 class="text-base sm:text-xl font-black text-slate-900 dark:text-white font-mono mt-0.5">{{ stats.totalEvidencias }}</h3>
         </div>
       </div>
 
       <!-- Áreas -->
-      <div class="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-4">
-        <div class="p-3 bg-cyan-50 dark:bg-cyan-950/30 text-cyan-600 dark:text-cyan-400 rounded-2xl">
-          <Award :size="22" />
+      <div class="bg-white dark:bg-slate-900 p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-3 sm:gap-4">
+        <div class="p-2.5 sm:p-3 bg-cyan-50 dark:bg-cyan-950/30 text-cyan-600 dark:text-cyan-400 rounded-2xl shrink-0">
+          <Award :size="20" class="sm:w-5.5 sm:h-5.5" />
         </div>
-        <div>
-          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Áreas</p>
-          <h3 class="text-xl font-black text-slate-900 dark:text-white font-mono mt-0.5">{{ stats.totalAreas }}</h3>
+        <div class="min-w-0">
+          <p class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider truncate">Áreas</p>
+          <h3 class="text-base sm:text-xl font-black text-slate-900 dark:text-white font-mono mt-0.5">{{ stats.totalAreas }}</h3>
         </div>
       </div>
 
       <!-- Versiones -->
-      <div class="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-4">
-        <div class="p-3 bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400 rounded-2xl">
-          <Settings :size="22" />
+      <div class="bg-white dark:bg-slate-900 p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-3 sm:gap-4">
+        <div class="p-2.5 sm:p-3 bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400 rounded-2xl shrink-0">
+          <Settings :size="20" class="sm:w-5.5 sm:h-5.5" />
         </div>
-        <div>
-          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Versiones</p>
-          <h3 class="text-xl font-black text-slate-900 dark:text-white font-mono mt-0.5">{{ stats.totalVersiones }}</h3>
+        <div class="min-w-0">
+          <p class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider truncate">Versiones</p>
+          <h3 class="text-base sm:text-xl font-black text-slate-900 dark:text-white font-mono mt-0.5">{{ stats.totalVersiones }}</h3>
         </div>
       </div>
 
       <!-- Activos -->
-      <div class="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-4 col-span-2 md:col-span-1">
-        <div class="p-3 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 rounded-2xl">
-          <CheckCircle :size="22" />
+      <div class="bg-white dark:bg-slate-900 p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-3 sm:gap-4 col-span-2 md:col-span-1">
+        <div class="p-2.5 sm:p-3 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 rounded-2xl shrink-0">
+          <CheckCircle :size="20" class="sm:w-5.5 sm:h-5.5" />
         </div>
-        <div>
-          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Activos</p>
-          <h3 class="text-xl font-black text-slate-900 dark:text-white font-mono mt-0.5">{{ stats.totalActivos }}</h3>
+        <div class="min-w-0">
+          <p class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider truncate">Activos</p>
+          <h3 class="text-base sm:text-xl font-black text-slate-900 dark:text-white font-mono mt-0.5">{{ stats.totalActivos }}</h3>
         </div>
       </div>
     </div>
 
     <!-- Filters Panel -->
-    <div class="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+    <div class="bg-white dark:bg-slate-900 p-3.5 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-4">
         <!-- Area Filter -->
         <div>
-          <label class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase block mb-1">Área Académica</label>
-          <select v-model="filters.area" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <label class="text-[10px] sm:text-xs font-bold text-slate-400 dark:text-slate-500 uppercase block mb-1">Área Académica</label>
+          <select v-model="filters.area" class="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer">
             <option value="TODOS">Todas las áreas</option>
             <option v-for="area in areas" :key="area" :value="area">{{ area }}</option>
           </select>
@@ -618,8 +618,8 @@ const handleImportPDF = async () => {
 
         <!-- Grade Filter -->
         <div>
-          <label class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase block mb-1">Grado</label>
-          <select v-model="filters.grado" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <label class="text-[10px] sm:text-xs font-bold text-slate-400 dark:text-slate-500 uppercase block mb-1">Grado</label>
+          <select v-model="filters.grado" class="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer">
             <option value="TODOS">Todos los grados</option>
             <option v-for="grade in gradeOptions" :key="grade" :value="grade">{{ grade }}</option>
           </select>
@@ -627,8 +627,8 @@ const handleImportPDF = async () => {
 
         <!-- Version Filter -->
         <div>
-          <label class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase block mb-1">Versión Curricular</label>
-          <select v-model="filters.version" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <label class="text-[10px] sm:text-xs font-bold text-slate-400 dark:text-slate-500 uppercase block mb-1">Versión Curricular</label>
+          <select v-model="filters.version" class="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer">
             <option value="TODOS">Todas las versiones</option>
             <option v-for="ver in versions" :key="ver" :value="ver">{{ ver }}</option>
           </select>
@@ -636,8 +636,8 @@ const handleImportPDF = async () => {
 
         <!-- Status Filter -->
         <div>
-          <label class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase block mb-1">Estado</label>
-          <select v-model="filters.estado" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <label class="text-[10px] sm:text-xs font-bold text-slate-400 dark:text-slate-500 uppercase block mb-1">Estado</label>
+          <select v-model="filters.estado" class="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer">
             <option value="TODOS">Todos</option>
             <option value="ACTIVO">Activos</option>
             <option value="INACTIVO">Inactivos</option>
@@ -645,28 +645,28 @@ const handleImportPDF = async () => {
         </div>
 
         <!-- Search Filter -->
-        <div>
-          <label class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase block mb-1">Buscar</label>
+        <div class="sm:col-span-2 lg:col-span-1">
+          <label class="text-[10px] sm:text-xs font-bold text-slate-400 dark:text-slate-500 uppercase block mb-1">Buscar</label>
           <div class="relative">
-            <input v-model="filters.busqueda" type="text" placeholder="Buscar enunciado..." class="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-            <Search class="absolute left-3.5 top-3 text-slate-400" :size="16" />
+            <input v-model="filters.busqueda" type="text" placeholder="Buscar enunciado..." class="w-full pl-9 sm:pl-10 pr-4 py-2 sm:py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            <Search class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" :size="15" />
           </div>
         </div>
       </div>
     </div>
 
     <!-- Active Assignments Shortcut -->
-    <div class="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm" v-if="colleges.length > 0">
-      <h3 class="text-sm font-bold text-slate-800 dark:text-slate-200 mb-3 flex items-center gap-2">
-        <School :size="18" class="text-indigo-500" />
+    <div class="bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm" v-if="colleges.length > 0">
+      <h3 class="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200 mb-2.5 sm:mb-3 flex items-center gap-2">
+        <School :size="16" class="text-indigo-500" />
         Configuraciones Curriculares por Colegio
       </h3>
-      <div class="flex flex-wrap gap-2">
+      <div class="flex flex-wrap gap-1.5 sm:gap-2">
         <button 
           v-for="col in colleges" 
           :key="col.id_colegio" 
           @click="viewAssignments(col)"
-          class="px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-400 hover:bg-indigo-50/20 rounded-2xl text-xs font-semibold text-slate-700 dark:text-slate-300 transition-all flex items-center gap-1.5"
+          class="px-3 sm:px-4 py-1.5 sm:py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-400 hover:bg-indigo-50/20 rounded-xl sm:rounded-2xl text-[11px] sm:text-xs font-semibold text-slate-700 dark:text-slate-300 transition-all flex items-center gap-1.5 cursor-pointer"
         >
           {{ col.nombre }}
         </button>
@@ -674,76 +674,76 @@ const handleImportPDF = async () => {
     </div>
 
     <!-- List of DBAs -->
-    <div v-if="loading" class="flex flex-col items-center justify-center py-20">
-      <div class="animate-spin rounded-full h-12 w-12 border-4 border-indigo-600 border-t-transparent"></div>
-      <p class="mt-4 text-slate-500 dark:text-slate-400 font-bold text-sm">Cargando catálogo...</p>
+    <div v-if="loading" class="flex flex-col items-center justify-center py-16 sm:py-20">
+      <div class="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-4 border-indigo-600 border-t-transparent"></div>
+      <p class="mt-3 sm:mt-4 text-slate-500 dark:text-slate-400 font-bold text-xs sm:text-sm">Cargando catálogo...</p>
     </div>
 
-    <div v-else-if="dbaList.length === 0" class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-12 text-center">
-      <BookOpen :size="48" class="mx-auto text-slate-300 dark:text-slate-700 mb-4" />
-      <h3 class="text-lg font-bold text-slate-800 dark:text-white">No se encontraron DBAs</h3>
-      <p class="text-slate-500 dark:text-slate-400 mt-2">Prueba cambiando los filtros de búsqueda o registra un nuevo DBA.</p>
+    <div v-else-if="dbaList.length === 0" class="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 p-8 sm:p-12 text-center">
+      <BookOpen :size="40" class="sm:w-12 sm:h-12 mx-auto text-slate-300 dark:text-slate-700 mb-3 sm:mb-4" />
+      <h3 class="text-base sm:text-lg font-bold text-slate-800 dark:text-white">No se encontraron DBAs</h3>
+      <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 sm:mt-2">Prueba cambiando los filtros de búsqueda o registra un nuevo DBA.</p>
     </div>
 
-    <div v-else class="space-y-4">
+    <div v-else class="space-y-3 sm:space-y-4">
       <div 
         v-for="dba in dbaList" 
         :key="dba.id_dba" 
-        class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl shadow-sm transition-all overflow-hidden"
+        class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl sm:rounded-3xl shadow-sm transition-all overflow-hidden"
       >
         <!-- Card Header / DBA Summary Info -->
         <div 
           @click="toggleExpandDba(dba)"
-          class="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-all"
+          class="p-4 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 cursor-pointer hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-all"
         >
           <div class="flex-1 space-y-2">
-            <div class="flex flex-wrap items-center gap-2">
-              <span class="px-2.5 py-1 text-xs font-black bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-md">
+            <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
+              <span class="px-2 sm:px-2.5 py-0.5 sm:py-1 text-[10px] sm:text-xs font-black bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-md">
                 DBA #{{ dba.numero_dba }}
               </span>
-              <span class="px-2.5 py-1 text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-md">
+              <span class="px-2 sm:px-2.5 py-0.5 sm:py-1 text-[10px] sm:text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-md">
                 {{ dba.area }}
               </span>
-              <span class="px-2.5 py-1 text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-md">
+              <span class="px-2 sm:px-2.5 py-0.5 sm:py-1 text-[10px] sm:text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-md">
                 {{ dba.grado }}
               </span>
-              <span class="px-2.5 py-1 text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-md">
+              <span class="px-2 sm:px-2.5 py-0.5 sm:py-1 text-[10px] sm:text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-md">
                 Versión: {{ dba.version_curricular }}
               </span>
               <span 
-                class="px-2.5 py-1 text-xs font-bold rounded-md"
+                class="px-2 sm:px-2.5 py-0.5 sm:py-1 text-[10px] sm:text-xs font-bold rounded-md"
                 :class="dba.estado === 'ACTIVO' ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400' : 'bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400'"
               >
                 {{ dba.estado }}
               </span>
             </div>
             
-            <p class="text-slate-850 dark:text-slate-200 font-bold leading-relaxed pr-6">
+            <p class="text-slate-800 dark:text-slate-200 font-bold leading-relaxed text-xs sm:text-sm pr-2 sm:pr-6">
               {{ dba.enunciado }}
             </p>
           </div>
 
-          <div class="flex items-center gap-4 self-end md:self-auto">
-            <span class="text-xs font-bold text-slate-400">
+          <div class="flex items-center gap-3 sm:gap-4 self-end md:self-auto">
+            <span class="text-[11px] sm:text-xs font-bold text-slate-400">
               {{ dba.total_evidencias || dba.evidencias?.length || 0 }} evidencias
             </span>
             <div class="text-slate-400">
-              <ChevronDown v-if="!dba.isExpanded" :size="20" />
-              <ChevronUp v-else :size="20" />
+              <ChevronDown v-if="!dba.isExpanded" :size="18" class="sm:w-5 sm:h-5" />
+              <ChevronUp v-else :size="18" class="sm:w-5 sm:h-5" />
             </div>
           </div>
         </div>
 
         <!-- Card Body / Expanded Evidences and Actions -->
-        <div v-if="dba.isExpanded" class="border-t border-slate-100 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-800/10 p-6 space-y-6">
+        <div v-if="dba.isExpanded" class="border-t border-slate-100 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-800/10 p-4 sm:p-6 space-y-4 sm:space-y-6">
           <!-- Evidences List -->
           <div>
-            <div class="flex items-center justify-between mb-4">
-              <h4 class="text-xs font-black text-slate-400 uppercase tracking-wider">Evidencias de Aprendizaje</h4>
+            <div class="flex items-center justify-between mb-3 sm:mb-4">
+              <h4 class="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider">Evidencias de Aprendizaje</h4>
               <button 
                 v-if="dba.estado === 'ACTIVO'"
                 @click.stop="openCreateEvidence(dba)" 
-                class="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/30 hover:bg-indigo-100 dark:hover:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-lg text-xs font-bold transition-all"
+                class="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 bg-indigo-50 dark:bg-indigo-950/30 hover:bg-indigo-100 dark:hover:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-lg text-[11px] sm:text-xs font-bold transition-all cursor-pointer"
               >
                 <Plus :size="14" />
                 Agregar Evidencia
@@ -754,38 +754,38 @@ const handleImportPDF = async () => {
               No hay evidencias registradas para este DBA.
             </div>
             
-            <div v-else class="space-y-3">
+            <div v-else class="space-y-2.5 sm:space-y-3">
               <div 
                 v-for="ev in dba.evidencias" 
                 :key="ev.id_evidencia_dba"
-                class="p-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl shadow-xs hover:shadow-sm transition-all flex items-start justify-between gap-4"
+                class="p-3 sm:p-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl sm:rounded-2xl shadow-xs hover:shadow-sm transition-all flex items-start justify-between gap-3 sm:gap-4"
               >
-                <div class="flex items-start gap-3">
-                  <span class="mt-0.5 px-2 py-0.5 text-[10px] font-black bg-slate-100 dark:bg-slate-800 text-slate-550 dark:text-slate-400 rounded-md">
+                <div class="flex items-start gap-2.5 sm:gap-3 min-w-0">
+                  <span class="mt-0.5 px-1.5 sm:px-2 py-0.5 text-[9px] sm:text-[10px] font-black bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-md shrink-0">
                     #{{ ev.orden }}
                   </span>
-                  <div class="space-y-1">
-                    <p class="text-sm font-semibold text-slate-700 dark:text-slate-300 leading-normal" :class="ev.estado === 'INACTIVO' ? 'line-through text-slate-400 dark:text-slate-500' : ''">
+                  <div class="space-y-1 min-w-0">
+                    <p class="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 leading-normal" :class="ev.estado === 'INACTIVO' ? 'line-through text-slate-400 dark:text-slate-500' : ''">
                       {{ ev.descripcion }}
                     </p>
-                    <span class="text-[10px] font-bold" :class="ev.estado === 'ACTIVO' ? 'text-emerald-555' : 'text-red-500'">
+                    <span class="text-[9px] sm:text-[10px] font-bold" :class="ev.estado === 'ACTIVO' ? 'text-emerald-500' : 'text-red-500'">
                       {{ ev.estado }}
                     </span>
                   </div>
                 </div>
 
                 <!-- Evidence action buttons -->
-                <div class="flex items-center gap-1">
+                <div class="flex items-center gap-1 shrink-0">
                   <button 
                     @click.stop="openEditEvidence(dba, ev)" 
-                    class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-lg transition-all"
+                    class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-lg transition-all cursor-pointer"
                     title="Editar Evidencia"
                   >
                     <Edit3 :size="14" />
                   </button>
                   <button 
                     @click.stop="toggleEvidenceStatus(ev)" 
-                    class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-all"
+                    class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-all cursor-pointer"
                     :class="ev.estado === 'ACTIVO' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'"
                     :title="ev.estado === 'ACTIVO' ? 'Desactivar Evidencia' : 'Activar Evidencia'"
                   >
@@ -798,14 +798,14 @@ const handleImportPDF = async () => {
           </div>
 
           <!-- DBA Admin Actions -->
-          <div class="border-t border-slate-100 dark:border-slate-800 pt-4 flex justify-between items-center">
-            <span class="text-xs text-slate-400 dark:text-slate-550">
+          <div class="border-t border-slate-100 dark:border-slate-800 pt-3 sm:pt-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2.5 sm:gap-3">
+            <span class="text-[10px] sm:text-xs text-slate-400 dark:text-slate-500">
               Registrado: {{ new Date(dba.created_at || Date.now()).toLocaleDateString() }}
             </span>
-            <div class="flex gap-2">
+            <div class="flex flex-wrap gap-2">
               <button 
                 @click.stop="handleDeleteDba(dba)" 
-                class="px-4 py-2 bg-red-50 hover:bg-red-100 dark:bg-red-950/20 text-red-600 dark:text-red-400 border border-transparent rounded-xl font-bold text-xs transition-all flex items-center gap-1.5"
+                class="px-3 sm:px-4 py-1.5 sm:py-2 bg-red-50 hover:bg-red-100 dark:bg-red-950/20 text-red-600 dark:text-red-400 border border-transparent rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer"
                 title="Eliminar DBA"
               >
                 <Trash2 :size="14" />
@@ -813,14 +813,14 @@ const handleImportPDF = async () => {
               </button>
               <button 
                 @click.stop="toggleDbaStatus(dba)" 
-                class="px-4 py-2 border rounded-xl font-bold text-xs transition-all"
-                :class="dba.estado === 'ACTIVO' ? 'border-red-200 dark:border-red-900/30 text-red-650 dark:text-red-450 hover:bg-red-50 dark:hover:bg-red-950/20' : 'border-emerald-200 dark:border-emerald-900/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/20'"
+                class="px-3 sm:px-4 py-1.5 sm:py-2 border rounded-xl font-bold text-xs transition-all cursor-pointer"
+                :class="dba.estado === 'ACTIVO' ? 'border-red-200 dark:border-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20' : 'border-emerald-200 dark:border-emerald-900/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/20'"
               >
                 {{ dba.estado === 'ACTIVO' ? 'Inactivar' : 'Activar' }}
               </button>
               <button 
                 @click.stop="openEditDba(dba)" 
-                class="flex items-center gap-1 px-4 py-2 bg-indigo-50 dark:bg-indigo-950/30 hover:bg-indigo-100 dark:hover:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-xl font-bold text-xs transition-all"
+                class="flex items-center gap-1 px-3 sm:px-4 py-1.5 sm:py-2 bg-indigo-50 dark:bg-indigo-950/30 hover:bg-indigo-100 dark:hover:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-xl font-bold text-xs transition-all cursor-pointer"
               >
                 <Edit3 :size="14" />
                 Editar
@@ -831,22 +831,22 @@ const handleImportPDF = async () => {
       </div>
 
       <!-- Pagination -->
-      <div v-if="totalPages > 1" class="flex items-center justify-between bg-white dark:bg-slate-900 px-6 py-4 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm mt-4">
+      <div v-if="totalPages > 1" class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 px-4 sm:px-6 py-3.5 sm:py-4 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm mt-4">
         <span class="text-xs font-bold text-slate-500">
           Mostrando página {{ page }} de {{ totalPages }} ({{ totalCount }} registros)
         </span>
-        <div class="flex gap-2">
+        <div class="flex gap-2 self-end sm:self-auto">
           <button 
             :disabled="page === 1" 
             @click="page--" 
-            class="px-3 py-1.5 border border-slate-200 dark:border-slate-700 disabled:opacity-50 text-slate-650 dark:text-slate-350 rounded-lg text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
+            class="px-3 py-1.5 border border-slate-200 dark:border-slate-700 disabled:opacity-50 text-slate-600 dark:text-slate-300 rounded-lg text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer"
           >
             Anterior
           </button>
           <button 
             :disabled="page === totalPages" 
             @click="page++" 
-            class="px-3 py-1.5 border border-slate-200 dark:border-slate-700 disabled:opacity-50 text-slate-650 dark:text-slate-350 rounded-lg text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
+            class="px-3 py-1.5 border border-slate-200 dark:border-slate-700 disabled:opacity-50 text-slate-600 dark:text-slate-300 rounded-lg text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer"
           >
             Siguiente
           </button>

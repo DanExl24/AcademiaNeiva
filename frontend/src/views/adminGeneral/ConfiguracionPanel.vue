@@ -129,17 +129,17 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="max-w-[1400px] mx-auto space-y-6">
+  <div class="max-w-[1400px] mx-auto space-y-4 sm:space-y-6 animate-in fade-in duration-500 pb-16">
     <!-- Header -->
-    <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden transition-all duration-300">
-      <div class="px-8 py-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div class="flex items-center gap-4">
-          <div class="p-4 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl text-indigo-600 dark:text-indigo-400">
-            <Settings :size="32" />
+    <div class="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden transition-all duration-300">
+      <div class="px-4 sm:px-8 py-6 sm:py-10 flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
+        <div class="flex items-center gap-3 sm:gap-4">
+          <div class="p-3 sm:p-4 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl text-indigo-600 dark:text-indigo-400 shrink-0">
+            <Settings :size="26" class="sm:w-8 sm:h-8" />
           </div>
           <div>
-            <h1 class="text-2xl font-black text-slate-900 dark:text-white leading-tight">Configuración del Sistema</h1>
-            <p class="text-slate-500 dark:text-slate-400 font-medium">Gestiona tu perfil, ajusta las políticas de supervisión y visualiza diagnósticos de la plataforma.</p>
+            <h1 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white leading-tight">Configuración del Sistema</h1>
+            <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium mt-0.5">Gestiona tu perfil, ajusta las políticas de supervisión y visualiza diagnósticos de la plataforma.</p>
           </div>
         </div>
       </div>
@@ -148,112 +148,112 @@ onMounted(() => {
     <!-- Feedback Toast -->
     <Transition name="slide-fade">
       <div v-if="feedbackMessage" :class="[
-        'flex items-center gap-3 px-5 py-3.5 rounded-2xl border shadow-lg text-sm font-bold transition-all duration-300',
+        'flex items-center gap-2.5 sm:gap-3 px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl border shadow-lg text-xs sm:text-sm font-bold transition-all duration-300',
         feedbackType === 'success' ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300' : '',
         feedbackType === 'error' ? 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300' : ''
       ]">
-        <CheckCircle v-if="feedbackType === 'success'" :size="18" />
-        <AlertTriangle v-if="feedbackType === 'error'" :size="18" />
-        {{ feedbackMessage }}
+        <CheckCircle v-if="feedbackType === 'success'" :size="16" class="shrink-0" />
+        <AlertTriangle v-if="feedbackType === 'error'" :size="16" class="shrink-0" />
+        <span>{{ feedbackMessage }}</span>
       </div>
     </Transition>
 
     <!-- Main Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
       
       <!-- Profile Card -->
-      <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4">
-        <h3 class="text-sm font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-          <User :size="16" />
+      <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm space-y-3 sm:space-y-4">
+        <h3 class="text-xs sm:text-sm font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+          <User :size="15" />
           Mi Perfil
         </h3>
         
-        <div class="flex flex-col items-center py-4 space-y-3">
-          <div class="w-20 h-20 bg-indigo-50 text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-300 rounded-full flex items-center justify-center text-3xl font-black shadow-inner border border-indigo-100 dark:border-indigo-900/40">
+        <div class="flex flex-col items-center py-2 sm:py-4 space-y-2.5 sm:space-y-3">
+          <div class="w-16 h-16 sm:w-20 sm:h-20 bg-indigo-50 text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-300 rounded-full flex items-center justify-center text-2xl sm:text-3xl font-black shadow-inner border border-indigo-100 dark:border-indigo-900/40">
             {{ profile.nombre.charAt(0) }}
           </div>
           <div class="text-center">
-            <h4 class="font-black text-slate-900 dark:text-white text-lg leading-tight">{{ profile.nombre }}</h4>
-            <span class="text-xs text-indigo-500 font-bold uppercase tracking-wider block mt-1">{{ profile.rol }}</span>
+            <h4 class="font-black text-slate-900 dark:text-white text-base sm:text-lg leading-tight">{{ profile.nombre }}</h4>
+            <span class="text-[10px] sm:text-xs text-indigo-500 font-bold uppercase tracking-wider block mt-1">{{ profile.rol }}</span>
           </div>
         </div>
 
-        <div class="space-y-2 text-xs font-semibold text-slate-500 dark:text-slate-400 border-t border-slate-50 dark:border-slate-800 pt-4">
-          <p>Correo: <span class="font-bold text-slate-900 dark:text-white">{{ profile.email }}</span></p>
+        <div class="space-y-1.5 sm:space-y-2 text-xs font-semibold text-slate-500 dark:text-slate-400 border-t border-slate-50 dark:border-slate-800 pt-3 sm:pt-4">
+          <p class="truncate">Correo: <span class="font-bold text-slate-900 dark:text-white">{{ profile.email }}</span></p>
           <p>Permisos: <span class="font-bold text-slate-900 dark:text-white">Acceso total de plataforma</span></p>
         </div>
       </div>
 
       <!-- Supervision Policies (Editable) -->
-      <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-5 md:col-span-2">
-        <div class="flex items-center justify-between">
-          <h3 class="text-sm font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-            <Shield :size="16" />
+      <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm space-y-4 sm:space-y-5 lg:col-span-2">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2">
+          <h3 class="text-xs sm:text-sm font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+            <Shield :size="15" />
             Políticas de Supervisión
           </h3>
-          <span v-if="lastUpdated" class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+          <span v-if="lastUpdated" class="text-[9px] sm:text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
             Última modificación: {{ formatDate(lastUpdated) }}
           </span>
         </div>
 
         <!-- Loading State -->
-        <div v-if="loading" class="flex items-center justify-center py-12 text-slate-400">
-          <Loader2 :size="24" class="animate-spin" />
-          <span class="ml-2 text-sm font-bold">Cargando configuración...</span>
+        <div v-if="loading" class="flex items-center justify-center py-10 sm:py-12 text-slate-400">
+          <Loader2 :size="20" class="animate-spin" />
+          <span class="ml-2 text-xs sm:text-sm font-bold">Cargando configuración...</span>
         </div>
 
         <template v-else>
-          <div class="space-y-4">
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div class="space-y-3.5 sm:space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <!-- Duración Mínima -->
-              <div class="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-100/50 dark:border-slate-800/50 space-y-2">
-                <label class="text-xs font-black text-slate-400 uppercase tracking-wider block">Duración Mínima (Minutos)</label>
+              <div class="bg-slate-50 dark:bg-slate-800/40 p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100/50 dark:border-slate-800/50 space-y-1.5 sm:space-y-2">
+                <label class="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider block">Duración Mínima (Minutos)</label>
                 <input 
                   v-model.number="supervisionSettings.minDuration" 
                   type="number" 
                   min="1" 
                   max="60"
-                  class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-lg font-black text-slate-800 dark:text-white font-mono outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition-all duration-200"
+                  class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-base sm:text-lg font-black text-slate-800 dark:text-white font-mono outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition-all duration-200"
                 />
-                <p class="text-[10px] font-semibold text-slate-400 dark:text-slate-500">Rango permitido: 1 – 60 minutos</p>
+                <p class="text-[9px] sm:text-[10px] font-semibold text-slate-400 dark:text-slate-500">Rango permitido: 1 – 60 minutos</p>
               </div>
 
               <!-- Duración Máxima -->
-              <div class="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-100/50 dark:border-slate-800/50 space-y-2">
-                <label class="text-xs font-black text-slate-400 uppercase tracking-wider block">Duración Máxima (Minutos)</label>
+              <div class="bg-slate-50 dark:bg-slate-800/40 p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100/50 dark:border-slate-800/50 space-y-1.5 sm:space-y-2">
+                <label class="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider block">Duración Máxima (Minutos)</label>
                 <input 
                   v-model.number="supervisionSettings.maxDuration" 
                   type="number" 
                   min="30" 
                   max="1440"
-                  class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-lg font-black text-slate-800 dark:text-white font-mono outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition-all duration-200"
+                  class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-base sm:text-lg font-black text-slate-800 dark:text-white font-mono outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition-all duration-200"
                 />
-                <p class="text-[10px] font-semibold text-slate-400 dark:text-slate-500">Rango permitido: 30 – 1440 minutos (24h)</p>
+                <p class="text-[9px] sm:text-[10px] font-semibold text-slate-400 dark:text-slate-500">Rango permitido: 30 – 1440 minutos (24h)</p>
               </div>
             </div>
 
             <!-- Validation Error -->
-            <div v-if="validationError" class="flex items-center gap-2.5 bg-red-50/60 dark:bg-red-950/20 p-3.5 rounded-2xl border border-red-100/60 dark:border-red-900/50 text-xs text-red-600 dark:text-red-400 font-bold">
+            <div v-if="validationError" class="flex items-center gap-2.5 bg-red-50/60 dark:bg-red-950/20 p-3 sm:p-3.5 rounded-xl sm:rounded-2xl border border-red-100/60 dark:border-red-900/50 text-xs text-red-600 dark:text-red-400 font-bold">
               <AlertTriangle :size="16" class="shrink-0" />
               <span>{{ validationError }}</span>
             </div>
 
             <!-- Info banner -->
-            <div class="flex items-center gap-2.5 bg-indigo-50/50 dark:bg-indigo-950/20 p-4 rounded-2xl border border-indigo-100/50 dark:border-indigo-900/50 text-xs text-indigo-700/80 dark:text-indigo-400/80 font-medium">
-              <Info :size="16" class="shrink-0 text-indigo-500" />
+            <div class="flex items-start sm:items-center gap-2.5 bg-indigo-50/50 dark:bg-indigo-950/20 p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border border-indigo-100/50 dark:border-indigo-900/50 text-xs text-indigo-700/80 dark:text-indigo-400/80 font-medium">
+              <Info :size="16" class="shrink-0 text-indigo-500 mt-0.5 sm:mt-0" />
               <span>Estos límites definen el rango de duración que puedes solicitar al crear una supervisión. Al solicitar la supervisión se mostrará este rango como restricción.</span>
             </div>
 
             <!-- Action buttons -->
-            <div class="flex items-center gap-3 pt-2">
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 pt-2">
               <button 
                 @click="saveConfig" 
                 :disabled="!hasChanges || saving || !!validationError" 
                 :class="[
-                  'flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-black transition-all duration-200 shadow-sm',
+                  'flex items-center justify-center gap-2 px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-black transition-all duration-200 shadow-sm cursor-pointer',
                   hasChanges && !validationError
-                    ? 'bg-indigo-600 hover:bg-indigo-700 text-white hover:shadow-md cursor-pointer' 
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
+                    ? 'bg-indigo-600 hover:bg-indigo-700 text-white hover:shadow-md' 
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-400 !cursor-not-allowed'
                 ]"
               >
                 <Loader2 v-if="saving" :size="16" class="animate-spin" />
@@ -263,7 +263,7 @@ onMounted(() => {
               <button 
                 v-if="hasChanges"
                 @click="resetConfig"
-                class="px-5 py-3 rounded-xl text-sm font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-200 cursor-pointer"
+                class="px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-200 cursor-pointer text-center"
               >
                 Descartar
               </button>
@@ -273,28 +273,28 @@ onMounted(() => {
       </div>
 
       <!-- Platform Diagnostics -->
-      <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4 md:col-span-3">
-        <h3 class="text-sm font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-          <Server :size="16" />
+      <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm space-y-3 sm:space-y-4 lg:col-span-3">
+        <h3 class="text-xs sm:text-sm font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+          <Server :size="15" />
           Diagnósticos de Servidor
         </h3>
 
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs font-semibold text-slate-500 dark:text-slate-400">
-          <div class="space-y-1 bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-100/50">
-            <span class="text-[10px] font-black text-slate-400 uppercase">Entorno</span>
-            <p class="font-bold text-slate-900 dark:text-white text-sm">{{ platformDiagnostics.env }}</p>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-4 text-xs font-semibold text-slate-500 dark:text-slate-400">
+          <div class="space-y-1 bg-slate-50 dark:bg-slate-800/40 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100/50 dark:border-slate-800/50">
+            <span class="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase">Entorno</span>
+            <p class="font-bold text-slate-900 dark:text-white text-xs sm:text-sm truncate">{{ platformDiagnostics.env }}</p>
           </div>
-          <div class="space-y-1 bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-100/50">
-            <span class="text-[10px] font-black text-slate-400 uppercase">Base de Datos</span>
-            <p class="font-bold text-slate-900 dark:text-white text-sm">{{ platformDiagnostics.dbVersion }}</p>
+          <div class="space-y-1 bg-slate-50 dark:bg-slate-800/40 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100/50 dark:border-slate-800/50">
+            <span class="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase">Base de Datos</span>
+            <p class="font-bold text-slate-900 dark:text-white text-xs sm:text-sm truncate">{{ platformDiagnostics.dbVersion }}</p>
           </div>
-          <div class="space-y-1 bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-100/50">
-            <span class="text-[10px] font-black text-slate-400 uppercase">Motor Backend</span>
-            <p class="font-bold text-slate-900 dark:text-white text-sm">{{ platformDiagnostics.nodeVersion }}</p>
+          <div class="space-y-1 bg-slate-50 dark:bg-slate-800/40 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100/50 dark:border-slate-800/50">
+            <span class="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase">Motor Backend</span>
+            <p class="font-bold text-slate-900 dark:text-white text-xs sm:text-sm truncate">{{ platformDiagnostics.nodeVersion }}</p>
           </div>
-          <div class="space-y-1 bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-100/50">
-            <span class="text-[10px] font-black text-slate-400 uppercase">Puerto de Escucha</span>
-            <p class="font-bold text-slate-900 dark:text-white text-sm">Port {{ platformDiagnostics.port }}</p>
+          <div class="space-y-1 bg-slate-50 dark:bg-slate-800/40 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100/50 dark:border-slate-800/50">
+            <span class="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase">Puerto de Escucha</span>
+            <p class="font-bold text-slate-900 dark:text-white text-xs sm:text-sm truncate">Port {{ platformDiagnostics.port }}</p>
           </div>
         </div>
       </div>

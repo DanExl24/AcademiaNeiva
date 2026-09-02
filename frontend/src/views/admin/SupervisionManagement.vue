@@ -234,39 +234,39 @@ const openJsonInspector = (action: AccionAuditoria) => {
 </script>
 
 <template>
-  <div class="max-w-[1400px] mx-auto space-y-6">
+  <div class="max-w-[1400px] mx-auto space-y-4 sm:space-y-6 animate-in fade-in duration-500 pb-16">
     <!-- Header -->
-    <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden transition-all duration-300">
-      <div class="px-8 py-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div class="flex items-center gap-4">
-          <div class="p-4 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl text-indigo-600 dark:text-indigo-400">
-            <ShieldAlert :size="32" />
+    <div class="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden transition-all duration-300">
+      <div class="px-4 sm:px-8 py-6 sm:py-10 flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
+        <div class="flex items-center gap-3 sm:gap-4">
+          <div class="p-3 sm:p-4 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl text-indigo-600 dark:text-indigo-400 shrink-0">
+            <ShieldAlert :size="26" class="sm:w-8 sm:h-8" />
           </div>
           <div>
-            <h1 class="text-2xl font-black text-slate-900 dark:text-white leading-tight">Supervisiones de Auditoría</h1>
-            <p class="text-slate-500 dark:text-slate-400 font-medium">Gestiona y audita las solicitudes de acceso por parte del Administrador General.</p>
+            <h1 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white leading-tight">Supervisiones de Auditoría</h1>
+            <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium mt-0.5">Gestiona y audita las solicitudes de acceso por parte del Administrador General.</p>
           </div>
         </div>
       </div>
     </div>
 
     <!-- Error/Warning state when school context is missing -->
-    <div v-if="!schoolId" class="bg-amber-50 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-900/60 p-6 rounded-3xl flex items-center gap-4 text-amber-900 dark:text-amber-300">
+    <div v-if="!schoolId" class="bg-amber-50 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-900/60 p-4 sm:p-6 rounded-2xl sm:rounded-3xl flex items-center gap-3 sm:gap-4 text-amber-900 dark:text-amber-300">
       <AlertCircle class="shrink-0" :size="24" />
       <div>
-        <h3 class="font-bold">Sin Contexto de Colegio</h3>
-        <p class="text-sm opacity-90">No hemos podido detectar tu colegio activo. Selecciona tu colegio en el panel o vuelve a iniciar sesión.</p>
+        <h3 class="font-bold text-sm sm:text-base">Sin Contexto de Colegio</h3>
+        <p class="text-xs sm:text-sm opacity-90">No hemos podido detectar tu colegio activo. Selecciona tu colegio en el panel o vuelve a iniciar sesión.</p>
       </div>
     </div>
 
     <template v-else>
       <!-- Alerta: Año Lectivo Cerrado -->
-      <div v-if="yearStore.isReadonlyYear" class="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-3xl p-5 flex items-center gap-4 text-amber-900 dark:text-amber-200 shadow-sm">
-        <div class="p-3 bg-amber-500 text-white rounded-2xl shrink-0">
-          <AlertCircle :size="24" />
+      <div v-if="yearStore.isReadonlyYear" class="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 flex items-center gap-3 sm:gap-4 text-amber-900 dark:text-amber-200 shadow-sm">
+        <div class="p-2 sm:p-3 bg-amber-500 text-white rounded-xl sm:rounded-2xl shrink-0">
+          <AlertCircle :size="20" class="sm:w-6 sm:h-6" />
         </div>
-        <div class="text-sm">
-          <h3 class="font-black uppercase tracking-wider text-xs">🔒 Año Lectivo {{ yearStore.selectedYear?.calendario }} — CERRADO (Histórico)</h3>
+        <div class="text-xs sm:text-sm">
+          <h3 class="font-black uppercase tracking-wider text-[11px] sm:text-xs">🔒 Año Lectivo {{ yearStore.selectedYear?.calendario }} — CERRADO (Histórico)</h3>
           <p class="text-xs opacity-90 mt-0.5">
             El año lectivo seleccionado se encuentra cerrado. Las solicitudes y sesiones de supervisión mostradas corresponden al historial de este ciclo escolar y no admiten nuevas aprobaciones o revocaciones.
           </p>
@@ -274,35 +274,35 @@ const openJsonInspector = (action: AccionAuditoria) => {
       </div>
 
       <!-- Navigation & Tabs -->
-      <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-slate-900 p-4 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
-        <div class="flex flex-wrap gap-2">
+      <div class="flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3 sm:gap-4 bg-white dark:bg-slate-900 p-3 sm:p-4 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
+        <div class="flex flex-wrap gap-1.5 sm:gap-2">
           <button
             @click="activeTab = 'pendientes'"
-            :class="[activeTab === 'pendientes' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-none' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800', 'px-5 py-2.5 rounded-2xl font-bold text-sm transition-all flex items-center gap-2']"
+            :class="[activeTab === 'pendientes' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-none' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800', 'px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm transition-all flex items-center gap-1.5 sm:gap-2 cursor-pointer']"
           >
             <span>Pendientes</span>
-            <span :class="[activeTab === 'pendientes' ? 'bg-indigo-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400', 'px-2 py-0.5 rounded-lg text-xs font-bold']">{{ countPendientes }}</span>
+            <span :class="[activeTab === 'pendientes' ? 'bg-indigo-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400', 'px-1.5 sm:px-2 py-0.5 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold']">{{ countPendientes }}</span>
           </button>
           <button
             @click="activeTab = 'activas'"
-            :class="[activeTab === 'activas' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-none' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800', 'px-5 py-2.5 rounded-2xl font-bold text-sm transition-all flex items-center gap-2']"
+            :class="[activeTab === 'activas' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-none' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800', 'px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm transition-all flex items-center gap-1.5 sm:gap-2 cursor-pointer']"
           >
             <span>Activas</span>
-            <span :class="[activeTab === 'activas' ? 'bg-indigo-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400', 'px-2 py-0.5 rounded-lg text-xs font-bold']">{{ countActivas }}</span>
+            <span :class="[activeTab === 'activas' ? 'bg-indigo-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400', 'px-1.5 sm:px-2 py-0.5 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold']">{{ countActivas }}</span>
           </button>
           <button
             @click="activeTab = 'historial'"
-            :class="[activeTab === 'historial' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-none' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800', 'px-5 py-2.5 rounded-2xl font-bold text-sm transition-all flex items-center gap-2']"
+            :class="[activeTab === 'historial' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-none' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800', 'px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm transition-all flex items-center gap-1.5 sm:gap-2 cursor-pointer']"
           >
             <span>Historial</span>
-            <span :class="[activeTab === 'historial' ? 'bg-indigo-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400', 'px-2 py-0.5 rounded-lg text-xs font-bold']">{{ countHistorial }}</span>
+            <span :class="[activeTab === 'historial' ? 'bg-indigo-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400', 'px-1.5 sm:px-2 py-0.5 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold']">{{ countHistorial }}</span>
           </button>
           <button
             @click="activeTab = 'rechazadas'"
-            :class="[activeTab === 'rechazadas' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-none' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800', 'px-5 py-2.5 rounded-2xl font-bold text-sm transition-all flex items-center gap-2']"
+            :class="[activeTab === 'rechazadas' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-none' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800', 'px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm transition-all flex items-center gap-1.5 sm:gap-2 cursor-pointer']"
           >
-            <span>Rechazadas/Revocadas</span>
-            <span :class="[activeTab === 'rechazadas' ? 'bg-indigo-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400', 'px-2 py-0.5 rounded-lg text-xs font-bold']">{{ countRechazadas }}</span>
+            <span>Rechazadas</span>
+            <span :class="[activeTab === 'rechazadas' ? 'bg-indigo-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400', 'px-1.5 sm:px-2 py-0.5 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold']">{{ countRechazadas }}</span>
           </button>
         </div>
         <div class="relative w-full md:w-64 shrink-0">
@@ -310,13 +310,13 @@ const openJsonInspector = (action: AccionAuditoria) => {
             v-model="search"
             type="text"
             placeholder="Buscar por motivo o admin..."
-            class="w-full pl-4 pr-10 py-2.5 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-slate-800 dark:text-white"
+            class="w-full pl-4 pr-10 py-2 sm:py-2.5 bg-slate-50 dark:bg-slate-800 border-none rounded-xl sm:rounded-2xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-slate-800 dark:text-white"
           />
         </div>
       </div>
 
       <!-- Main Loader & States -->
-      <div class="p-2">
+      <div class="p-1 sm:p-2">
         <SkeletonTable v-if="loading" :rows="5" :cols="6" />
 
         <EmptyState
@@ -332,12 +332,12 @@ const openJsonInspector = (action: AccionAuditoria) => {
         <DataTable v-else>
           <template #header>
             <tr>
-              <th class="py-4 px-6">Administrador General</th>
-              <th class="py-4 px-6">Tipo Acceso</th>
-              <th class="py-4 px-6">Motivo Solicitud</th>
-              <th class="py-4 px-6">Duración Max</th>
-              <th class="py-4 px-6">Estado / Fechas</th>
-              <th class="py-4 px-6 text-right">Acciones</th>
+              <th class="py-3 sm:py-4 px-3 sm:px-6">Administrador General</th>
+              <th class="py-3 sm:py-4 px-3 sm:px-6">Tipo Acceso</th>
+              <th class="py-3 sm:py-4 px-3 sm:px-6 hidden md:table-cell">Motivo Solicitud</th>
+              <th class="py-3 sm:py-4 px-3 sm:px-6 hidden sm:table-cell">Duración</th>
+              <th class="py-3 sm:py-4 px-3 sm:px-6">Estado</th>
+              <th class="py-3 sm:py-4 px-3 sm:px-6 text-right">Acciones</th>
             </tr>
           </template>
           <tr
@@ -345,30 +345,30 @@ const openJsonInspector = (action: AccionAuditoria) => {
             :key="sup.id_auditoria"
             class="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors"
           >
-            <td class="py-4 px-6">
-              <div class="flex items-center gap-3">
-                <div class="w-9 h-9 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-500 dark:text-slate-400">
-                  <User :size="16" />
+            <td class="py-3 sm:py-4 px-3 sm:px-6">
+              <div class="flex items-center gap-2.5 sm:gap-3">
+                <div class="w-8 h-8 sm:w-9 sm:h-9 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-500 dark:text-slate-400 shrink-0">
+                  <User :size="15" />
                 </div>
-                <div>
-                  <h4 class="font-bold text-slate-950 dark:text-white text-sm leading-snug">{{ sup.admin_nombre }}</h4>
-                  <p class="text-xs text-slate-400 leading-snug font-mono">{{ sup.admin_email }}</p>
+                <div class="min-w-0">
+                  <h4 class="font-bold text-slate-950 dark:text-white text-xs sm:text-sm leading-snug truncate">{{ sup.admin_nombre }}</h4>
+                  <p class="text-[10px] sm:text-xs text-slate-400 leading-snug font-mono truncate">{{ sup.admin_email }}</p>
                 </div>
               </div>
             </td>
-            <td class="py-4 px-6">
-              <span :class="[sup.tipo_supervision === 'EDITOR' ? 'bg-purple-50 text-purple-600 dark:bg-purple-950/20 dark:text-purple-400' : 'bg-blue-50 text-blue-600 dark:bg-blue-950/20 dark:text-blue-400', 'px-3 py-1.5 rounded-xl text-xs font-bold']">
-                {{ sup.tipo_supervision === 'EDITOR' ? 'Editor' : 'Solo Lectura' }}
+            <td class="py-3 sm:py-4 px-3 sm:px-6">
+              <span :class="[sup.tipo_supervision === 'EDITOR' ? 'bg-purple-50 text-purple-600 dark:bg-purple-950/20 dark:text-purple-400' : 'bg-blue-50 text-blue-600 dark:bg-blue-950/20 dark:text-blue-400', 'px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-bold inline-block whitespace-nowrap']">
+                {{ sup.tipo_supervision === 'EDITOR' ? 'Editor' : 'Lectura' }}
               </span>
             </td>
-            <td class="py-4 px-6 max-w-xs">
-              <p class="text-sm text-slate-600 dark:text-slate-300 font-medium truncate">{{ sup.motivo_solicitud }}</p>
+            <td class="py-3 sm:py-4 px-3 sm:px-6 max-w-xs hidden md:table-cell">
+              <p class="text-xs sm:text-sm text-slate-600 dark:text-slate-300 font-medium truncate">{{ sup.motivo_solicitud }}</p>
             </td>
-            <td class="py-4 px-6 text-sm text-slate-600 dark:text-slate-300 font-semibold font-mono">
-              {{ sup.duracion_maxima_minutos }} min
+            <td class="py-3 sm:py-4 px-3 sm:px-6 text-xs sm:text-sm text-slate-600 dark:text-slate-300 font-semibold font-mono hidden sm:table-cell">
+              {{ sup.duracion_maxima_minutos }}m
             </td>
-            <td class="py-4 px-6">
-              <div class="space-y-1">
+            <td class="py-3 sm:py-4 px-3 sm:px-6">
+              <div class="space-y-0.5 sm:space-y-1">
                 <span :class="[
                   sup.estado_supervision === 'SOLICITADA' ? 'bg-amber-50 text-amber-600 dark:bg-amber-950/20 dark:text-amber-400' : '',
                   sup.estado_supervision === 'APROBADA' ? 'bg-sky-50 text-sky-600 dark:bg-sky-950/20 dark:text-sky-400' : '',
@@ -376,37 +376,37 @@ const openJsonInspector = (action: AccionAuditoria) => {
                   sup.estado_supervision === 'FINALIZADA' ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400' : '',
                   sup.estado_supervision === 'EXPIRADA' ? 'bg-slate-100 text-slate-400 dark:bg-slate-800/50' : '',
                   sup.estado_supervision === 'REVOCADA' ? 'bg-red-50 text-red-600 dark:bg-red-950/20 dark:text-red-400' : '',
-                  'px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider inline-block font-mono'
+                  'px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md sm:rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-wider inline-block font-mono'
                 ]">{{ sup.estado_supervision }}</span>
-                <div class="text-[10px] text-slate-400 font-medium font-mono">
-                  <span>Solicitado: {{ new Date(sup.fecha_solicitud).toLocaleDateString() }}</span>
+                <div class="text-[9px] sm:text-[10px] text-slate-400 font-medium font-mono">
+                  <span>{{ new Date(sup.fecha_solicitud).toLocaleDateString() }}</span>
                 </div>
               </div>
             </td>
-            <td class="py-4 px-6 text-right">
-              <div class="flex items-center justify-end gap-2">
+            <td class="py-3 sm:py-4 px-3 sm:px-6 text-right">
+              <div class="flex items-center justify-end gap-1.5 sm:gap-2">
                 <template v-if="sup.estado_supervision === 'SOLICITADA'">
-                  <button @click="handleApprove(sup)" :disabled="processingAction" class="p-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-400 rounded-xl transition-all" title="Aprobar Solicitud">
+                  <button @click="handleApprove(sup)" :disabled="processingAction" class="p-1.5 sm:p-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-400 rounded-xl transition-all cursor-pointer" title="Aprobar Solicitud">
                     <Check :size="16" />
                   </button>
-                  <button @click="openRejectOrRevoke(sup)" :disabled="processingAction" class="p-2 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-950/20 dark:text-red-400 rounded-xl transition-all" title="Rechazar Solicitud">
+                  <button @click="openRejectOrRevoke(sup)" :disabled="processingAction" class="p-1.5 sm:p-2 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-950/20 dark:text-red-400 rounded-xl transition-all cursor-pointer" title="Rechazar Solicitud">
                     <X :size="16" />
                   </button>
                 </template>
                 <template v-else-if="sup.estado_supervision === 'APROBADA' || sup.estado_supervision === 'ACTIVA'">
-                  <button @click="openRejectOrRevoke(sup)" :disabled="processingAction" class="px-3 py-1.5 bg-red-50 text-red-600 dark:bg-red-950/20 dark:text-red-400 text-xs font-bold rounded-xl hover:bg-red-100 transition-all flex items-center gap-1.5" title="Revocar Acceso">
+                  <button @click="openRejectOrRevoke(sup)" :disabled="processingAction" class="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-red-50 text-red-600 dark:bg-red-950/20 dark:text-red-400 text-xs font-bold rounded-xl hover:bg-red-100 transition-all flex items-center gap-1.5 cursor-pointer" title="Revocar Acceso">
                     <ShieldCheck :size="14" />
                     <span>Revocar</span>
                   </button>
                 </template>
                 <template v-else-if="sup.estado_supervision === 'FINALIZADA' || sup.estado_supervision === 'EXPIRADA'">
-                  <button @click="viewActions(sup)" class="px-3 py-1.5 bg-indigo-50 text-indigo-600 dark:bg-indigo-950/20 dark:text-indigo-400 text-xs font-bold rounded-xl hover:bg-indigo-100 transition-all flex items-center gap-1.5">
+                  <button @click="viewActions(sup)" class="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-indigo-50 text-indigo-600 dark:bg-indigo-950/20 dark:text-indigo-400 text-xs font-bold rounded-xl hover:bg-indigo-100 transition-all flex items-center gap-1.5 cursor-pointer">
                     <Eye :size="14" />
-                    <span>Ver Auditoría</span>
+                    <span>Auditoría</span>
                   </button>
                 </template>
                 <template v-else-if="sup.estado_supervision === 'REVOCADA'">
-                  <span class="text-xs text-slate-400 dark:text-slate-500 font-bold block max-w-[200px] truncate text-right">
+                  <span class="text-[10px] sm:text-xs text-slate-400 dark:text-slate-500 font-bold block max-w-[140px] sm:max-w-[200px] truncate text-right">
                     Revocado por {{ sup.directivo_revocador_nombre || 'Directivo' }}
                   </span>
                 </template>
@@ -419,31 +419,31 @@ const openJsonInspector = (action: AccionAuditoria) => {
       <!-- Modals -->
       <Teleport to="body">
         <!-- Reject / Revoke Modal -->
-        <div v-if="showRevocationModal && selectedSupervision" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div v-if="showRevocationModal && selectedSupervision" class="fixed inset-0 z-[100] flex items-center justify-center p-3.5 sm:p-4">
           <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" @click="showRevocationModal = false"></div>
-          <div class="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[32px] overflow-hidden shadow-2xl border border-slate-100 dark:border-slate-800 p-8 space-y-6">
-            <div class="flex items-start gap-4">
-              <div class="p-3 bg-red-50 dark:bg-red-950/30 rounded-2xl text-red-600 dark:text-red-400 shrink-0">
-                <ShieldAlert :size="24" />
+          <div class="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[32px] overflow-hidden shadow-2xl border border-slate-100 dark:border-slate-800 p-5 sm:p-8 space-y-4 sm:space-y-6 max-h-[90dvh] flex flex-col">
+            <div class="flex items-start gap-3 sm:gap-4">
+              <div class="p-2.5 sm:p-3 bg-red-50 dark:bg-red-950/30 rounded-2xl text-red-600 dark:text-red-400 shrink-0">
+                <ShieldAlert :size="22" class="sm:w-6 sm:h-6" />
               </div>
               <div>
-                <h3 class="text-lg font-black text-slate-900 dark:text-white">
+                <h3 class="text-base sm:text-lg font-black text-slate-900 dark:text-white">
                   {{ selectedSupervision.estado_supervision === 'SOLICITADA' ? 'Rechazar Solicitud' : 'Revocar Supervisión' }}
                 </h3>
-                <p class="text-sm text-slate-400 mt-1">
+                <p class="text-xs sm:text-sm text-slate-400 mt-1 leading-relaxed">
                   {{ selectedSupervision.estado_supervision === 'SOLICITADA'
                     ? 'Por favor, ingrese el motivo del rechazo. Este motivo le será enviado por correo al administrador.'
                     : 'Esta acción cancelará inmediatamente el acceso de supervisión y cerrará su sesión de rector heredada.' }}
                 </p>
               </div>
             </div>
-            <div class="space-y-2">
-              <label class="text-xs font-black text-slate-400 uppercase tracking-wider">Motivo / Razón</label>
-              <textarea v-model="revocationReason" rows="3" placeholder="Describa el motivo..." class="w-full p-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-slate-800 dark:text-white"></textarea>
+            <div class="space-y-1.5 sm:space-y-2">
+              <label class="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider">Motivo / Razón</label>
+              <textarea v-model="revocationReason" rows="3" placeholder="Describa el motivo..." class="w-full p-3 sm:p-4 bg-slate-50 dark:bg-slate-800 border-none rounded-xl sm:rounded-2xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-slate-800 dark:text-white resize-none"></textarea>
             </div>
-            <div class="flex justify-end gap-3 pt-2">
-              <button @click="showRevocationModal = false" class="px-5 py-3 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-2xl font-bold text-sm hover:bg-slate-200 transition-all">Cancelar</button>
-              <button @click="handleRejectOrRevoke" :disabled="processingAction" class="px-5 py-3 bg-red-600 text-white rounded-2xl font-bold text-sm hover:bg-red-700 transition-all flex items-center gap-2">
+            <div class="flex flex-col-reverse sm:flex-row justify-end gap-2.5 sm:gap-3 pt-2">
+              <button @click="showRevocationModal = false" class="w-full sm:w-auto px-4 sm:px-5 py-2.5 sm:py-3 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm hover:bg-slate-200 transition-all cursor-pointer">Cancelar</button>
+              <button @click="handleRejectOrRevoke" :disabled="processingAction" class="w-full sm:w-auto px-4 sm:px-5 py-2.5 sm:py-3 bg-red-600 text-white rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm hover:bg-red-700 transition-all flex items-center justify-center gap-2 cursor-pointer">
                 <span v-if="processingAction" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
                 <span>Confirmar</span>
               </button>
@@ -452,34 +452,34 @@ const openJsonInspector = (action: AccionAuditoria) => {
         </div>
 
         <!-- Audit Trail Modal -->
-        <div v-if="showActionsModal && selectedSupervision" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div v-if="showActionsModal && selectedSupervision" class="fixed inset-0 z-[100] flex items-center justify-center p-3.5 sm:p-4">
           <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" @click="showActionsModal = false"></div>
-          <div class="relative w-full max-w-4xl bg-white dark:bg-slate-900 rounded-[32px] overflow-hidden shadow-2xl border border-slate-100 dark:border-slate-800 flex flex-col max-h-[85vh]">
-            <div class="p-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900 shrink-0">
-              <div class="flex items-center gap-4">
-                <div class="p-3.5 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl text-indigo-600 dark:text-indigo-400">
-                  <History :size="24" />
+          <div class="relative w-full max-w-4xl bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[32px] overflow-hidden shadow-2xl border border-slate-100 dark:border-slate-800 flex flex-col max-h-[90dvh]">
+            <div class="p-4 sm:p-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900 shrink-0">
+              <div class="flex items-center gap-3 sm:gap-4 min-w-0">
+                <div class="p-2.5 sm:p-3.5 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl text-indigo-600 dark:text-indigo-400 shrink-0">
+                  <History :size="20" class="sm:w-6 sm:h-6" />
                 </div>
-                <div>
-                  <h3 class="text-lg font-black text-slate-900 dark:text-white leading-tight">Bitácora de Cambios de Supervisión</h3>
-                  <p class="text-sm text-slate-400 font-medium">Auditoría #{{ selectedSupervision.id_auditoria }} • Realizado por: {{ selectedSupervision.admin_nombre }}</p>
+                <div class="min-w-0">
+                  <h3 class="text-base sm:text-lg font-black text-slate-900 dark:text-white leading-tight truncate">Bitácora de Cambios de Supervisión</h3>
+                  <p class="text-xs sm:text-sm text-slate-400 font-medium truncate">Auditoría #{{ selectedSupervision.id_auditoria }} • Por: {{ selectedSupervision.admin_nombre }}</p>
                 </div>
               </div>
-              <button @click="showActionsModal = false" class="p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all">
+              <button @click="showActionsModal = false" class="p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer">
                 <X :size="20" />
               </button>
             </div>
-            <div class="p-8 overflow-y-auto flex-1 bg-white dark:bg-slate-900">
-              <div v-if="loadingActions" class="flex flex-col items-center justify-center py-20">
+            <div class="p-4 sm:p-8 overflow-y-auto flex-1 bg-white dark:bg-slate-900">
+              <div v-if="loadingActions" class="flex flex-col items-center justify-center py-16 sm:py-20">
                 <div class="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
                 <p class="mt-3 text-xs text-slate-400 font-medium">Cargando bitácora de acciones...</p>
               </div>
-              <div v-else-if="actions.length === 0" class="flex flex-col items-center justify-center py-16 text-slate-400">
-                <ShieldCheck :size="48" class="opacity-20 mb-3" />
-                <p class="font-bold">No se registraron acciones o cambios durante esta supervisión</p>
+              <div v-else-if="actions.length === 0" class="flex flex-col items-center justify-center py-12 sm:py-16 text-slate-400">
+                <ShieldCheck :size="40" class="opacity-20 mb-3 sm:w-12 sm:h-12" />
+                <p class="font-bold text-xs sm:text-sm text-center px-4">No se registraron acciones o cambios durante esta supervisión</p>
               </div>
-              <div v-else class="space-y-4">
-                <div v-for="act in actions" :key="act.id_accion" class="bg-slate-50/50 dark:bg-slate-800/20 border border-slate-100 dark:border-slate-800/60 p-5 rounded-2xl space-y-3">
+              <div v-else class="space-y-3 sm:space-y-4">
+                <div v-for="act in actions" :key="act.id_accion" class="bg-slate-50/50 dark:bg-slate-800/20 border border-slate-100 dark:border-slate-800/60 p-3.5 sm:p-5 rounded-2xl space-y-2.5 sm:space-y-3">
                   <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
                     <div class="flex items-start gap-2.5">
                       <span :class="[
@@ -491,49 +491,49 @@ const openJsonInspector = (action: AccionAuditoria) => {
                         'px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider block font-mono shrink-0'
                       ]">{{ act.tipo_accion }}</span>
                       <div>
-                        <h4 class="font-bold text-slate-900 dark:text-white text-sm">{{ act.accion }}</h4>
-                        <p class="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5 font-mono">Módulo: {{ act.modulo }}</p>
+                        <h4 class="font-bold text-slate-900 dark:text-white text-xs sm:text-sm">{{ act.accion }}</h4>
+                        <p class="text-[10px] sm:text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5 font-mono">Módulo: {{ act.modulo }}</p>
                       </div>
                     </div>
-                    <div class="text-right text-xs text-slate-400 font-mono">{{ new Date(act.fecha_accion).toLocaleString() }}</div>
+                    <div class="text-right text-[10px] sm:text-xs text-slate-400 font-mono">{{ new Date(act.fecha_accion).toLocaleString() }}</div>
                   </div>
-                  <div class="text-xs space-y-1.5 border-t border-slate-100 dark:border-slate-800/40 pt-3">
-                    <p class="text-slate-500 font-bold">Recurso afectado: <span class="font-semibold text-slate-800 dark:text-slate-200">{{ act.recurso_afectado }}</span></p>
-                    <p v-if="act.usuario_afectado_nombre" class="text-slate-500 font-bold">Usuario afectado: <span class="font-semibold text-slate-800 dark:text-slate-200">{{ act.usuario_afectado_nombre }} ({{ act.usuario_afectado_email }})</span></p>
+                  <div class="text-[11px] sm:text-xs space-y-1 border-t border-slate-100 dark:border-slate-800/40 pt-2.5 sm:pt-3">
+                    <p class="text-slate-500 font-bold">Recurso: <span class="font-semibold text-slate-800 dark:text-slate-200">{{ act.recurso_afectado }}</span></p>
+                    <p v-if="act.usuario_afectado_nombre" class="text-slate-500 font-bold">Usuario: <span class="font-semibold text-slate-800 dark:text-slate-200">{{ act.usuario_afectado_nombre }} ({{ act.usuario_afectado_email }})</span></p>
                   </div>
-                  <div v-if="act.tipo_accion === 'MODIFICACION'" class="bg-blue-50/50 dark:bg-blue-950/10 border border-blue-100/30 p-3 rounded-xl text-xs space-y-2">
-                    <p class="text-blue-900 dark:text-blue-400 font-bold">Motivo de la modificación: <span class="font-medium text-slate-700 dark:text-slate-300 block mt-1 bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-100 dark:border-slate-800">{{ act.motivo_cambio || 'No especificado' }}</span></p>
-                    <button @click="openJsonInspector(act)" class="flex items-center gap-1 text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider underline">Ver valores antes / después</button>
+                  <div v-if="act.tipo_accion === 'MODIFICACION'" class="bg-blue-50/50 dark:bg-blue-950/10 border border-blue-100/30 p-2.5 sm:p-3 rounded-xl text-xs space-y-1.5 sm:space-y-2">
+                    <p class="text-blue-900 dark:text-blue-400 font-bold text-[11px] sm:text-xs">Motivo: <span class="font-medium text-slate-700 dark:text-slate-300 block mt-1 bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-100 dark:border-slate-800">{{ act.motivo_cambio || 'No especificado' }}</span></p>
+                    <button @click="openJsonInspector(act)" class="flex items-center gap-1 text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider underline cursor-pointer">Ver valores antes / después</button>
                   </div>
                 </div>
               </div>
             </div>
-            <div class="p-6 border-t border-slate-100 dark:border-slate-800 flex justify-end shrink-0 bg-slate-50/50 dark:bg-slate-900">
-              <button @click="showActionsModal = false" class="px-6 py-3 bg-slate-900 dark:bg-white dark:text-slate-900 text-white rounded-2xl font-bold text-sm hover:translate-y-[-2px] transition-all">Cerrar Bitácora</button>
+            <div class="p-4 sm:p-6 border-t border-slate-100 dark:border-slate-800 flex justify-end shrink-0 bg-slate-50/50 dark:bg-slate-900">
+              <button @click="showActionsModal = false" class="w-full sm:w-auto px-5 sm:px-6 py-2.5 sm:py-3 bg-slate-900 dark:bg-white dark:text-slate-900 text-white rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm hover:translate-y-[-2px] transition-all cursor-pointer">Cerrar Bitácora</button>
             </div>
           </div>
         </div>
 
         <!-- JSON Inspector Modal -->
-        <div v-if="showJsonModal && activeAction" class="fixed inset-0 z-[120] flex items-center justify-center p-4">
+        <div v-if="showJsonModal && activeAction" class="fixed inset-0 z-[120] flex items-center justify-center p-3.5 sm:p-4">
           <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" @click="showJsonModal = false"></div>
-          <div class="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-[32px] overflow-hidden shadow-2xl border border-slate-100 dark:border-slate-800">
-            <div class="px-8 pt-8 pb-4 border-b border-slate-100 dark:border-slate-800">
-              <h3 class="text-lg font-black text-slate-900 dark:text-white">Cambios en el Registro</h3>
-              <p class="text-xs text-slate-400 font-medium mt-0.5">{{ activeAction.accion }}</p>
+          <div class="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[32px] overflow-hidden shadow-2xl border border-slate-100 dark:border-slate-800 max-h-[90dvh] flex flex-col">
+            <div class="px-5 sm:px-8 pt-5 sm:pt-8 pb-3 sm:pb-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
+              <h3 class="text-base sm:text-lg font-black text-slate-900 dark:text-white">Cambios en el Registro</h3>
+              <p class="text-[11px] sm:text-xs text-slate-400 font-medium mt-0.5">{{ activeAction.accion }}</p>
             </div>
-            <div class="p-6 grid grid-cols-2 gap-4 h-[400px] overflow-hidden">
-              <div class="flex flex-col h-full">
-                <span class="text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Valor Anterior</span>
-                <pre class="flex-1 bg-slate-50 dark:bg-slate-800/80 p-4 rounded-2xl text-[10px] font-mono text-slate-800 dark:text-slate-200 overflow-auto border border-slate-100 dark:border-slate-800">{{ JSON.stringify(oldJson, null, 2) }}</pre>
+            <div class="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 flex-1 overflow-y-auto min-h-0">
+              <div class="flex flex-col h-60 sm:h-full">
+                <span class="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider mb-1.5 sm:mb-2">Valor Anterior</span>
+                <pre class="flex-1 bg-slate-50 dark:bg-slate-800/80 p-3 sm:p-4 rounded-xl sm:rounded-2xl text-[10px] font-mono text-slate-800 dark:text-slate-200 overflow-auto border border-slate-100 dark:border-slate-800">{{ JSON.stringify(oldJson, null, 2) }}</pre>
               </div>
-              <div class="flex flex-col h-full">
-                <span class="text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Valor Nuevo</span>
-                <pre class="flex-1 bg-indigo-50/20 dark:bg-indigo-950/10 p-4 rounded-2xl text-[10px] font-mono text-indigo-950 dark:text-indigo-200 overflow-auto border border-indigo-100/20 dark:border-indigo-900/30">{{ JSON.stringify(newJson, null, 2) }}</pre>
+              <div class="flex flex-col h-60 sm:h-full">
+                <span class="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider mb-1.5 sm:mb-2">Valor Nuevo</span>
+                <pre class="flex-1 bg-indigo-50/20 dark:bg-indigo-950/10 p-3 sm:p-4 rounded-xl sm:rounded-2xl text-[10px] font-mono text-indigo-950 dark:text-indigo-200 overflow-auto border border-indigo-100/20 dark:border-indigo-900/30">{{ JSON.stringify(newJson, null, 2) }}</pre>
               </div>
             </div>
-            <div class="bg-slate-50 dark:bg-slate-800/50 p-6 flex justify-end border-t border-slate-100 dark:border-slate-800">
-              <button @click="showJsonModal = false" class="px-6 py-2.5 bg-slate-900 dark:bg-white dark:text-slate-900 text-white rounded-xl font-bold text-xs">Cerrar Visor</button>
+            <div class="bg-slate-50 dark:bg-slate-800/50 p-4 sm:p-6 flex justify-end border-t border-slate-100 dark:border-slate-800 shrink-0">
+              <button @click="showJsonModal = false" class="w-full sm:w-auto px-5 sm:px-6 py-2 sm:py-2.5 bg-slate-900 dark:bg-white dark:text-slate-900 text-white rounded-xl font-bold text-xs cursor-pointer">Cerrar Visor</button>
             </div>
           </div>
         </div>

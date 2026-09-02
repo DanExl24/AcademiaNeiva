@@ -984,13 +984,13 @@ onMounted(async () => {
 
 <style scoped>
 .tracking-container {
-  padding: 1.5rem;
+  padding: 0;
   max-width: 1400px;
   margin: 0 auto;
 }
 
 .tracking-header {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
 }
 
 .header-badge {
@@ -1001,22 +1001,34 @@ onMounted(async () => {
   background: rgba(37, 99, 235, 0.1);
   color: #2563eb;
   border-radius: 9999px;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-weight: 700;
   margin-bottom: 0.5rem;
 }
 
 .header-title {
-  font-size: 1.75rem;
+  font-size: 1.35rem;
   font-weight: 900;
   color: #0f172a;
   letter-spacing: -0.025em;
   margin-bottom: 0.25rem;
 }
 
+@media (min-width: 640px) {
+  .header-title {
+    font-size: 1.75rem;
+  }
+}
+
 .header-subtitle {
   color: #64748b;
-  font-size: 0.9rem;
+  font-size: 0.825rem;
+}
+
+@media (min-width: 640px) {
+  .header-subtitle {
+    font-size: 0.9rem;
+  }
 }
 
 .filters-card {
@@ -1030,7 +1042,7 @@ onMounted(async () => {
 
 .filters-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 0.75rem;
   align-items: flex-end;
 }
@@ -1098,23 +1110,36 @@ onMounted(async () => {
   display: flex;
   gap: 0.5rem;
   border-bottom: 2px solid #e2e8f0;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
+  overflow-x: auto;
+  white-space: nowrap;
+  padding-bottom: 2px;
+  -webkit-overflow-scrolling: touch;
 }
 
 .tab-btn {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.25rem;
+  gap: 0.4rem;
+  padding: 0.65rem 1rem;
   border: none;
   background: transparent;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   font-weight: 700;
   color: #64748b;
   border-bottom: 3px solid transparent;
   cursor: pointer;
   margin-bottom: -2px;
   transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+@media (min-width: 640px) {
+  .tab-btn {
+    font-size: 0.9rem;
+    padding: 0.75rem 1.25rem;
+    gap: 0.5rem;
+  }
 }
 
 .tab-btn:hover {

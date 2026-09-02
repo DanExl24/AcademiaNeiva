@@ -561,42 +561,42 @@ const saveChanges = async () => {
 </script>
 
 <template>
-  <div class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+  <div class="space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-16">
     <!-- Header banner -->
-    <div class="rounded-3xl border border-slate-100 bg-white p-8 shadow-sm md:p-10 dark:bg-slate-900 dark:border-slate-800">
-      <div class="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-        <div class="flex items-center gap-4">
-          <div class="p-4 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl text-indigo-600 dark:text-indigo-400">
-            <School :size="32" />
+    <div class="rounded-2xl sm:rounded-3xl border border-slate-100 bg-white p-4 sm:p-8 md:p-10 shadow-sm dark:bg-slate-900 dark:border-slate-800">
+      <div class="flex flex-col gap-4 sm:gap-5 lg:flex-row lg:items-center lg:justify-between">
+        <div class="flex items-center gap-3 sm:gap-4">
+          <div class="p-3 sm:p-4 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl text-indigo-600 dark:text-indigo-400 shrink-0">
+            <School :size="26" class="sm:w-8 sm:h-8" />
           </div>
           <div>
-            <h1 class="text-3xl font-black text-slate-900 dark:text-white leading-none">Mi Colegio</h1>
-            <p class="mt-2 text-slate-500 dark:text-slate-400">Visualiza los datos institucionales y gestiona el escudo y los colores de la plataforma.</p>
+            <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white leading-tight">Mi Colegio</h1>
+            <p class="mt-1 sm:mt-2 text-xs sm:text-sm text-slate-500 dark:text-slate-400">Visualiza los datos institucionales y gestiona el escudo y los colores de la plataforma.</p>
           </div>
         </div>
 
         <!-- Supervision notice -->
-        <div v-if="isSupervision" class="flex items-center gap-2 rounded-2xl bg-amber-50 px-4 py-3 text-xs font-black text-amber-800 dark:bg-amber-950/30 dark:text-amber-400 border border-amber-200/50">
-          <ShieldAlert :size="16" class="animate-pulse" />
+        <div v-if="isSupervision" class="flex items-center gap-2 rounded-xl sm:rounded-2xl bg-amber-50 px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs font-black text-amber-800 dark:bg-amber-950/30 dark:text-amber-400 border border-amber-200/50">
+          <ShieldAlert :size="16" class="animate-pulse shrink-0" />
           <span>Modo Supervisión: Modificando como Editor. Se requiere justificación.</span>
         </div>
       </div>
     </div>
 
     <!-- Loading state -->
-    <div v-if="loading" class="rounded-3xl border border-slate-100 bg-white p-20 text-center shadow-sm dark:bg-slate-900 dark:border-slate-800">
-      <RefreshCw class="animate-spin h-8 w-8 mx-auto text-indigo-600 mb-3" />
-      <span class="font-bold text-slate-400">Cargando información del colegio...</span>
+    <div v-if="loading" class="rounded-2xl sm:rounded-3xl border border-slate-100 bg-white p-12 sm:p-20 text-center shadow-sm dark:bg-slate-900 dark:border-slate-800">
+      <RefreshCw class="animate-spin h-7 w-7 sm:h-8 sm:w-8 mx-auto text-indigo-600 mb-3" />
+      <span class="font-bold text-xs sm:text-sm text-slate-400">Cargando información del colegio...</span>
     </div>
 
     <template v-else-if="schoolData">
       <!-- Tabs -->
-      <div class="flex gap-2 p-1 bg-slate-100 dark:bg-slate-800/60 rounded-2xl w-fit shrink-0">
+      <div class="flex flex-wrap gap-1.5 sm:gap-2 p-1 bg-slate-100 dark:bg-slate-800/60 rounded-xl sm:rounded-2xl w-full sm:w-fit shrink-0">
         <button 
           @click="activeTab = 'general'"
           :class="[
             activeTab === 'general' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200',
-            'px-5 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2'
+            'flex-1 sm:flex-initial px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer'
           ]"
         >
           <FileText :size="15" />
@@ -606,7 +606,7 @@ const saveChanges = async () => {
           @click="activeTab = 'identity'"
           :class="[
             activeTab === 'identity' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200',
-            'px-5 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2'
+            'flex-1 sm:flex-initial px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer'
           ]"
         >
           <Palette :size="15" />
@@ -615,79 +615,79 @@ const saveChanges = async () => {
       </div>
 
       <!-- Tab Content: General Info -->
-      <div v-if="activeTab === 'general'" class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div v-if="activeTab === 'general'" class="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
         <!-- Main stats & card details -->
-        <div class="lg:col-span-2 space-y-8">
-          <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-8 shadow-sm">
-            <h2 class="text-xl font-black text-slate-900 dark:text-white mb-6 border-b border-slate-50 dark:border-slate-800/50 pb-3">Detalles Institucionales</h2>
+        <div class="lg:col-span-2 space-y-6 sm:space-y-8">
+          <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-8 shadow-sm">
+            <h2 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white mb-4 sm:mb-6 border-b border-slate-50 dark:border-slate-800/50 pb-2.5 sm:pb-3">Detalles Institucionales</h2>
             
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
-              <div class="flex items-start gap-3">
-                <div class="p-2 bg-slate-50 dark:bg-slate-800 rounded-xl text-slate-400">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 text-xs sm:text-sm">
+              <div class="flex items-start gap-2.5 sm:gap-3">
+                <div class="p-2 bg-slate-50 dark:bg-slate-800 rounded-xl text-slate-400 shrink-0">
                   <School :size="18" />
                 </div>
                 <div>
-                  <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Nombre del Colegio</p>
+                  <p class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Nombre del Colegio</p>
                   <p class="font-extrabold text-slate-800 dark:text-white mt-0.5">{{ schoolData.nombre }}</p>
                 </div>
               </div>
 
-              <div class="flex items-start gap-3">
-                <div class="p-2 bg-slate-50 dark:bg-slate-800 rounded-xl text-slate-400">
+              <div class="flex items-start gap-2.5 sm:gap-3">
+                <div class="p-2 bg-slate-50 dark:bg-slate-800 rounded-xl text-slate-400 shrink-0">
                   <Hash :size="18" />
                 </div>
                 <div>
-                  <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Código DANE</p>
+                  <p class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Código DANE</p>
                   <p class="font-bold text-slate-800 dark:text-white mt-0.5 font-mono">{{ schoolData.dane }}</p>
                 </div>
               </div>
 
-              <div class="flex items-start gap-3">
-                <div class="p-2 bg-slate-50 dark:bg-slate-800 rounded-xl text-slate-400">
+              <div class="flex items-start gap-2.5 sm:gap-3">
+                <div class="p-2 bg-slate-50 dark:bg-slate-800 rounded-xl text-slate-400 shrink-0">
                   <MapPin :size="18" />
                 </div>
                 <div>
-                  <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Sede</p>
+                  <p class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Sede</p>
                   <p class="font-semibold text-slate-800 dark:text-slate-350 mt-0.5">{{ schoolData.sede || 'Sede Principal' }}</p>
                 </div>
               </div>
 
-              <div class="flex items-start gap-3">
-                <div class="p-2 bg-slate-50 dark:bg-slate-800 rounded-xl text-slate-400">
+              <div class="flex items-start gap-2.5 sm:gap-3">
+                <div class="p-2 bg-slate-50 dark:bg-slate-800 rounded-xl text-slate-400 shrink-0">
                   <Sliders :size="18" />
                 </div>
                 <div>
-                  <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Tipo Colegio</p>
+                  <p class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Tipo Colegio</p>
                   <p class="font-semibold text-slate-800 dark:text-slate-350 mt-0.5">{{ schoolData.tipo_colegio }}</p>
                 </div>
               </div>
 
-              <div class="flex items-start gap-3">
-                <div class="p-2 bg-slate-50 dark:bg-slate-800 rounded-xl text-slate-400">
+              <div class="flex items-start gap-2.5 sm:gap-3">
+                <div class="p-2 bg-slate-50 dark:bg-slate-800 rounded-xl text-slate-400 shrink-0">
                   <Mail :size="18" />
                 </div>
                 <div>
-                  <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Correo Institucional</p>
-                  <p class="font-semibold text-slate-800 dark:text-slate-350 mt-0.5">{{ schoolData.correo }}</p>
+                  <p class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Correo Institucional</p>
+                  <p class="font-semibold text-slate-800 dark:text-slate-350 mt-0.5 break-all">{{ schoolData.correo }}</p>
                 </div>
               </div>
 
-              <div class="flex items-start gap-3">
-                <div class="p-2 bg-slate-50 dark:bg-slate-800 rounded-xl text-slate-400">
+              <div class="flex items-start gap-2.5 sm:gap-3">
+                <div class="p-2 bg-slate-50 dark:bg-slate-800 rounded-xl text-slate-400 shrink-0">
                   <Phone :size="18" />
                 </div>
                 <div>
-                  <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Contacto Telefónico</p>
+                  <p class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Contacto Telefónico</p>
                   <p class="font-semibold text-slate-800 dark:text-slate-350 mt-0.5">{{ schoolData.contacto || 'No registrado' }}</p>
                 </div>
               </div>
 
-              <div class="flex items-start gap-3">
-                <div class="p-2 bg-slate-50 dark:bg-slate-800 rounded-xl text-slate-400">
+              <div class="flex items-start gap-2.5 sm:gap-3">
+                <div class="p-2 bg-slate-50 dark:bg-slate-800 rounded-xl text-slate-400 shrink-0">
                   <Calendar :size="18" />
                 </div>
                 <div>
-                  <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Calendario</p>
+                  <p class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Calendario</p>
                   <p class="font-bold text-slate-800 dark:text-white mt-0.5">Calendario {{ schoolData.tipo_calendario || 'A' }}</p>
                 </div>
               </div>
@@ -695,34 +695,34 @@ const saveChanges = async () => {
           </div>
 
           <!-- School KPIs -->
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
-              <div class="p-3 bg-sky-50 dark:bg-sky-950/30 text-sky-600 dark:text-sky-400 rounded-2xl">
-                <Users :size="24" />
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5 sm:gap-6">
+            <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm flex items-center gap-3 sm:gap-4 hover:shadow-md transition-shadow">
+              <div class="p-2.5 sm:p-3 bg-sky-50 dark:bg-sky-950/30 text-sky-600 dark:text-sky-400 rounded-xl sm:rounded-2xl shrink-0">
+                <Users :size="20" class="sm:w-6 sm:h-6" />
               </div>
               <div>
-                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Estudiantes Activos</p>
-                <h3 class="text-2xl font-black text-slate-900 dark:text-white mt-0.5 font-mono">{{ kpis.totalEstudiantes }}</h3>
+                <p class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Estudiantes</p>
+                <h3 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mt-0.5 font-mono">{{ kpis.totalEstudiantes }}</h3>
               </div>
             </div>
 
-            <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
-              <div class="p-3 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 rounded-2xl">
-                <Users :size="24" />
+            <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm flex items-center gap-3 sm:gap-4 hover:shadow-md transition-shadow">
+              <div class="p-2.5 sm:p-3 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 rounded-xl sm:rounded-2xl shrink-0">
+                <Users :size="20" class="sm:w-6 sm:h-6" />
               </div>
               <div>
-                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Docentes Activos</p>
-                <h3 class="text-2xl font-black text-slate-900 dark:text-white mt-0.5 font-mono">{{ kpis.totalDocentes }}</h3>
+                <p class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Docentes</p>
+                <h3 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mt-0.5 font-mono">{{ kpis.totalDocentes }}</h3>
               </div>
             </div>
 
-            <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
-              <div class="p-3 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 rounded-2xl">
-                <Users :size="24" />
+            <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm flex items-center gap-3 sm:gap-4 hover:shadow-md transition-shadow">
+              <div class="p-2.5 sm:p-3 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 rounded-xl sm:rounded-2xl shrink-0">
+                <Users :size="20" class="sm:w-6 sm:h-6" />
               </div>
               <div>
-                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Padres Registrados</p>
-                <h3 class="text-2xl font-black text-slate-900 dark:text-white mt-0.5 font-mono">{{ kpis.totalPadres }}</h3>
+                <p class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Padres</p>
+                <h3 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mt-0.5 font-mono">{{ kpis.totalPadres }}</h3>
               </div>
             </div>
           </div>
@@ -730,12 +730,12 @@ const saveChanges = async () => {
 
         <!-- Sidebar visual card -->
         <div class="lg:col-span-1 space-y-6">
-          <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-8 shadow-sm flex flex-col items-center justify-center text-center space-y-4">
+          <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-5 sm:p-8 shadow-sm flex flex-col items-center justify-center text-center space-y-3 sm:space-y-4">
             <h4 class="text-xs font-black text-slate-400 uppercase tracking-wider self-start">Escudo del Colegio</h4>
             
-            <div class="w-40 h-40 rounded-full bg-slate-50 dark:bg-slate-800/40 p-4 border border-slate-100 dark:border-slate-800 flex items-center justify-center overflow-hidden">
+            <div class="w-32 h-32 sm:w-40 sm:h-40 rounded-full bg-slate-50 dark:bg-slate-800/40 p-3 sm:p-4 border border-slate-100 dark:border-slate-800 flex items-center justify-center overflow-hidden">
               <img v-if="getShieldUrl(form.escudo_url)" :src="getShieldUrl(form.escudo_url)" alt="Escudo" class="w-full h-full object-contain" />
-              <School v-else class="text-slate-300 dark:text-slate-700" :size="72" />
+              <School v-else class="text-slate-300 dark:text-slate-700" :size="60" />
             </div>
             
             <div v-if="getShieldUrl(form.escudo_url)" class="space-y-1">
@@ -945,15 +945,15 @@ const saveChanges = async () => {
             </div>
 
             <!-- Form Action buttons -->
-            <div class="flex flex-wrap gap-3 pt-6 border-t border-slate-100 dark:border-slate-800">
-              <button @click="resetToDefaults" :disabled="saving" class="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all shrink-0">
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 pt-5 sm:pt-6 border-t border-slate-100 dark:border-slate-800">
+              <button @click="resetToDefaults" :disabled="saving" class="flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer">
                 <RefreshCw :size="14" />
                 Restablecer por defecto
               </button>
               
-              <div class="flex-1"></div>
+              <div class="hidden sm:block flex-1"></div>
               
-              <button @click="undoChanges" :disabled="saving" class="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-800 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl text-xs font-bold transition-all">
+              <button @click="undoChanges" :disabled="saving" class="flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-800 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl text-xs font-bold transition-all cursor-pointer">
                 <Undo :size="14" />
                 Deshacer cambios
               </button>
@@ -961,7 +961,7 @@ const saveChanges = async () => {
               <button 
                 @click="saveChanges" 
                 :disabled="saving" 
-                class="flex items-center justify-center gap-1.5 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-200 dark:shadow-none"
+                class="flex items-center justify-center gap-1.5 px-5 sm:px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-200 dark:shadow-none cursor-pointer"
                 :style="form.color_primario ? { backgroundColor: form.color_primario } : {}"
               >
                 <Check :size="14" />

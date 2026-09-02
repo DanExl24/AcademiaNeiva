@@ -270,50 +270,50 @@ const handleDelete = async (college: Colegio) => {
 </script>
 
 <template>
-  <div class="max-w-[1400px] mx-auto space-y-6">
+  <div class="max-w-[1400px] mx-auto space-y-4 sm:space-y-6 animate-in fade-in duration-500 pb-16">
     <!-- Header -->
-    <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden transition-all duration-300">
-      <div class="px-8 py-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div class="flex items-center gap-4">
-          <div class="p-4 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl text-indigo-600 dark:text-indigo-400">
-            <School :size="32" />
+    <div class="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden transition-all duration-300">
+      <div class="px-4 sm:px-8 py-6 sm:py-10 flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
+        <div class="flex items-center gap-3 sm:gap-4">
+          <div class="p-3 sm:p-4 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl text-indigo-600 dark:text-indigo-400 shrink-0">
+            <School :size="26" class="sm:w-8 sm:h-8" />
           </div>
           <div>
-            <h1 class="text-2xl font-black text-slate-900 dark:text-white leading-tight">Colegios Registrados</h1>
-            <p class="text-slate-500 dark:text-slate-400 font-medium">Administra e incorpora colegios al sistema global.</p>
+            <h1 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white leading-tight">Colegios Registrados</h1>
+            <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium mt-0.5">Administra e incorpora colegios al sistema global.</p>
           </div>
         </div>
         
-        <button @click="openCreate" class="flex items-center gap-2 px-5 py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 dark:shadow-none">
-          <Plus :size="18" />
+        <button @click="openCreate" class="flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 sm:py-3 bg-indigo-600 text-white rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 dark:shadow-none self-stretch sm:self-start md:self-auto cursor-pointer">
+          <Plus :size="16" class="sm:w-4.5 sm:h-4.5" />
           Registrar Colegio
         </button>
       </div>
     </div>
 
     <!-- KPIs Row -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
       <StatCard title="Total Instituciones" :value="stats.total">
         <template #icon>
-          <School :size="20" class="text-indigo-600 dark:text-indigo-400" />
+          <School :size="18" class="sm:w-5 sm:h-5 text-indigo-600 dark:text-indigo-400" />
         </template>
       </StatCard>
 
       <StatCard title="Activas" :value="stats.activos">
         <template #icon>
-          <CheckCircle :size="20" class="text-emerald-600 dark:text-emerald-400" />
+          <CheckCircle :size="18" class="sm:w-5 sm:h-5 text-emerald-600 dark:text-emerald-400" />
         </template>
       </StatCard>
 
       <StatCard title="Pendientes" :value="stats.pendientes">
         <template #icon>
-          <AlertTriangle :size="20" class="text-amber-600 dark:text-amber-400" />
+          <AlertTriangle :size="18" class="sm:w-5 sm:h-5 text-amber-600 dark:text-amber-400" />
         </template>
       </StatCard>
 
       <StatCard title="Suspendidas" :value="stats.suspendidos">
         <template #icon>
-          <XCircle :size="20" class="text-red-600 dark:text-red-400" />
+          <XCircle :size="18" class="sm:w-5 sm:h-5 text-red-600 dark:text-red-400" />
         </template>
       </StatCard>
     </div>
@@ -321,17 +321,17 @@ const handleDelete = async (college: Colegio) => {
 
     <!-- Filters and Grid -->
     <div class="space-y-4">
-      <div class="flex flex-col sm:flex-row gap-3 bg-white dark:bg-slate-900 p-4 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
+      <div class="flex flex-col sm:flex-row gap-2.5 sm:gap-3 bg-white dark:bg-slate-900 p-3 sm:p-4 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
         <div class="relative flex-1">
           <Search class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" :size="16" />
           <input 
             v-model="search" 
             type="text" 
             placeholder="Buscar por nombre, DANE, correo..."
-            class="w-full bg-slate-50 dark:bg-slate-800/50 border-none rounded-xl py-3 pl-11 pr-4 text-sm font-medium outline-none text-slate-900 dark:text-white"
+            class="w-full bg-slate-50 dark:bg-slate-800/50 border-none rounded-xl py-2.5 sm:py-3 pl-10 sm:pl-11 pr-4 text-xs sm:text-sm font-medium outline-none text-slate-900 dark:text-white"
           />
         </div>
-        <select v-model="selectedEstado" class="bg-slate-50 dark:bg-slate-800/50 rounded-xl px-4 py-3 text-sm font-bold border-none outline-none text-slate-700 dark:text-slate-200 cursor-pointer min-w-[150px]">
+        <select v-model="selectedEstado" class="bg-slate-50 dark:bg-slate-800/50 rounded-xl px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-bold border-none outline-none text-slate-700 dark:text-slate-200 cursor-pointer min-w-full sm:min-w-[160px]">
           <option value="">Todos los estados</option>
           <option value="PENDIENTE">Pendientes</option>
           <option value="ACTIVO">Activos</option>
@@ -343,7 +343,7 @@ const handleDelete = async (college: Colegio) => {
 
       <!-- College Grid -->
       <div v-if="loading" class="h-64 flex items-center justify-center text-slate-400">
-        <span class="animate-pulse font-bold">Cargando instituciones...</span>
+        <span class="animate-pulse font-bold text-xs sm:text-sm">Cargando instituciones...</span>
       </div>
 
       <EmptyState 
@@ -357,18 +357,18 @@ const handleDelete = async (college: Colegio) => {
       </EmptyState>
 
 
-      <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
         <div 
           v-for="college in colleges" 
           :key="college.id_colegio"
-          class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
+          class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
         >
-          <div class="space-y-4">
+          <div class="space-y-3 sm:space-y-4">
             <!-- Title & Status -->
-            <div class="flex justify-between items-start">
-              <div>
-                <h3 class="font-black text-slate-800 dark:text-white text-lg leading-snug">{{ college.nombre }}</h3>
-                <p class="text-xs text-indigo-500 font-bold uppercase mt-0.5 tracking-wider">{{ college.tipo_colegio }}</p>
+            <div class="flex justify-between items-start gap-2">
+              <div class="min-w-0 flex-1">
+                <h3 class="font-black text-slate-800 dark:text-white text-base sm:text-lg leading-snug truncate">{{ college.nombre }}</h3>
+                <p class="text-[10px] sm:text-xs text-indigo-500 font-bold uppercase mt-0.5 tracking-wider truncate">{{ college.tipo_colegio }}</p>
               </div>
               <span 
                 :class="[
@@ -377,7 +377,7 @@ const handleDelete = async (college: Colegio) => {
                   college.estado === 'SUSPENDIDO' ? 'bg-orange-50 text-orange-600 dark:bg-orange-950/20 dark:text-orange-400' : '',
                   college.estado === 'RECHAZADO' ? 'bg-red-50 text-red-600 dark:bg-red-950/20 dark:text-red-400' : '',
                   college.estado === 'ELIMINADO' ? 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400' : '',
-                  'px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider'
+                  'px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider shrink-0'
                 ]"
               >
                 {{ college.estado }}
@@ -385,83 +385,83 @@ const handleDelete = async (college: Colegio) => {
             </div>
 
             <!-- Meta info -->
-            <div class="space-y-2 text-xs font-semibold text-slate-500 dark:text-slate-400 border-t border-slate-50 dark:border-slate-800/50 pt-4">
+            <div class="space-y-1.5 sm:space-y-2 text-[11px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 border-t border-slate-50 dark:border-slate-800/50 pt-3 sm:pt-4">
               <div class="flex items-center gap-2">
-                <Hash :size="14" class="text-slate-400" />
-                <span>DANE: <span class="font-mono">{{ college.dane }}</span></span>
+                <Hash :size="14" class="text-slate-400 shrink-0" />
+                <span class="truncate">DANE: <span class="font-mono">{{ college.dane }}</span></span>
               </div>
               <div class="flex items-center gap-2">
-                <MapPin :size="14" class="text-slate-400" />
-                <span class="truncate">Sede: {{ college.sede }}</span>
+                <MapPin :size="14" class="text-slate-400 shrink-0" />
+                <span class="truncate">Sede: {{ college.sede || 'Principal' }}</span>
               </div>
               <div class="flex items-center gap-2">
-                <Mail :size="14" class="text-slate-400" />
+                <Mail :size="14" class="text-slate-400 shrink-0" />
                 <span class="truncate">{{ college.correo }}</span>
               </div>
               <div class="flex items-center gap-2">
-                <Phone :size="14" class="text-slate-400" />
-                <span>Contacto: {{ college.contacto }}</span>
+                <Phone :size="14" class="text-slate-400 shrink-0" />
+                <span class="truncate">Contacto: {{ college.contacto || 'No registrado' }}</span>
               </div>
               <div class="flex items-center gap-2">
-                <Calendar :size="14" class="text-slate-400" />
+                <Calendar :size="14" class="text-slate-400 shrink-0" />
                 <span>Calendario: <span class="font-bold">{{ college.tipo_calendario }}</span></span>
               </div>
             </div>
           </div>
 
           <!-- Actions -->
-          <div class="flex items-center justify-between border-t border-slate-50 dark:border-slate-800/50 pt-4 mt-6">
-            <button @click="openDetails(college)" class="flex items-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/40 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-bold transition-all">
+          <div class="flex items-center justify-between border-t border-slate-50 dark:border-slate-800/50 pt-3.5 sm:pt-4 mt-4 sm:mt-6">
+            <button @click="openDetails(college)" class="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/40 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-bold transition-all cursor-pointer">
               <Eye :size="14" />
               Detalles
             </button>
 
-            <div class="flex items-center gap-1.5">
+            <div class="flex items-center gap-1 sm:gap-1.5">
               <!-- Edit -->
               <button 
                 v-if="college.estado !== 'ELIMINADO'"
                 @click="openEdit(college)" 
-                class="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/20 rounded-xl transition-all"
+                class="p-1.5 sm:p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/20 rounded-xl transition-all cursor-pointer"
                 title="Editar"
               >
-                <Edit3 :size="16" />
+                <Edit3 :size="15" class="sm:w-4 sm:h-4" />
               </button>
 
               <!-- State-based Admin Actions -->
               <template v-if="college.estado === 'PENDIENTE'">
                 <button 
                   @click="updateStatus(college, 'ACTIVO')" 
-                  class="p-2 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 rounded-xl transition-all"
+                  class="p-1.5 sm:p-2 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 rounded-xl transition-all cursor-pointer"
                   title="Aprobar e Incorporar"
                 >
-                  <CheckCircle :size="16" />
+                  <CheckCircle :size="15" class="sm:w-4 sm:h-4" />
                 </button>
                 <button 
                   @click="openReject(college)" 
-                  class="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl transition-all"
+                  class="p-1.5 sm:p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl transition-all cursor-pointer"
                   title="Rechazar incorporación"
                 >
-                  <XCircle :size="16" />
+                  <XCircle :size="15" class="sm:w-4 sm:h-4" />
                 </button>
               </template>
 
               <template v-if="college.estado === 'ACTIVO'">
                 <button 
                   @click="updateStatus(college, 'SUSPENDIDO')" 
-                  class="p-2 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/20 rounded-xl transition-all"
+                  class="p-1.5 sm:p-2 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/20 rounded-xl transition-all cursor-pointer"
                   title="Suspender Colegio"
                 >
-                  <AlertTriangle :size="16" />
+                  <AlertTriangle :size="15" class="sm:w-4 sm:h-4" />
                 </button>
               </template>
 
               <template v-if="college.estado === 'SUSPENDIDO'">
                 <button 
                   @click="updateStatus(college, 'ACTIVO')" 
-                  class="p-2 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 rounded-xl transition-all"
+                  class="p-1.5 sm:p-2 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 rounded-xl transition-all cursor-pointer"
                   title="Re-activar Colegio"
                 >
-                  <CheckCircle :size="16" />
+                  <CheckCircle :size="15" class="sm:w-4 sm:h-4" />
                 </button>
               </template>
 
@@ -469,10 +469,10 @@ const handleDelete = async (college: Colegio) => {
               <button 
                 v-if="college.estado !== 'ELIMINADO'"
                 @click="handleDelete(college)"
-                class="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl transition-all"
+                class="p-1.5 sm:p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl transition-all cursor-pointer"
                 title="Eliminar"
               >
-                <Trash2 :size="16" />
+                <Trash2 :size="15" class="sm:w-4 sm:h-4" />
               </button>
             </div>
           </div>
@@ -483,55 +483,55 @@ const handleDelete = async (college: Colegio) => {
     <!-- Modals -->
     <Teleport to="body">
       <!-- Create/Edit Modals -->
-      <div v-if="showCreateModal || showEditModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div v-if="showCreateModal || showEditModal" class="fixed inset-0 z-[100] flex items-center justify-center p-3.5 sm:p-4">
         <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" @click="showCreateModal = showEditModal = false"></div>
-        <div class="relative w-full max-w-xl bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden max-h-[90vh] flex flex-col">
-          <div class="px-8 pt-8 pb-6 bg-slate-50/50 dark:bg-slate-800/30 border-b border-slate-100 dark:border-slate-800 shrink-0">
-            <h2 class="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-3">
-              <School :size="24" class="text-indigo-600" />
+        <div class="relative w-full max-w-xl bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[32px] shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden max-h-[90dvh] flex flex-col">
+          <div class="px-5 sm:px-8 pt-6 sm:pt-8 pb-4 sm:pb-6 bg-slate-50/50 dark:bg-slate-800/30 border-b border-slate-100 dark:border-slate-800 shrink-0">
+            <h2 class="text-lg sm:text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2.5 sm:gap-3">
+              <School :size="22" class="text-indigo-600 sm:w-6 sm:h-6" />
               {{ showCreateModal ? 'Registrar Nueva Institución' : 'Editar Información del Colegio' }}
             </h2>
-            <p class="text-slate-500 dark:text-slate-400 text-sm font-medium mt-1">Completa los campos de registro primario.</p>
+            <p class="text-slate-500 dark:text-slate-400 text-xs sm:text-sm font-medium mt-1">Completa los campos de registro primario.</p>
           </div>
 
-          <div class="p-8 space-y-4 overflow-y-auto flex-1">
-            <div class="grid grid-cols-2 gap-4">
-              <div class="col-span-2 space-y-1">
-                <label class="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Nombre del Colegio *</label>
-                <input v-model="form.nombre" type="text" placeholder="Ej. Colegio San José" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white" />
+          <div class="p-4 sm:p-8 space-y-3.5 sm:space-y-4 overflow-y-auto flex-1">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+              <div class="col-span-1 sm:col-span-2 space-y-1">
+                <label class="text-[10px] sm:text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Nombre del Colegio *</label>
+                <input v-model="form.nombre" type="text" placeholder="Ej. Colegio San José" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-2.5 sm:p-3 text-xs sm:text-sm font-bold outline-none text-slate-900 dark:text-white" />
               </div>
 
               <div class="space-y-1">
-                <label class="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Código DANE *</label>
-                <input v-model="form.dane" type="text" placeholder="Ej. 14100100123" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white font-mono" />
+                <label class="text-[10px] sm:text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Código DANE *</label>
+                <input v-model="form.dane" type="text" placeholder="Ej. 14100100123" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-2.5 sm:p-3 text-xs sm:text-sm font-bold outline-none text-slate-900 dark:text-white font-mono" />
               </div>
 
               <div class="space-y-1">
-                <label class="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tipo Colegio</label>
-                <select v-model="form.tipo_colegio" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white cursor-pointer">
+                <label class="text-[10px] sm:text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tipo Colegio</label>
+                <select v-model="form.tipo_colegio" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-2.5 sm:p-3 text-xs sm:text-sm font-bold outline-none text-slate-900 dark:text-white cursor-pointer">
                   <option value="OFICIAL">OFICIAL (Público)</option>
                   <option value="NO OFICIAL">NO OFICIAL (Privado)</option>
                 </select>
               </div>
 
-              <div class="col-span-2 space-y-1">
-                <label class="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Sede Principal</label>
-                <input v-model="form.sede" type="text" placeholder="Ej. Sede Central - Neiva" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white" />
+              <div class="col-span-1 sm:col-span-2 space-y-1">
+                <label class="text-[10px] sm:text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Sede Principal</label>
+                <input v-model="form.sede" type="text" placeholder="Ej. Sede Central - Neiva" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-2.5 sm:p-3 text-xs sm:text-sm font-bold outline-none text-slate-900 dark:text-white" />
               </div>
 
               <div class="space-y-1">
-                <label class="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Contacto Telefónico</label>
-                <input v-model="form.contacto" type="number" placeholder="Ej. 3123456789" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white" />
+                <label class="text-[10px] sm:text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Contacto Telefónico</label>
+                <input v-model="form.contacto" type="number" placeholder="Ej. 3123456789" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-2.5 sm:p-3 text-xs sm:text-sm font-bold outline-none text-slate-900 dark:text-white" />
               </div>
 
               <div class="space-y-1">
-                <label class="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Correo Electrónico *</label>
-                <input v-model="form.correo" type="email" placeholder="Ej. rectoria@colegio.edu.co" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white" />
+                <label class="text-[10px] sm:text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Correo Electrónico *</label>
+                <input v-model="form.correo" type="email" placeholder="Ej. rectoria@colegio.edu.co" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-2.5 sm:p-3 text-xs sm:text-sm font-bold outline-none text-slate-900 dark:text-white" />
               </div>
 
               <div class="space-y-1">
-                <label class="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tipo Calendario</label>
-                <select v-model="form.tipo_calendario" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-3 text-sm font-bold outline-none text-slate-900 dark:text-white cursor-pointer">
+                <label class="text-[10px] sm:text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tipo Calendario</label>
+                <select v-model="form.tipo_calendario" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-2.5 sm:p-3 text-xs sm:text-sm font-bold outline-none text-slate-900 dark:text-white cursor-pointer">
                   <option value="A">Calendario A</option>
                   <option value="B">Calendario B</option>
                 </select>
@@ -539,9 +539,9 @@ const handleDelete = async (college: Colegio) => {
             </div>
           </div>
 
-          <div class="px-8 py-6 bg-slate-50/50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800 flex gap-3 shrink-0">
-            <button @click="showCreateModal = showEditModal = false" class="flex-1 px-4 py-3.5 rounded-2xl font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all">Cancelar</button>
-            <button @click="showCreateModal ? handleCreate() : handleEdit()" :disabled="saving" class="flex-[2] bg-indigo-600 text-white px-6 py-3.5 rounded-2xl font-bold hover:bg-indigo-700 transition-all disabled:opacity-50 shadow-lg shadow-indigo-100 dark:shadow-none">
+          <div class="px-5 sm:px-8 py-4 sm:py-6 bg-slate-50/50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800 flex gap-2.5 sm:gap-3 shrink-0">
+            <button @click="showCreateModal = showEditModal = false" class="flex-1 px-4 py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer">Cancelar</button>
+            <button @click="showCreateModal ? handleCreate() : handleEdit()" :disabled="saving" class="flex-[2] bg-indigo-600 text-white px-5 sm:px-6 py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm hover:bg-indigo-700 transition-all disabled:opacity-50 shadow-lg shadow-indigo-100 dark:shadow-none cursor-pointer">
               {{ saving ? 'Guardando...' : 'Confirmar' }}
             </button>
           </div>
@@ -549,125 +549,125 @@ const handleDelete = async (college: Colegio) => {
       </div>
 
       <!-- Details Modal -->
-      <div v-if="showDetailsModal && selectedCollege" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div v-if="showDetailsModal && selectedCollege" class="fixed inset-0 z-[100] flex items-center justify-center p-3.5 sm:p-4">
         <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" @click="showDetailsModal = false"></div>
-        <div class="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
-          <div class="p-8 space-y-6">
-            <div class="flex justify-between items-start border-b border-slate-100 dark:border-slate-800 pb-4">
-              <div>
-                <h2 class="text-2xl font-black text-slate-900 dark:text-white">{{ selectedCollege.nombre }}</h2>
-                <span class="text-xs text-indigo-500 font-extrabold uppercase mt-1 tracking-wider block">ID: {{ selectedCollege.id_colegio }} · {{ selectedCollege.tipo_colegio }}</span>
+        <div class="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[32px] shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden max-h-[90dvh] flex flex-col">
+          <div class="p-5 sm:p-8 space-y-4 sm:space-y-6 overflow-y-auto flex-1">
+            <div class="flex justify-between items-start border-b border-slate-100 dark:border-slate-800 pb-3.5 sm:pb-4 gap-2">
+              <div class="min-w-0 flex-1">
+                <h2 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white leading-tight truncate">{{ selectedCollege.nombre }}</h2>
+                <span class="text-[10px] sm:text-xs text-indigo-500 font-extrabold uppercase mt-1 tracking-wider block">ID: {{ selectedCollege.id_colegio }} · {{ selectedCollege.tipo_colegio }}</span>
               </div>
-              <span class="px-3 py-1 rounded-full text-xs font-black bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400 uppercase tracking-widest">{{ selectedCollege.estado }}</span>
+              <span class="px-2.5 sm:px-3 py-1 rounded-full text-[10px] sm:text-xs font-black bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400 uppercase tracking-widest shrink-0">{{ selectedCollege.estado }}</span>
             </div>
 
             <!-- Profile Info Grid -->
-            <div class="grid grid-cols-2 gap-6 text-sm">
-              <div class="space-y-3">
-                <h4 class="text-xs font-black text-slate-400 uppercase tracking-wider">Identificación y Ubicación</h4>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 text-xs sm:text-sm">
+              <div class="space-y-2 sm:space-y-3">
+                <h4 class="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider">Identificación y Ubicación</h4>
                 <p class="font-bold text-slate-700 dark:text-slate-300">DANE: <span class="font-mono text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-800 px-2 py-0.5 rounded">{{ selectedCollege.dane }}</span></p>
-                <p class="font-bold text-slate-700 dark:text-slate-300">Sede: <span class="font-medium">{{ selectedCollege.sede }}</span></p>
+                <p class="font-bold text-slate-700 dark:text-slate-300">Sede: <span class="font-medium">{{ selectedCollege.sede || 'Principal' }}</span></p>
                 <p class="font-bold text-slate-700 dark:text-slate-300">Calendario: <span class="font-bold">{{ selectedCollege.tipo_calendario }}</span></p>
               </div>
 
-              <div class="space-y-3">
-                <h4 class="text-xs font-black text-slate-400 uppercase tracking-wider">Contacto</h4>
-                <p class="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5"><Mail :size="14" class="text-slate-400" /> <span class="font-medium">{{ selectedCollege.correo }}</span></p>
-                <p class="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5"><Phone :size="14" class="text-slate-400" /> <span class="font-medium">{{ selectedCollege.contacto }}</span></p>
-                <p class="font-bold text-slate-700 dark:text-slate-300">Registro: <span class="font-medium">{{ new Date(selectedCollege.fecha_registro).toLocaleString() }}</span></p>
+              <div class="space-y-2 sm:space-y-3">
+                <h4 class="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider">Contacto</h4>
+                <p class="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5"><Mail :size="14" class="text-slate-400 shrink-0" /> <span class="font-medium truncate">{{ selectedCollege.correo }}</span></p>
+                <p class="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5"><Phone :size="14" class="text-slate-400 shrink-0" /> <span class="font-medium">{{ selectedCollege.contacto || 'No registrado' }}</span></p>
+                <p class="font-bold text-slate-700 dark:text-slate-300">Registro: <span class="font-medium">{{ new Date(selectedCollege.fecha_registro).toLocaleDateString() }}</span></p>
               </div>
             </div>
 
             <!-- Audit details if state changes occurred -->
-            <div v-if="selectedCollege.motivo_rechazo || selectedCollege.fecha_cambio_estado" class="bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/50 p-4 rounded-2xl text-xs space-y-2">
+            <div v-if="selectedCollege.motivo_rechazo || selectedCollege.fecha_cambio_estado" class="bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/50 p-3 sm:p-4 rounded-xl sm:rounded-2xl text-[11px] sm:text-xs space-y-1.5 sm:space-y-2">
               <h4 class="font-black text-red-600 dark:text-red-400 uppercase tracking-wider">Historial de Cambio de Estado</h4>
               <p v-if="selectedCollege.fecha_cambio_estado" class="text-slate-600 dark:text-slate-400 font-bold">Fecha del último cambio: <span class="font-medium text-slate-900 dark:text-white">{{ new Date(selectedCollege.fecha_cambio_estado).toLocaleString() }}</span></p>
               <p v-if="selectedCollege.motivo_rechazo" class="text-slate-600 dark:text-slate-400 font-bold">Motivo registrado: <span class="font-medium text-red-800 dark:text-red-300 block mt-1 bg-red-100/50 dark:bg-red-950/40 p-2 rounded-xl">{{ selectedCollege.motivo_rechazo }}</span></p>
             </div>
 
             <!-- Identidad Visual -->
-            <div class="border-t border-slate-100 dark:border-slate-800 pt-6 grid grid-cols-2 gap-6 text-sm">
+            <div class="border-t border-slate-100 dark:border-slate-800 pt-4 sm:pt-6 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 text-xs sm:text-sm">
               <div class="space-y-2">
-                <h4 class="text-xs font-black text-slate-400 uppercase tracking-wider">Escudo Institucional</h4>
-                <div class="w-24 h-24 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 p-2 flex items-center justify-center overflow-hidden">
+                <h4 class="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider">Escudo Institucional</h4>
+                <div class="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 p-2 flex items-center justify-center overflow-hidden">
                   <img v-if="selectedCollege.escudo_url" :src="getShieldUrl(selectedCollege.escudo_url)" alt="Escudo" class="w-full h-full object-contain" />
-                  <span v-else class="text-xs text-slate-400 italic font-medium">Sin Escudo</span>
+                  <span v-else class="text-[11px] sm:text-xs text-slate-400 italic font-medium">Sin Escudo</span>
                 </div>
               </div>
               
               <div class="space-y-2">
-                <h4 class="text-xs font-black text-slate-400 uppercase tracking-wider">Colores Corporativos</h4>
-                <div v-if="selectedCollege.color_primario || selectedCollege.color_secundario" class="flex flex-wrap gap-3 mt-2">
+                <h4 class="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider">Colores Corporativos</h4>
+                <div v-if="selectedCollege.color_primario || selectedCollege.color_secundario" class="flex flex-wrap gap-2.5 sm:gap-3 mt-2">
                   <div v-if="selectedCollege.color_primario" class="flex items-center gap-1.5">
-                    <div class="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700 shadow-sm" :style="{ backgroundColor: selectedCollege.color_primario }" :title="selectedCollege.color_primario"></div>
-                    <span class="text-[10px] font-bold text-slate-500">Primario ({{ selectedCollege.color_primario }})</span>
+                    <div class="w-6 h-6 sm:w-8 sm:h-8 rounded-full border border-slate-200 dark:border-slate-700 shadow-sm shrink-0" :style="{ backgroundColor: selectedCollege.color_primario }" :title="selectedCollege.color_primario"></div>
+                    <span class="text-[9px] sm:text-[10px] font-bold text-slate-500">Primario ({{ selectedCollege.color_primario }})</span>
                   </div>
                   <div v-if="selectedCollege.color_secundario" class="flex items-center gap-1.5">
-                    <div class="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700 shadow-sm" :style="{ backgroundColor: selectedCollege.color_secundario }" :title="selectedCollege.color_secundario"></div>
-                    <span class="text-[10px] font-bold text-slate-500">Secundario ({{ selectedCollege.color_secundario }})</span>
+                    <div class="w-6 h-6 sm:w-8 sm:h-8 rounded-full border border-slate-200 dark:border-slate-700 shadow-sm shrink-0" :style="{ backgroundColor: selectedCollege.color_secundario }" :title="selectedCollege.color_secundario"></div>
+                    <span class="text-[9px] sm:text-[10px] font-bold text-slate-500">Secundario ({{ selectedCollege.color_secundario }})</span>
                   </div>
                 </div>
-                <span v-else class="text-xs text-slate-400 italic font-medium block mt-2">Sin Colores Definidos</span>
+                <span v-else class="text-[11px] sm:text-xs text-slate-400 italic font-medium block mt-2">Sin Colores Definidos</span>
               </div>
             </div>
 
 
             <!-- Statistics Box -->
-            <div class="border-t border-slate-100 dark:border-slate-800 pt-6">
-              <h4 class="text-xs font-black text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-1.5"><Users :size="16" /> Estadísticas de Cuentas</h4>
-              <div class="grid grid-cols-4 gap-3 text-center">
-                <div class="bg-slate-50 dark:bg-slate-800/40 p-3 rounded-2xl border border-slate-100/50 dark:border-slate-800/50">
-                  <span class="text-[10px] font-black text-slate-400 uppercase block">Directivos</span>
-                  <span class="text-lg font-black text-slate-800 dark:text-white mt-1 block font-mono">{{ selectedCollege.directivos_count ?? '...' }}</span>
+            <div class="border-t border-slate-100 dark:border-slate-800 pt-4 sm:pt-6">
+              <h4 class="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider mb-3 sm:mb-4 flex items-center gap-1.5"><Users :size="16" /> Estadísticas de Cuentas</h4>
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 text-center">
+                <div class="bg-slate-50 dark:bg-slate-800/40 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border border-slate-100/50 dark:border-slate-800/50">
+                  <span class="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase block">Directivos</span>
+                  <span class="text-base sm:text-lg font-black text-slate-800 dark:text-white mt-0.5 sm:mt-1 block font-mono">{{ selectedCollege.directivos_count ?? '...' }}</span>
                 </div>
-                <div class="bg-slate-50 dark:bg-slate-800/40 p-3 rounded-2xl border border-slate-100/50 dark:border-slate-800/50">
-                  <span class="text-[10px] font-black text-slate-400 uppercase block">Docentes</span>
-                  <span class="text-lg font-black text-slate-800 dark:text-white mt-1 block font-mono">{{ selectedCollege.docentes_count ?? '...' }}</span>
+                <div class="bg-slate-50 dark:bg-slate-800/40 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border border-slate-100/50 dark:border-slate-800/50">
+                  <span class="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase block">Docentes</span>
+                  <span class="text-base sm:text-lg font-black text-slate-800 dark:text-white mt-0.5 sm:mt-1 block font-mono">{{ selectedCollege.docentes_count ?? '...' }}</span>
                 </div>
-                <div class="bg-slate-50 dark:bg-slate-800/40 p-3 rounded-2xl border border-slate-100/50 dark:border-slate-800/50">
-                  <span class="text-[10px] font-black text-slate-400 uppercase block">Padres</span>
-                  <span class="text-lg font-black text-slate-800 dark:text-white mt-1 block font-mono">{{ selectedCollege.padres_count ?? '...' }}</span>
+                <div class="bg-slate-50 dark:bg-slate-800/40 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border border-slate-100/50 dark:border-slate-800/50">
+                  <span class="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase block">Padres</span>
+                  <span class="text-base sm:text-lg font-black text-slate-800 dark:text-white mt-0.5 sm:mt-1 block font-mono">{{ selectedCollege.padres_count ?? '...' }}</span>
                 </div>
-                <div class="bg-slate-50 dark:bg-slate-800/40 p-3 rounded-2xl border border-slate-100/50 dark:border-slate-800/50">
-                  <span class="text-[10px] font-black text-slate-400 uppercase block">Alumnos</span>
-                  <span class="text-lg font-black text-slate-800 dark:text-white mt-1 block font-mono">{{ selectedCollege.estudiantes_count ?? '...' }}</span>
+                <div class="bg-slate-50 dark:bg-slate-800/40 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border border-slate-100/50 dark:border-slate-800/50">
+                  <span class="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase block">Alumnos</span>
+                  <span class="text-base sm:text-lg font-black text-slate-800 dark:text-white mt-0.5 sm:mt-1 block font-mono">{{ selectedCollege.estudiantes_count ?? '...' }}</span>
                 </div>
               </div>
             </div>
 
             <!-- Footer actions -->
-            <div class="flex justify-end pt-4 border-t border-slate-100 dark:border-slate-800 mt-6">
-              <button @click="showDetailsModal = false" class="px-6 py-3 bg-slate-900 dark:bg-white dark:text-slate-900 text-white rounded-2xl font-bold text-sm hover:translate-y-[-2px] transition-all">Cerrar</button>
+            <div class="flex justify-end pt-3 sm:pt-4 border-t border-slate-100 dark:border-slate-800 mt-4 sm:mt-6">
+              <button @click="showDetailsModal = false" class="w-full sm:w-auto px-5 sm:px-6 py-2.5 sm:py-3 bg-slate-900 dark:bg-white dark:text-slate-900 text-white rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm hover:translate-y-[-2px] transition-all cursor-pointer">Cerrar</button>
             </div>
           </div>
         </div>
       </div>
 
       <!-- Reject Confirmation Modal -->
-      <div v-if="showRejectModal && selectedCollege" class="fixed inset-0 z-[110] flex items-center justify-center p-4">
+      <div v-if="showRejectModal && selectedCollege" class="fixed inset-0 z-[110] flex items-center justify-center p-3.5 sm:p-4">
         <div class="absolute inset-0 bg-red-950/30 backdrop-blur-md" @click="showRejectModal = false"></div>
-        <div class="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[32px] overflow-hidden shadow-2xl">
-          <div class="p-8 space-y-4">
-            <div class="w-16 h-16 bg-red-50 dark:bg-red-950/30 text-red-500 rounded-full flex items-center justify-center mx-auto">
-              <XCircle :size="32" />
+        <div class="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[32px] overflow-hidden shadow-2xl">
+          <div class="p-5 sm:p-8 space-y-3.5 sm:space-y-4">
+            <div class="w-12 h-12 sm:w-16 sm:h-16 bg-red-50 dark:bg-red-950/30 text-red-500 rounded-full flex items-center justify-center mx-auto">
+              <XCircle :size="28" class="sm:w-8 sm:h-8" />
             </div>
             <div class="text-center">
-              <h2 class="text-xl font-black text-slate-900 dark:text-white">Rechazar Incorporación</h2>
+              <h2 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white">Rechazar Incorporación</h2>
               <p class="text-slate-500 dark:text-slate-400 text-xs font-medium mt-1">Por favor escribe la justificación del rechazo para {{ selectedCollege.nombre }}.</p>
             </div>
             <textarea 
               v-model="rejectReason"
               placeholder="Indica detalladamente los motivos del rechazo..."
               rows="4"
-              class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl p-4 text-xs font-bold outline-none text-slate-900 dark:text-white resize-none"
+              class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl sm:rounded-2xl p-3.5 sm:p-4 text-xs font-bold outline-none text-slate-900 dark:text-white resize-none"
             ></textarea>
           </div>
           
-          <div class="bg-slate-50 dark:bg-slate-800/50 p-6 flex gap-3 border-t border-slate-100 dark:border-slate-800">
-            <button @click="showRejectModal = false" class="flex-1 px-6 py-3 rounded-xl font-bold text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 transition-all text-xs">Cancelar</button>
+          <div class="bg-slate-50 dark:bg-slate-800/50 p-4 sm:p-6 flex gap-2.5 sm:gap-3 border-t border-slate-100 dark:border-slate-800">
+            <button @click="showRejectModal = false" class="flex-1 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-bold text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 transition-all text-xs cursor-pointer">Cancelar</button>
             <button 
               @click="handleReject"
-              class="flex-1 bg-red-500 text-white px-6 py-3 rounded-xl font-bold hover:bg-red-600 transition-all text-xs shadow-lg shadow-red-100 dark:shadow-none"
+              class="flex-1 bg-red-500 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-bold hover:bg-red-600 transition-all text-xs shadow-lg shadow-red-100 dark:shadow-none cursor-pointer"
             >
               Confirmar Rechazo
             </button>
