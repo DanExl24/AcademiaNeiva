@@ -190,44 +190,44 @@ const closeStudentsModal = () => {
 </script>
 
 <template>
-  <div class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+  <div class="space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
     <!-- Header -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 transition-colors">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 transition-colors">
       <div>
-        <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Mis Cursos y Materias</h1>
-        <p class="text-slate-500 dark:text-slate-400 mt-1">Gestiona tu carga académica y estudiantes</p>
+        <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Mis Cursos y Materias</h1>
+        <p class="text-slate-500 dark:text-slate-400 text-xs sm:text-sm mt-1">Gestiona tu carga académica y estudiantes</p>
       </div>
       
-      <div class="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-700">
+      <div class="flex items-center gap-1.5 sm:gap-2 bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded-xl sm:rounded-2xl border border-slate-200 dark:border-slate-700 self-start sm:self-auto">
         <button 
           @click="viewMode = 'grades'"
-          class="flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 font-medium"
+          class="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl transition-all duration-300 font-medium text-xs sm:text-sm cursor-pointer"
           :class="viewMode === 'grades' ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-md ring-1 ring-slate-200 dark:ring-slate-700' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'"
         >
-          <LayoutGrid class="w-4 h-4" />
-          Por Grado
+          <LayoutGrid class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+          <span>Por Grado</span>
         </button>
         <button 
           @click="viewMode = 'subjects'"
-          class="flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 font-medium"
+          class="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl transition-all duration-300 font-medium text-xs sm:text-sm cursor-pointer"
           :class="viewMode === 'subjects' ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-md ring-1 ring-slate-200 dark:ring-slate-700' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'"
         >
-          <BookOpen class="w-4 h-4" />
-          Por Materia
+          <BookOpen class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+          <span>Por Materia</span>
         </button>
       </div>
     </div>
 
     <!-- Barra de Filtros -->
-    <div v-if="rawData.length > 0" class="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col md:flex-row gap-4 items-center justify-between transition-colors">
-      <div class="flex flex-col sm:flex-row flex-wrap gap-4 items-center w-full md:w-auto">
+    <div v-if="rawData.length > 0" class="bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col md:flex-row gap-4 items-center justify-between transition-colors">
+      <div class="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 items-center w-full md:w-auto">
         <!-- Buscador -->
         <div class="relative w-full sm:w-64">
           <input 
             v-model="searchQuery" 
             type="text" 
             placeholder="Buscar por grado o materia..." 
-            class="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all duration-300"
+            class="w-full pl-10 pr-4 py-2 sm:py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all duration-300"
           />
           <svg class="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
@@ -412,23 +412,23 @@ const closeStudentsModal = () => {
         <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"></div>
 
         <!-- Modal Panel -->
-        <div class="relative bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden border dark:border-slate-800">
+        <div class="relative bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-lg max-h-[90dvh] flex flex-col overflow-hidden border border-slate-100 dark:border-slate-800">
           <!-- Header -->
-          <div class="bg-gradient-to-br from-indigo-600 to-violet-600 p-6 flex items-center justify-between shrink-0">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center">
-                <Users class="w-5 h-5 text-white" />
+          <div class="bg-gradient-to-br from-indigo-600 to-violet-600 p-4 sm:p-6 flex items-center justify-between shrink-0">
+            <div class="flex items-center gap-2.5 sm:gap-3">
+              <div class="w-9 h-9 sm:w-10 sm:h-10 bg-white/20 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0">
+                <Users class="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </div>
               <div>
-                <h2 class="text-lg font-black text-white leading-tight">Lista de Alumnos</h2>
-                <p class="text-indigo-200 text-xs font-medium mt-0.5">{{ studentsModalTitle }}</p>
+                <h2 class="text-base sm:text-lg font-black text-white leading-tight">Lista de Alumnos</h2>
+                <p class="text-indigo-200 text-[11px] sm:text-xs font-medium mt-0.5">{{ studentsModalTitle }}</p>
               </div>
             </div>
             <button
               @click="closeStudentsModal"
-              class="w-9 h-9 bg-white/10 hover:bg-white/20 rounded-xl flex items-center justify-center transition-colors"
+              class="w-8 h-8 sm:w-9 sm:h-9 bg-white/10 hover:bg-white/20 rounded-xl flex items-center justify-center transition-colors cursor-pointer"
             >
-              <X class="w-5 h-5 text-white" />
+              <X class="w-4 h-4 sm:w-5 sm:h-5 text-white" />
             </button>
           </div>
 

@@ -814,34 +814,34 @@ watch(() => yearStore.selectedYearId, () => {
 </script>
 
 <template>
-  <div class="max-w-[1400px] mx-auto space-y-6">
+  <div class="max-w-[1400px] mx-auto space-y-4 sm:space-y-6">
     <!-- Header -->
-    <div class="bg-white dark:bg-slate-900 rounded-[28px] border border-slate-100 dark:border-slate-800 shadow-sm px-8 py-7 flex flex-col sm:flex-row sm:items-center justify-between gap-5">
-      <div class="flex items-center gap-4">
-        <div class="p-3.5 bg-blue-50 dark:bg-blue-950/30 rounded-2xl text-blue-600 dark:text-blue-400">
-          <Users :size="28" />
+    <div class="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[28px] border border-slate-100 dark:border-slate-800 shadow-sm px-4 sm:px-8 py-5 sm:py-7 flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-5">
+      <div class="flex items-center gap-3.5 sm:gap-4">
+        <div class="p-3 sm:p-3.5 bg-blue-50 dark:bg-blue-950/30 rounded-xl sm:rounded-2xl text-blue-600 dark:text-blue-400 shrink-0">
+          <Users :size="24" class="sm:w-7 sm:h-7" />
         </div>
         <div>
-          <h1 class="text-xl font-black text-slate-900 dark:text-white">Gestión de Docentes</h1>
-          <p class="text-slate-400 dark:text-slate-500 text-sm font-medium">Administra docentes, carga horaria y estados académicos.</p>
+          <h1 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">Gestión de Docentes</h1>
+          <p class="text-slate-400 dark:text-slate-500 text-xs sm:text-sm font-medium">Administra docentes, carga horaria y estados académicos.</p>
         </div>
       </div>
-      <div class="flex flex-wrap items-center gap-3">
+      <div class="flex flex-wrap items-center gap-2.5 sm:gap-3">
         <button 
           v-if="teachers.length > 0"
           @click="exportTeachersToCSV" 
-          class="flex items-center gap-2 px-5 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl font-bold text-sm transition-all shadow-sm whitespace-nowrap active:scale-95"
+          class="flex items-center gap-2 px-4 sm:px-5 py-2.5 sm:py-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl font-bold text-xs sm:text-sm transition-all shadow-sm whitespace-nowrap active:scale-95 cursor-pointer"
         >
-          <Download :size="18" />
-          Exportar Excel (CSV)
+          <Download :size="16" class="sm:w-4.5 sm:h-4.5" />
+          <span>Exportar (CSV)</span>
         </button>
         <button 
           v-if="!yearStore.isReadonlyYear"
           @click="createTeacherModal = true" 
-          class="flex items-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-blue-100/60 dark:shadow-none whitespace-nowrap active:scale-95"
+          class="flex items-center gap-2 px-4 sm:px-5 py-2.5 sm:py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs sm:text-sm transition-all shadow-lg shadow-blue-100/60 dark:shadow-none whitespace-nowrap active:scale-95 cursor-pointer"
         >
-          <Plus :size="18" />
-          Nuevo Docente
+          <Plus :size="16" class="sm:w-4.5 sm:h-4.5" />
+          <span>Nuevo Docente</span>
         </button>
       </div>
     </div>
@@ -962,48 +962,48 @@ watch(() => yearStore.selectedYearId, () => {
           <div v-if="drawerOpen" class="fixed right-0 top-0 h-full w-full max-w-[680px] bg-white dark:bg-slate-900 shadow-2xl flex flex-col overflow-hidden">
             
             <!-- Drawer Header -->
-            <div v-if="selectedTeacher" class="px-8 py-7 bg-gradient-to-r from-blue-600 to-indigo-700 dark:from-blue-900 dark:to-indigo-900 flex items-start justify-between gap-4 shrink-0">
-              <div class="flex items-center gap-4">
-                <div class="h-16 w-16 bg-white/15 dark:bg-white/5 rounded-2xl flex items-center justify-center font-black text-2xl text-white shadow-inner">
+            <div v-if="selectedTeacher" class="px-5 sm:px-8 py-5 sm:py-7 bg-gradient-to-r from-blue-600 to-indigo-700 dark:from-blue-900 dark:to-indigo-900 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shrink-0">
+              <div class="flex items-center gap-3.5 sm:gap-4 min-w-0">
+                <div class="h-12 w-12 sm:h-16 sm:w-16 bg-white/15 dark:bg-white/5 rounded-xl sm:rounded-2xl flex items-center justify-center font-black text-xl sm:text-2xl text-white shadow-inner shrink-0">
                   {{ selectedTeacher.nombre.charAt(0) }}{{ selectedTeacher.apellido.charAt(0) }}
                 </div>
-                <div>
+                <div class="min-w-0">
                   <div class="flex items-center gap-2 flex-wrap">
-                    <h2 class="text-xl font-black text-white uppercase">{{ selectedTeacher.nombre }} {{ selectedTeacher.apellido }}</h2>
-                    <span :class="[teacherStatusClass(selectedTeacher.estado), 'px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest']">
+                    <h2 class="text-lg sm:text-xl font-black text-white uppercase truncate">{{ selectedTeacher.nombre }} {{ selectedTeacher.apellido }}</h2>
+                    <span :class="[teacherStatusClass(selectedTeacher.estado), 'px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest shrink-0']">
                       {{ teacherStatusLabel(selectedTeacher.estado) }}
                     </span>
                   </div>
-                  <div class="flex items-center gap-3 mt-1.5 text-blue-100 dark:text-blue-300 text-xs font-medium flex-wrap">
+                  <div class="flex items-center gap-2 sm:gap-3 mt-1 text-blue-100 dark:text-blue-300 text-xs font-medium flex-wrap">
                     <span class="flex items-center gap-1"><Mail :size="12" /> {{ selectedTeacher.email }}</span>
                     <span v-if="selectedTeacher.telefono" class="flex items-center gap-1"><Phone :size="12" /> {{ selectedTeacher.telefono }}</span>
                   </div>
-                  <div v-if="selectedTeacher.email_padre" class="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-white/20 dark:bg-white/15 backdrop-blur-md rounded-full text-white text-[11px] font-bold shadow-sm">
-                    <Users :size="12" class="text-blue-100" />
+                  <div v-if="selectedTeacher.email_padre" class="mt-1 inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-white/20 dark:bg-white/15 backdrop-blur-md rounded-full text-white text-[10px] sm:text-[11px] font-bold shadow-sm">
+                    <Users :size="11" class="text-blue-100" />
                     <span>Correo Padre:</span>
                     <span class="underline underline-offset-2">{{ selectedTeacher.email_padre }}</span>
                   </div>
                   <p class="text-blue-200 dark:text-blue-400 text-[10px] font-black uppercase mt-1 tracking-widest">{{ selectedTeacher.tipo_documento }} {{ selectedTeacher.documento }}</p>
                 </div>
               </div>
-              <div class="flex items-center gap-2">
+              <div class="flex items-center gap-2 self-end sm:self-auto shrink-0">
                 <!-- Monitoring Button -->
                 <button
                   @click="goToTeacherMonitoring"
-                  class="flex items-center gap-1.5 bg-white/15 hover:bg-white/30 border border-white/30 text-white px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wide transition-all"
+                  class="flex items-center gap-1.5 bg-white/15 hover:bg-white/30 border border-white/30 text-white px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-black uppercase tracking-wide transition-all cursor-pointer"
                   title="Ver el panel del docente en modo solo lectura"
                 >
-                  <Eye :size="15" />
-                  Ir a Seguimiento
+                  <Eye :size="14" />
+                  <span>Seguimiento</span>
                 </button>
-                <button @click="closeDrawer" class="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all mt-1 shrink-0">
-                  <X :size="20" />
+                <button @click="closeDrawer" class="p-1.5 sm:p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all shrink-0 cursor-pointer">
+                  <X :size="18" />
                 </button>
               </div>
             </div>
 
             <!-- Drawer Body -->
-            <div class="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
+            <div class="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6 sm:space-y-8 custom-scrollbar">
 
               <!-- Status Controls -->
               <div v-if="selectedTeacher && !yearStore.isReadonlyYear">
@@ -1282,14 +1282,14 @@ watch(() => yearStore.selectedYearId, () => {
     </Transition>
 
     <!-- Create Teacher Modal -->
-    <div v-if="createTeacherModal" class="fixed inset-0 z-[300] flex items-center justify-center p-4">
+    <div v-if="createTeacherModal" class="fixed inset-0 z-[300] flex items-center justify-center p-3 sm:p-4">
       <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" @click="createTeacherModal = false"></div>
-      <div class="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        <div class="px-8 pt-8 pb-6 border-b border-slate-100 dark:border-slate-800 shrink-0">
-          <h2 class="text-xl font-black text-slate-900 dark:text-white flex items-center gap-3"><Plus :size="22" class="text-blue-600" />Alta de Nuevo Docente</h2>
-          <p class="text-slate-400 dark:text-slate-500 text-sm font-medium mt-1">Completa los datos personales y las credenciales de acceso inicial.</p>
+      <div class="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[32px] shadow-2xl overflow-hidden flex flex-col max-h-[90dvh]">
+        <div class="px-5 sm:px-8 pt-5 sm:pt-8 pb-4 sm:pb-6 border-b border-slate-100 dark:border-slate-800 shrink-0">
+          <h2 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white flex items-center gap-2.5 sm:gap-3"><Plus :size="20" class="text-blue-600 sm:w-5.5 sm:h-5.5" />Alta de Nuevo Docente</h2>
+          <p class="text-slate-400 dark:text-slate-500 text-xs sm:text-sm font-medium mt-0.5">Completa los datos personales y las credenciales de acceso inicial.</p>
         </div>
-        <div class="p-8 space-y-5 overflow-y-auto">
+        <div class="p-4 sm:p-8 space-y-4 sm:space-y-5 overflow-y-auto">
           <!-- Banner de Usuario Encontrado / Precargado -->
           <div v-if="isAutoFilledUser" class="space-y-2">
             <div class="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-2xl p-3.5 flex items-center justify-between gap-3 animate-in fade-in duration-200">
@@ -1320,42 +1320,42 @@ watch(() => yearStore.selectedYearId, () => {
             </div>
           </div>
 
-          <div class="grid grid-cols-2 gap-4">
-            <label class="space-y-1.5">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            <label class="space-y-1 sm:space-y-1.5">
               <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nombres</span>
-              <input v-model="newTeacher.nombre" :disabled="isAutoFilledUser" type="text" placeholder="Ej. Laura Elena" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white disabled:opacity-75 disabled:cursor-not-allowed disabled:bg-slate-200/50 dark:disabled:bg-slate-800/80" />
+              <input v-model="newTeacher.nombre" :disabled="isAutoFilledUser" type="text" placeholder="Ej. Laura Elena" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3 sm:p-3.5 text-xs sm:text-sm font-bold outline-none text-slate-900 dark:text-white disabled:opacity-75 disabled:cursor-not-allowed disabled:bg-slate-200/50 dark:disabled:bg-slate-800/80" />
             </label>
-            <label class="space-y-1.5">
+            <label class="space-y-1 sm:space-y-1.5">
               <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Apellidos</span>
-              <input v-model="newTeacher.apellido" :disabled="isAutoFilledUser" type="text" placeholder="Ej. Gómez" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white disabled:opacity-75 disabled:cursor-not-allowed disabled:bg-slate-200/50 dark:disabled:bg-slate-800/80" />
+              <input v-model="newTeacher.apellido" :disabled="isAutoFilledUser" type="text" placeholder="Ej. Gómez" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3 sm:p-3.5 text-xs sm:text-sm font-bold outline-none text-slate-900 dark:text-white disabled:opacity-75 disabled:cursor-not-allowed disabled:bg-slate-200/50 dark:disabled:bg-slate-800/80" />
             </label>
-            <label class="space-y-1.5">
+            <label class="space-y-1 sm:space-y-1.5">
               <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tipo Doc.</span>
-              <select v-model="newTeacher.id_tipodocumento" :disabled="isAutoFilledUser" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white disabled:opacity-75 disabled:cursor-not-allowed disabled:bg-slate-200/50 dark:disabled:bg-slate-800/80">
+              <select v-model="newTeacher.id_tipodocumento" :disabled="isAutoFilledUser" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3 sm:p-3.5 text-xs sm:text-sm font-bold outline-none text-slate-900 dark:text-white disabled:opacity-75 disabled:cursor-not-allowed disabled:bg-slate-200/50 dark:disabled:bg-slate-800/80 cursor-pointer">
                 <option value="">Seleccionar...</option>
                 <option v-for="type in documentTypes" :key="type.id_tipodocumento" :value="type.id_tipodocumento">{{ type.tipo }}</option>
               </select>
             </label>
-            <label class="space-y-1.5">
+            <label class="space-y-1 sm:space-y-1.5">
               <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Número</span>
-              <input v-model="newTeacher.documento" :disabled="isAutoFilledUser" @blur="handleAutoLookup" type="text" placeholder="Documento de identidad" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white disabled:opacity-75 disabled:cursor-not-allowed disabled:bg-slate-200/50 dark:disabled:bg-slate-800/80" />
+              <input v-model="newTeacher.documento" :disabled="isAutoFilledUser" @blur="handleAutoLookup" type="text" placeholder="Documento de identidad" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3 sm:p-3.5 text-xs sm:text-sm font-bold outline-none text-slate-900 dark:text-white disabled:opacity-75 disabled:cursor-not-allowed disabled:bg-slate-200/50 dark:disabled:bg-slate-800/80" />
             </label>
-            <label class="space-y-1.5">
+            <label class="space-y-1 sm:space-y-1.5">
               <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email Institucional</span>
-              <input v-model="newTeacher.email" @blur="handleAutoLookup" type="email" placeholder="docente@institucion.edu" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white" />
+              <input v-model="newTeacher.email" @blur="handleAutoLookup" type="email" placeholder="docente@institucion.edu" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3 sm:p-3.5 text-xs sm:text-sm font-bold outline-none text-slate-900 dark:text-white" />
             </label>
-            <label class="space-y-1.5">
+            <label class="space-y-1 sm:space-y-1.5">
               <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Teléfono / Celular</span>
-              <input v-model="newTeacher.telefono" type="tel" placeholder="Ej. 3001234567" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white" />
+              <input v-model="newTeacher.telefono" type="tel" placeholder="Ej. 3001234567" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3 sm:p-3.5 text-xs sm:text-sm font-bold outline-none text-slate-900 dark:text-white" />
             </label>
-            <label class="col-span-2 space-y-1.5">
+            <label class="col-span-1 sm:col-span-2 space-y-1 sm:space-y-1.5">
               <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Contraseña Temporal</span>
-              <input v-model="newTeacher.password" type="text" placeholder="Clave provisoria de acceso" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white" />
+              <input v-model="newTeacher.password" type="text" placeholder="Clave provisoria de acceso" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3 sm:p-3.5 text-xs sm:text-sm font-bold outline-none text-slate-900 dark:text-white" />
             </label>
           </div>
-          <div class="flex gap-3 pt-2">
-            <button @click="createTeacherModal = false; resetAutoFilledUser()" class="flex-1 py-4 rounded-xl font-black text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all text-sm uppercase tracking-widest cursor-pointer">Cancelar</button>
-            <button @click="createTeacher" :disabled="savingTeacher" class="flex-[2] bg-blue-600 text-white py-4 rounded-xl font-black shadow-xl shadow-blue-100 dark:shadow-none hover:bg-blue-700 transition-all disabled:opacity-50 text-sm uppercase tracking-widest cursor-pointer">
+          <div class="flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3 pt-2">
+            <button @click="createTeacherModal = false; resetAutoFilledUser()" class="w-full sm:flex-1 py-3 sm:py-4 rounded-xl font-black text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all text-xs sm:text-sm uppercase tracking-widest cursor-pointer text-center">Cancelar</button>
+            <button @click="createTeacher" :disabled="savingTeacher" class="w-full sm:flex-[2] bg-blue-600 text-white py-3 sm:py-4 rounded-xl font-black shadow-xl shadow-blue-100 dark:shadow-none hover:bg-blue-700 transition-all disabled:opacity-50 text-xs sm:text-sm uppercase tracking-widest cursor-pointer text-center">
               {{ savingTeacher ? 'Registrando...' : 'Crear Docente' }}
             </button>
           </div>
@@ -1364,14 +1364,14 @@ watch(() => yearStore.selectedYearId, () => {
     </div>
 
     <!-- Edit Teacher Modal -->
-    <div v-if="editTeacherModal" class="fixed inset-0 z-[300] flex items-center justify-center p-4">
+    <div v-if="editTeacherModal" class="fixed inset-0 z-[300] flex items-center justify-center p-3 sm:p-4">
       <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" @click="editTeacherModal = false"></div>
-      <div class="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        <div class="px-8 pt-8 pb-6 border-b border-slate-100 dark:border-slate-800 shrink-0">
-          <h2 class="text-xl font-black text-slate-900 dark:text-white flex items-center gap-3"><Edit2 :size="22" class="text-blue-600" />Modificar Datos de Docente</h2>
-          <p class="text-slate-400 dark:text-slate-500 text-sm font-medium mt-1">Actualiza el correo electrónico institucional y el teléfono de contacto del docente.</p>
+      <div class="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[32px] shadow-2xl overflow-hidden flex flex-col max-h-[90dvh]">
+        <div class="px-5 sm:px-8 pt-5 sm:pt-8 pb-4 sm:pb-6 border-b border-slate-100 dark:border-slate-800 shrink-0">
+          <h2 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white flex items-center gap-2.5 sm:gap-3"><Edit2 :size="20" class="text-blue-600 sm:w-5.5 sm:h-5.5" />Modificar Datos de Docente</h2>
+          <p class="text-slate-400 dark:text-slate-500 text-xs sm:text-sm font-medium mt-0.5">Actualiza el correo electrónico institucional y el teléfono de contacto del docente.</p>
         </div>
-        <div class="p-8 space-y-5 overflow-y-auto font-sans">
+        <div class="p-4 sm:p-8 space-y-4 sm:space-y-5 overflow-y-auto font-sans">
           <!-- Advertencia de datos personales bloqueados -->
           <div class="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-2xl p-3.5 flex items-center gap-3 animate-in fade-in duration-200">
             <div class="p-2 bg-amber-500 text-white rounded-xl shrink-0">
@@ -1385,38 +1385,38 @@ watch(() => yearStore.selectedYearId, () => {
             </div>
           </div>
 
-          <div class="grid grid-cols-2 gap-4">
-            <label class="space-y-1.5">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            <label class="space-y-1 sm:space-y-1.5">
               <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nombres</span>
-              <input v-model="editTeacherForm.nombre" :disabled="true" type="text" placeholder="Ej. Laura Elena" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white disabled:opacity-75 disabled:cursor-not-allowed disabled:bg-slate-200/50 dark:disabled:bg-slate-800/80" />
+              <input v-model="editTeacherForm.nombre" :disabled="true" type="text" placeholder="Ej. Laura Elena" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3 sm:p-3.5 text-xs sm:text-sm font-bold outline-none text-slate-900 dark:text-white disabled:opacity-75 disabled:cursor-not-allowed disabled:bg-slate-200/50 dark:disabled:bg-slate-800/80" />
             </label>
-            <label class="space-y-1.5">
+            <label class="space-y-1 sm:space-y-1.5">
               <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Apellidos</span>
-              <input v-model="editTeacherForm.apellido" :disabled="true" type="text" placeholder="Ej. Gómez" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white disabled:opacity-75 disabled:cursor-not-allowed disabled:bg-slate-200/50 dark:disabled:bg-slate-800/80" />
+              <input v-model="editTeacherForm.apellido" :disabled="true" type="text" placeholder="Ej. Gómez" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3 sm:p-3.5 text-xs sm:text-sm font-bold outline-none text-slate-900 dark:text-white disabled:opacity-75 disabled:cursor-not-allowed disabled:bg-slate-200/50 dark:disabled:bg-slate-800/80" />
             </label>
-            <label class="space-y-1.5">
+            <label class="space-y-1 sm:space-y-1.5">
               <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tipo Doc.</span>
-              <select v-model="editTeacherForm.id_tipodocumento" :disabled="true" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white disabled:opacity-75 disabled:cursor-not-allowed disabled:bg-slate-200/50 dark:disabled:bg-slate-800/80">
+              <select v-model="editTeacherForm.id_tipodocumento" :disabled="true" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3 sm:p-3.5 text-xs sm:text-sm font-bold outline-none text-slate-900 dark:text-white disabled:opacity-75 disabled:cursor-not-allowed disabled:bg-slate-200/50 dark:disabled:bg-slate-800/80 cursor-pointer">
                 <option value="">Seleccionar...</option>
                 <option v-for="type in documentTypes" :key="type.id_tipodocumento" :value="type.id_tipodocumento">{{ type.tipo }}</option>
               </select>
             </label>
-            <label class="space-y-1.5">
+            <label class="space-y-1 sm:space-y-1.5">
               <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Número</span>
-              <input v-model="editTeacherForm.documento" :disabled="true" type="text" placeholder="Documento de identidad" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white disabled:opacity-75 disabled:cursor-not-allowed disabled:bg-slate-200/50 dark:disabled:bg-slate-800/80" />
+              <input v-model="editTeacherForm.documento" :disabled="true" type="text" placeholder="Documento de identidad" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3 sm:p-3.5 text-xs sm:text-sm font-bold outline-none text-slate-900 dark:text-white disabled:opacity-75 disabled:cursor-not-allowed disabled:bg-slate-200/50 dark:disabled:bg-slate-800/80" />
             </label>
-            <label class="space-y-1.5">
+            <label class="space-y-1 sm:space-y-1.5">
               <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email Institucional</span>
-              <input v-model="editTeacherForm.email" type="email" placeholder="docente@institucion.edu" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20" />
+              <input v-model="editTeacherForm.email" type="email" placeholder="docente@institucion.edu" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3 sm:p-3.5 text-xs sm:text-sm font-bold outline-none text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20" />
             </label>
-            <label class="space-y-1.5">
+            <label class="space-y-1 sm:space-y-1.5">
               <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Teléfono / Celular</span>
-              <input v-model="editTeacherForm.telefono" type="tel" placeholder="Ej. 3001234567" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3.5 text-sm font-bold outline-none text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20" />
+              <input v-model="editTeacherForm.telefono" type="tel" placeholder="Ej. 3001234567" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3 sm:p-3.5 text-xs sm:text-sm font-bold outline-none text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20" />
             </label>
           </div>
-          <div class="flex gap-3 pt-2">
-            <button @click="editTeacherModal = false" class="flex-1 py-4 rounded-xl font-black text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all text-sm uppercase tracking-widest cursor-pointer">Cancelar</button>
-            <button @click="updateTeacher" class="flex-[2] bg-blue-600 text-white py-4 rounded-xl font-black shadow-xl shadow-blue-100 dark:shadow-none hover:bg-blue-700 transition-all text-sm uppercase tracking-widest cursor-pointer">
+          <div class="flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3 pt-2">
+            <button @click="editTeacherModal = false" class="w-full sm:flex-1 py-3 sm:py-4 rounded-xl font-black text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all text-xs sm:text-sm uppercase tracking-widest cursor-pointer text-center">Cancelar</button>
+            <button @click="updateTeacher" class="w-full sm:flex-[2] bg-blue-600 text-white py-3 sm:py-4 rounded-xl font-black shadow-xl shadow-blue-100 dark:shadow-none hover:bg-blue-700 transition-all text-xs sm:text-sm uppercase tracking-widest cursor-pointer text-center">
               Guardar Cambios
             </button>
           </div>

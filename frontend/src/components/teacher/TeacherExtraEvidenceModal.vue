@@ -23,33 +23,33 @@ const emit = defineEmits<{
 <template>
   <Teleport to="body">
     <!-- Modal 1: Advertencia de Evidencias Extra -->
-    <div v-if="showWarningModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 max-w-md w-full shadow-2xl space-y-4 animate-in zoom-in-95 duration-200">
+    <div v-if="showWarningModal" class="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div class="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-slate-800 p-4 sm:p-6 max-w-md w-full shadow-2xl space-y-4 animate-in zoom-in-95 duration-200">
         <div class="flex items-center gap-3 text-amber-500 dark:text-amber-400">
-          <div class="p-2.5 bg-amber-50 dark:bg-amber-950/40 rounded-2xl">
-            <AlertTriangle :size="24" />
+          <div class="p-2 sm:p-2.5 bg-amber-50 dark:bg-amber-950/40 rounded-xl sm:rounded-2xl shrink-0">
+            <AlertTriangle :size="22" class="sm:w-6 sm:h-6" />
           </div>
-          <h3 class="text-base font-black uppercase tracking-wide text-slate-850 dark:text-white">Advertencia de Evidencias</h3>
+          <h3 class="text-sm sm:text-base font-black uppercase tracking-wide text-slate-850 dark:text-white">Advertencia de Evidencias</h3>
         </div>
         <p class="text-xs font-semibold text-slate-600 dark:text-slate-400 leading-relaxed">
           Las evidencias que se mostrarán ya fueron planeadas en periodos anteriores/futuros, o no tienen alguna planeación. Si elige vincular una de estas evidencias con el registro de notas, el estado de la evidencia pasará a <span class="text-blue-600 font-extrabold uppercase">EXTRA</span> para este periodo académico.
         </p>
-        <div class="flex gap-2 pt-2">
-          <button @click="emit('closeWarning')" class="flex-1 py-3 text-xs font-black uppercase text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors border border-slate-200 dark:border-slate-800 rounded-2xl">Cancelar</button>
-          <button @click="emit('proceedToExtra')" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-2xl text-xs font-black uppercase active:scale-95 transition-all shadow-lg shadow-indigo-100 dark:shadow-none">Entendido, continuar</button>
+        <div class="flex flex-col-reverse sm:flex-row gap-2 pt-2">
+          <button @click="emit('closeWarning')" class="w-full sm:flex-1 py-2.5 sm:py-3 text-xs font-black uppercase text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors border border-slate-200 dark:border-slate-800 rounded-xl sm:rounded-2xl cursor-pointer">Cancelar</button>
+          <button @click="emit('proceedToExtra')" class="w-full sm:flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 sm:py-3 rounded-xl sm:rounded-2xl text-xs font-black uppercase active:scale-95 transition-all shadow-lg shadow-indigo-100 dark:shadow-none cursor-pointer">Entendido, continuar</button>
         </div>
       </div>
     </div>
 
     <!-- Modal 2: Catálogo de Evidencias Extras/Sin Planear -->
-    <div v-if="showExtraModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 max-w-lg w-full shadow-2xl flex flex-col max-h-[85vh] space-y-4 animate-in zoom-in-95 duration-200">
+    <div v-if="showExtraModal" class="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div class="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-slate-800 p-4 sm:p-6 max-w-lg w-full shadow-2xl flex flex-col max-h-[90dvh] space-y-4 animate-in zoom-in-95 duration-200">
         <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-          <h3 class="text-sm font-black uppercase tracking-wider text-slate-850 dark:text-white">Evidencias Extras disponibles</h3>
-          <button @click="emit('closeExtra')" class="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors rounded-xl hover:bg-slate-100 dark:hover:bg-slate-855"><X :size="16" /></button>
+          <h3 class="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-850 dark:text-white">Evidencias Extras disponibles</h3>
+          <button @click="emit('closeExtra')" class="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors rounded-xl hover:bg-slate-100 dark:hover:bg-slate-855 cursor-pointer"><X :size="16" /></button>
         </div>
 
-        <div class="flex-1 overflow-y-auto pr-1 space-y-4 custom-scrollbar">
+        <div class="flex-1 overflow-y-auto pr-1 space-y-3 sm:space-y-4 custom-scrollbar">
           <div v-if="extraDbaItems.length === 0" class="text-xs text-slate-400 dark:text-slate-500 italic py-8 text-center">
             No hay más evidencias disponibles en el catálogo de DBA para este curso.
           </div>
@@ -64,12 +64,12 @@ const emit = defineEmits<{
               </p>
             </div>
             
-            <div class="pl-4 space-y-1.5">
+            <div class="pl-2 sm:pl-4 space-y-1.5">
               <label 
                 v-for="ev in dbaItem.evidencias" 
                 :key="ev.id_evidencia_dba" 
                 :class="getLinkedActivityForEvidence(ev.id_evidencia_dba) ? 'opacity-60 cursor-not-allowed bg-slate-50/50 dark:bg-slate-900/10' : 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50'" 
-                class="flex flex-col gap-1 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 transition-all"
+                class="flex flex-col gap-1 p-2 sm:p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 transition-all"
               >
                 <div class="flex items-start gap-2 text-xs font-bold text-slate-650 dark:text-slate-300">
                   <input 
@@ -77,7 +77,7 @@ const emit = defineEmits<{
                     :checked="selectedEvidenciasDba.includes(ev.id_evidencia_dba)" 
                     :disabled="!!getLinkedActivityForEvidence(ev.id_evidencia_dba)" 
                     @change="emit('toggleEvidence', ev.id_evidencia_dba)"
-                    class="mt-0.5 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed" 
+                    class="mt-0.5 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer" 
                   />
                   <div class="flex flex-wrap items-center gap-1.5">
                     <span>{{ ev.descripcion }}</span>
@@ -98,7 +98,7 @@ const emit = defineEmits<{
         </div>
 
         <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end">
-          <button @click="emit('closeExtra')" class="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-2xl text-xs font-black uppercase active:scale-95 transition-all shadow-lg shadow-indigo-100 dark:shadow-none">Confirmar Selección</button>
+          <button @click="emit('closeExtra')" class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white px-6 sm:px-8 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl text-xs font-black uppercase active:scale-95 transition-all shadow-lg shadow-indigo-100 dark:shadow-none cursor-pointer">Confirmar Selección</button>
         </div>
       </div>
     </div>

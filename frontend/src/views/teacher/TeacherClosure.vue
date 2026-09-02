@@ -247,42 +247,42 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="space-y-8 animate-in fade-in duration-700">
+  <div class="space-y-6 sm:space-y-8 animate-in fade-in duration-700">
     <!-- Header -->
-    <div class="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-6 transition-colors">
+    <div class="bg-white dark:bg-slate-900 p-4 sm:p-6 md:p-8 rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6 transition-colors">
       <div class="space-y-1">
-        <h1 class="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Cierre de Periodo Académico</h1>
-        <p class="text-slate-500 dark:text-slate-400 font-medium">Finaliza tus materias para el periodo actual: <span class="text-indigo-600 dark:text-indigo-400 font-bold">{{ activePeriodName }}</span></p>
+        <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">Cierre de Periodo Académico</h1>
+        <p class="text-slate-500 dark:text-slate-400 text-xs sm:text-sm font-medium">Finaliza tus materias para el periodo actual: <span class="text-indigo-600 dark:text-indigo-400 font-bold">{{ activePeriodName }}</span></p>
       </div>
       
-      <div class="px-6 py-3 bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900 rounded-2xl flex items-center gap-3">
-        <Clock class="w-5 h-5 text-indigo-500 dark:text-indigo-400" />
-        <div class="text-xs font-bold text-indigo-700 dark:text-indigo-300 uppercase tracking-wider">
+      <div class="px-4 sm:px-6 py-2.5 sm:py-3 bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900 rounded-xl sm:rounded-2xl flex items-center gap-2.5 sm:gap-3 self-start md:self-auto">
+        <Clock class="w-4 h-4 sm:w-5 sm:h-5 text-indigo-500 dark:text-indigo-400 shrink-0" />
+        <div class="text-[11px] sm:text-xs font-bold text-indigo-700 dark:text-indigo-300 uppercase tracking-wider">
           Periodo Académico Activo
         </div>
       </div>
     </div>
 
     <!-- Filtros Interactivos -->
-    <div v-if="!loading && courses.length > 0" class="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800">
-      <div class="flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div class="flex flex-col sm:flex-row flex-wrap gap-4 items-center w-full md:w-auto">
-          <div class="relative w-full sm:w-64">
+    <div v-if="!loading && courses.length > 0" class="bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800">
+      <div class="flex flex-col md:flex-row gap-3 sm:gap-4 items-center justify-between">
+        <div class="flex flex-col sm:flex-row flex-wrap gap-2.5 sm:gap-3 items-center w-full md:w-auto">
+          <div class="relative w-full sm:w-60">
             <input 
               v-model="searchQuery" 
               type="text" 
               placeholder="Buscar por materia o grado..." 
-              class="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all duration-300"
+              class="w-full pl-10 pr-4 py-2 sm:py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all duration-300"
             />
-            <Search class="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+            <Search class="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5 sm:top-3" />
           </div>
 
           <!-- Period Selector -->
           <div v-if="periods.length > 0" class="relative w-full sm:w-48">
             <select 
-              v-model="activePeriodId"
+              v-model="activePeriodId" 
               @change="fetchCoursesWithStatus"
-              class="w-full pl-4 pr-10 py-2.5 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 rounded-2xl text-sm font-bold text-indigo-700 dark:text-indigo-300 outline-none appearance-none focus:ring-2 focus:ring-indigo-500 transition-all duration-300 cursor-pointer"
+              class="w-full pl-3.5 sm:pl-4 pr-10 py-2 sm:py-2.5 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold text-indigo-700 dark:text-indigo-300 outline-none appearance-none focus:ring-2 focus:ring-indigo-500 transition-all duration-300 cursor-pointer truncate"
             >
               <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo">
                 {{ p.nombre }} {{ p.estado === 'ABIERTO' ? '(Abierto)' : '' }}
@@ -290,40 +290,40 @@ onMounted(async () => {
             </select>
           </div>
 
-          <div class="relative w-full sm:w-44">
+          <div class="relative w-full sm:w-40">
             <select 
               v-model="selectedGrade"
-              class="w-full pl-4 pr-10 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none appearance-none focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all duration-300 cursor-pointer"
+              class="w-full pl-3.5 sm:pl-4 pr-10 py-2 sm:py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none appearance-none focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all duration-300 cursor-pointer truncate"
             >
               <option value="">Todos los Grados</option>
               <option v-for="g in uniqueGrades" :key="g" :value="g">{{ g }}</option>
             </select>
           </div>
 
-          <div class="relative w-full sm:w-44">
+          <div class="relative w-full sm:w-40">
             <select 
               v-model="selectedSubject"
-              class="w-full pl-4 pr-10 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none appearance-none focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all duration-300 cursor-pointer"
+              class="w-full pl-3.5 sm:pl-4 pr-10 py-2 sm:py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none appearance-none focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all duration-300 cursor-pointer truncate"
             >
               <option value="">Todas las Materias</option>
               <option v-for="s in uniqueSubjects" :key="s" :value="s">{{ s }}</option>
             </select>
           </div>
 
-          <div class="relative w-full sm:w-44">
+          <div class="relative w-full sm:w-40">
             <select 
               v-model="selectedJornada"
-              class="w-full pl-4 pr-10 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none appearance-none focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all duration-300 cursor-pointer"
+              class="w-full pl-3.5 sm:pl-4 pr-10 py-2 sm:py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none appearance-none focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all duration-300 cursor-pointer truncate"
             >
               <option value="">Todas las Jornadas</option>
               <option v-for="j in uniqueJornadas" :key="j" :value="j">{{ j }}</option>
             </select>
           </div>
 
-          <div class="relative w-full sm:w-44">
+          <div class="relative w-full sm:w-40">
             <select 
               v-model="selectedStatus"
-              class="w-full pl-4 pr-10 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none appearance-none focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all duration-300 cursor-pointer"
+              class="w-full pl-3.5 sm:pl-4 pr-10 py-2 sm:py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none appearance-none focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 transition-all duration-300 cursor-pointer truncate"
             >
               <option value="">Todos los Estados</option>
               <option value="cerrado">Cerrado</option>
@@ -336,10 +336,10 @@ onMounted(async () => {
         <button 
           v-if="hasActiveFilters"
           @click="clearFilters"
-          class="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors flex items-center gap-1 shrink-0"
+          class="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors flex items-center gap-1 shrink-0 self-start md:self-auto cursor-pointer"
         >
           <X class="w-3.5 h-3.5" />
-          Limpiar Filtros
+          <span>Limpiar Filtros</span>
         </button>
       </div>
     </div>
@@ -360,23 +360,23 @@ onMounted(async () => {
     </div>
 
     <!-- Course List -->
-    <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
       <div 
         v-for="course in filteredCourses" 
         :key="course.id_detallegrado"
-        class="bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden hover:shadow-xl transition-all duration-300 group"
+        class="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden hover:shadow-xl transition-all duration-300 group flex flex-col"
       >
         <!-- Header del Card -->
-        <div class="p-6 space-y-4">
+        <div class="p-4 sm:p-6 space-y-3 sm:space-y-4">
           <div class="flex justify-between items-start">
-            <div :class="[course.isClosed ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400' : 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400', 'p-3 rounded-2xl']">
-              <CheckCircle2 v-if="course.isClosed" class="w-6 h-6" />
-              <GraduationCap v-else class="w-6 h-6" />
+            <div :class="[course.isClosed ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400' : 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400', 'p-2.5 sm:p-3 rounded-xl sm:rounded-2xl shrink-0']">
+              <CheckCircle2 v-if="course.isClosed" class="w-5 h-5 sm:w-6 sm:h-6" />
+              <GraduationCap v-else class="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
             <div 
               :class="[
                 course.isClosed ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-100 dark:border-slate-800',
-                'px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border transition-colors'
+                'px-2.5 sm:px-3 py-1 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-widest border transition-colors shrink-0'
               ]"
             >
               {{ course.isClosed ? 'Cerrado' : 'Abierto' }}
@@ -384,8 +384,8 @@ onMounted(async () => {
           </div>
 
           <div>
-            <h3 class="text-xl font-black text-slate-900 dark:text-white leading-tight mb-1">{{ course.materia_nombre }}</h3>
-            <div class="flex items-center gap-2 text-slate-500 dark:text-slate-400 font-bold text-sm">
+            <h3 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white leading-tight mb-1">{{ course.materia_nombre }}</h3>
+            <div class="flex items-center gap-2 text-slate-500 dark:text-slate-400 font-bold text-xs sm:text-sm">
               {{ getCourseDisplayName({ grado_nombre: course.grado_nombre, seccion_nombre: course.seccion }) }} • {{ course.jornada_nombre }}
             </div>
           </div>
@@ -393,71 +393,71 @@ onMounted(async () => {
           <!-- Conditions / Warnings / Info -->
           <div class="space-y-3">
             <!-- Closed course info -->
-            <div v-if="course.isClosed" class="p-4 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900 rounded-2xl space-y-2">
+            <div v-if="course.isClosed" class="p-3.5 sm:p-4 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900 rounded-xl sm:rounded-2xl space-y-2">
               <div class="flex items-center gap-2">
                 <CheckCircle2 class="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                 <span class="text-[10px] font-black text-emerald-900 dark:text-emerald-300 uppercase">Resumen del Periodo</span>
               </div>
-              <div class="flex items-center justify-between">
-                <span class="text-[11px] text-emerald-700 dark:text-emerald-400 font-bold">Promedio del Grupo: <span class="font-black">{{ course.groupAverage != null ? course.groupAverage.toFixed(1) : 'N/A' }}</span></span>
-                <span class="text-[11px] text-emerald-700 dark:text-emerald-400 font-bold">Estudiantes: <span class="font-black text-emerald-600 dark:text-emerald-400">COMPLETADO</span></span>
+              <div class="flex items-center justify-between text-[10px] sm:text-[11px]">
+                <span class="text-emerald-700 dark:text-emerald-400 font-bold">Promedio Grupo: <span class="font-black">{{ course.groupAverage != null ? course.groupAverage.toFixed(1) : 'N/A' }}</span></span>
+                <span class="text-emerald-700 dark:text-emerald-400 font-bold">Estado: <span class="font-black text-emerald-600 dark:text-emerald-400">COMPLETADO</span></span>
               </div>
-              <div v-if="course.closureData && course.closureData.docente_cierre_nombre" class="text-[11px] text-emerald-800 dark:text-emerald-300 font-medium border-t border-emerald-200/60 dark:border-emerald-900/50 pt-1.5 mt-1">
+              <div v-if="course.closureData && course.closureData.docente_cierre_nombre" class="text-[10px] sm:text-[11px] text-emerald-800 dark:text-emerald-300 font-medium border-t border-emerald-200/60 dark:border-emerald-900/50 pt-1.5 mt-1">
                 Cerrado por: <span class="font-bold text-emerald-950 dark:text-emerald-200">{{ course.closureData.docente_cierre_nombre }}</span>
               </div>
             </div>
 
             <!-- Missing grades (Pending) -->
-            <div v-else-if="course.missingGrades && course.missingGrades.length > 0" class="p-4 bg-orange-50 dark:bg-orange-950/20 border border-orange-100 dark:border-orange-900 rounded-2xl">
-              <div class="flex items-center gap-2 mb-2">
+            <div v-else-if="course.missingGrades && course.missingGrades.length > 0" class="p-3.5 sm:p-4 bg-orange-50 dark:bg-orange-950/20 border border-orange-100 dark:border-orange-900 rounded-xl sm:rounded-2xl">
+              <div class="flex items-center gap-2 mb-1.5">
                 <AlertTriangle class="w-4 h-4 text-orange-500" />
                 <span class="text-[10px] font-black text-orange-900 dark:text-orange-300 uppercase">Pendiente</span>
               </div>
-              <p class="text-[11px] text-orange-700 dark:text-orange-400 font-medium italic">Faltan notas por registrar. Debes calificar a todos los estudiantes ({{ course.missingGrades.length }} pendientes) para poder cerrar la materia.</p>
+              <p class="text-[10px] sm:text-[11px] text-orange-700 dark:text-orange-400 font-medium italic">Faltan notas por registrar. Debes calificar a todos los estudiantes ({{ course.missingGrades.length }} pendientes) para poder cerrar la materia.</p>
             </div>
             
             <!-- Ready to close -->
-            <div v-else-if="course.activityCount > 0" class="p-4 bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900 rounded-2xl">
-              <div class="flex items-center gap-2 mb-2">
+            <div v-else-if="course.activityCount > 0" class="p-3.5 sm:p-4 bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900 rounded-xl sm:rounded-2xl">
+              <div class="flex items-center gap-2 mb-1.5">
                 <CheckCircle2 class="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
                 <span class="text-[10px] font-black text-indigo-900 dark:text-indigo-300 uppercase">Todo listo</span>
               </div>
-              <p class="text-[11px] text-indigo-700 dark:text-indigo-400 font-black">Todo está completo, listo para cerrar.</p>
+              <p class="text-[10px] sm:text-[11px] text-indigo-700 dark:text-indigo-400 font-black">Todo está completo, listo para cerrar.</p>
             </div>
           </div>
         </div>
 
         <!-- Footer / Actions -->
-        <div class="p-6 pt-4 bg-slate-50/50 dark:bg-slate-800/30 border-t border-slate-50 dark:border-slate-800 transition-colors mt-auto">
+        <div class="p-4 sm:p-6 pt-3 sm:pt-4 bg-slate-50/50 dark:bg-slate-800/30 border-t border-slate-50 dark:border-slate-800 transition-colors mt-auto">
           <div class="flex gap-2">
             <button 
               @click="navigateToGrades(course)"
-              class="flex-1 px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
+              class="flex-1 px-3 sm:px-4 py-2.5 sm:py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <ClipboardList class="w-4 h-4" />
-              Revisar
+              <span>Revisar</span>
             </button>
 
             <button 
               v-if="!course.isClosed && !auth.isMonitoring"
               @click="handleClosePeriod(course)"
               :disabled="course.missingGrades?.length > 0 || processingId === course.id_detallegrado"
-              class="flex-[1.5] px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-100 dark:shadow-none transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              class="flex-[1.5] px-3 sm:px-4 py-2.5 sm:py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-100 dark:shadow-none transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
             >
               <Loader2 v-if="processingId === course.id_detallegrado" class="w-4 h-4 animate-spin" />
               <Lock v-else class="w-4 h-4" />
-              Cerrar Periodo
+              <span>Cerrar Periodo</span>
             </button>
             <div 
               v-else-if="auth.isMonitoring && !course.isClosed"
-              class="flex-[1.5] flex items-center justify-center gap-2 text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest bg-amber-50 dark:bg-amber-950/30 rounded-xl border border-amber-100 dark:border-amber-900"
+              class="flex-[1.5] flex items-center justify-center gap-1.5 text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest bg-amber-50 dark:bg-amber-950/30 rounded-xl border border-amber-100 dark:border-amber-900 py-2.5"
             >
               <Lock class="w-4 h-4" />
-              Solo Lectura
+              <span>Solo Lectura</span>
             </div>
-            <div v-else class="flex-[1.5] flex items-center justify-center gap-2 text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest bg-emerald-50 dark:bg-emerald-950/30 rounded-xl">
+            <div v-else class="flex-[1.5] flex items-center justify-center gap-1.5 text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest bg-emerald-50 dark:bg-emerald-950/30 rounded-xl py-2.5">
               <CheckCircle2 class="w-4 h-4" />
-              Materia Cerrada
+              <span>Cerrada</span>
             </div>
           </div>
         </div>
@@ -465,33 +465,33 @@ onMounted(async () => {
     </div>
 
     <!-- Empty State -->
-    <div v-if="!loading && courses.length === 0" class="bg-white p-20 rounded-3xl text-center border-2 border-dashed border-slate-200">
-      <div class="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
-        <GraduationCap class="w-10 h-10 text-slate-300" />
+    <div v-if="!loading && courses.length === 0" class="bg-white dark:bg-slate-900 p-12 sm:p-20 rounded-2xl sm:rounded-3xl text-center border-2 border-dashed border-slate-200 dark:border-slate-800">
+      <div class="w-16 h-16 sm:w-20 sm:h-20 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-6">
+        <GraduationCap class="w-8 h-8 sm:w-10 sm:h-10 text-slate-300 dark:text-slate-600" />
       </div>
-      <h3 class="text-xl font-black text-slate-400">No tienes materias asignadas</h3>
-      <p class="text-slate-400 mt-2">Contacta a la administración para verificar tu carga académica.</p>
+      <h3 class="text-lg sm:text-xl font-black text-slate-400">No tienes materias asignadas</h3>
+      <p class="text-xs sm:text-sm text-slate-400 mt-2">Contacta a la administración para verificar tu carga académica.</p>
     </div>
 
     <!-- Modal de Justificación de Evidencias DBA Pendientes -->
-    <div v-if="showJustificationModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div class="bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 dark:border-slate-800 space-y-5">
+    <div v-if="showJustificationModal" class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div class="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl max-w-lg w-full p-4 sm:p-6 shadow-2xl border border-slate-100 dark:border-slate-800 space-y-4 sm:space-y-5 max-h-[90dvh] overflow-y-auto">
         <div class="flex items-start justify-between gap-4">
-          <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
-              <AlertTriangle class="w-5 h-5" />
+          <div class="flex items-center gap-2.5 sm:gap-3">
+            <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold shrink-0">
+              <AlertTriangle class="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div>
-              <h3 class="text-lg font-black text-slate-900 dark:text-white">Evidencias DBA Sin Evaluar</h3>
-              <p class="text-xs text-slate-500 font-medium">Materia: {{ courseToClose?.materia_nombre }} ({{ courseToClose?.grado_nombre }})</p>
+              <h3 class="text-base sm:text-lg font-black text-slate-900 dark:text-white">Evidencias DBA Sin Evaluar</h3>
+              <p class="text-[11px] sm:text-xs text-slate-500 font-medium">Materia: {{ courseToClose?.materia_nombre }} ({{ courseToClose?.grado_nombre }})</p>
             </div>
           </div>
-          <button @click="showJustificationModal = false" class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg">
+          <button @click="showJustificationModal = false" class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg cursor-pointer">
             <X class="w-5 h-5" />
           </button>
         </div>
 
-        <div class="p-4 bg-amber-50/50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/40 rounded-2xl text-xs text-amber-800 dark:text-amber-300 space-y-2">
+        <div class="p-3.5 sm:p-4 bg-amber-50/50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/40 rounded-xl sm:rounded-2xl text-xs text-amber-800 dark:text-amber-300 space-y-2">
           <p class="font-bold">Existen {{ pendingEvidences.length }} evidencia(s) DBA planeadas para este periodo que no fueron asociadas a ninguna actividad evaluativa:</p>
           <ul class="list-disc list-inside space-y-1 text-[11px] max-h-28 overflow-y-auto custom-scrollbar">
             <li v-for="ev in pendingEvidences" :key="ev.id_evidencia_dba" class="font-medium">
@@ -500,10 +500,10 @@ onMounted(async () => {
           </ul>
         </div>
 
-        <div class="space-y-3">
+        <div class="space-y-2 sm:space-y-3">
           <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Selecciona o escribe el motivo por el cual no se evaluaron:</label>
           
-          <select v-model="selectedReasonPreset" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none focus:border-indigo-500">
+          <select v-model="selectedReasonPreset" class="w-full px-3.5 sm:px-4 py-2 sm:py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none focus:border-indigo-500 cursor-pointer">
             <option value="Tiempo insuficiente por imprevistos del calendario académico">Tiempo insuficiente por imprevistos del calendario académico</option>
             <option value="Reorganización pedagógica aprobada institucionalmente">Reorganización pedagógica aprobada institucionalmente</option>
             <option value="Contenido cubierto dentro de otra evidencia integrada">Contenido cubierto dentro de otra evidencia integrada</option>
@@ -519,17 +519,17 @@ onMounted(async () => {
           ></textarea>
         </div>
 
-        <div class="flex items-center justify-end gap-3 pt-2">
+        <div class="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 pt-2">
           <button 
             @click="showJustificationModal = false" 
-            class="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs rounded-xl hover:bg-slate-200 transition-all"
+            class="w-full sm:w-auto px-4 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs rounded-xl hover:bg-slate-200 transition-all cursor-pointer text-center"
           >
             Cancelar
           </button>
           <button 
             @click="handleConfirmClosureWithJustification" 
             :disabled="processingId === courseToClose?.id_detallegrado"
-            class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 disabled:opacity-50"
+            class="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
           >
             <Loader2 v-if="processingId === courseToClose?.id_detallegrado" class="w-4 h-4 animate-spin" />
             <span>Confirmar Cierre de Materia</span>

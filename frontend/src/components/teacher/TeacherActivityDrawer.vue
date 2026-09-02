@@ -45,30 +45,30 @@ const emit = defineEmits<{
   <div v-if="isOpen" class="fixed inset-0 z-50 overflow-hidden" aria-labelledby="slide-over-title" role="dialog" aria-modal="true">
     <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" @click="emit('close')"></div>
     
-    <div class="absolute inset-y-0 right-0 pl-10 max-w-full flex">
+    <div class="absolute inset-y-0 right-0 pl-0 sm:pl-10 max-w-full flex">
       <div class="w-screen max-w-lg bg-white dark:bg-slate-900 shadow-2xl flex flex-col transition-all transform duration-300 ease-in-out border-l border-slate-100 dark:border-slate-800">
         <!-- Drawer Header -->
-        <div class="px-6 py-5 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <div class="p-2.5 bg-indigo-50 dark:bg-indigo-950/30 rounded-xl text-indigo-600 dark:text-indigo-400">
-              <Settings :size="20" />
+        <div class="px-4 sm:px-6 py-4 sm:py-5 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+          <div class="flex items-center gap-2.5 sm:gap-3">
+            <div class="p-2 sm:p-2.5 bg-indigo-50 dark:bg-indigo-950/30 rounded-xl text-indigo-600 dark:text-indigo-400 shrink-0">
+              <Settings :size="18" class="sm:w-5 sm:h-5" />
             </div>
             <div>
-              <h2 class="text-lg font-black text-slate-900 dark:text-white leading-none">
+              <h2 class="text-base sm:text-lg font-black text-slate-900 dark:text-white leading-tight">
                 {{ isPeriodClosed ? 'Detalle de Actividades (Solo Lectura)' : 'Gestión Pedagógica' }}
               </h2>
-              <p class="text-xs text-slate-500 dark:text-slate-400 font-semibold mt-1">
+              <p class="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-semibold mt-0.5">
                 {{ isPeriodClosed ? 'Materia cerrada para este periodo' : 'Configura actividades y evidencias DBA' }}
               </p>
             </div>
           </div>
-          <button @click="emit('close')" class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
-            <X :size="20" />
+          <button @click="emit('close')" class="p-1.5 sm:p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer">
+            <X :size="18" class="sm:w-5 sm:h-5" />
           </button>
         </div>
         
         <!-- Drawer Body (scrollable) -->
-        <div class="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
+        <div class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 sm:space-y-8 custom-scrollbar">
           <!-- Section 1: Active Competency -->
           <div class="space-y-4">
             <div class="flex items-center gap-2">

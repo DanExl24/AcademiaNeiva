@@ -578,41 +578,41 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="space-y-8 animate-in fade-in duration-700">
+  <div class="space-y-6 sm:space-y-8 animate-in fade-in duration-700">
     <!-- Header with Actions -->
     <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
       <div>
-        <h1 class="text-3xl font-black text-slate-900 dark:text-white tracking-tight transition-colors">Asistencia de Grados</h1>
-        <p class="text-slate-500 dark:text-slate-400 text-lg transition-colors">Registra, modifica y visualiza la asistencia diaria de tus cursos asignados.</p>
+        <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight transition-colors">Asistencia de Grados</h1>
+        <p class="text-slate-500 dark:text-slate-400 text-xs sm:text-sm md:text-base mt-0.5 transition-colors">Registra, modifica y visualiza la asistencia diaria de tus cursos asignados.</p>
       </div>
-      <div class="flex flex-wrap gap-3">
+      <div class="flex flex-wrap items-center gap-2 sm:gap-3">
         <button 
           v-if="selectedCourse"
           @click="printAttendanceSheet"
-          class="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 px-6 py-3 rounded-2xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-all flex items-center gap-2 border border-slate-200/60 dark:border-slate-700/60 shadow-sm"
+          class="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 px-4 sm:px-6 py-2 sm:py-3 rounded-xl sm:rounded-2xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-all flex items-center gap-2 border border-slate-200/60 dark:border-slate-700/60 shadow-sm text-xs sm:text-sm cursor-pointer"
         >
-          <Download :size="20" />
-          Descargar Formato
+          <Download :size="16" class="sm:w-5 sm:h-5" />
+          <span>Descargar Formato</span>
         </button>
         <button 
           v-if="selectedCourse && activeTab === 'history' && historyData.length > 0"
           @click="exportHistoryToCSV"
-          class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-2xl font-bold transition-all flex items-center gap-2 shadow-md"
+          class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-xl sm:rounded-2xl font-bold transition-all flex items-center gap-2 shadow-md text-xs sm:text-sm cursor-pointer"
         >
-          <Download :size="20" />
-          Exportar Historial (CSV)
+          <Download :size="16" class="sm:w-5 sm:h-5" />
+          <span>Exportar (CSV)</span>
         </button>
         <!-- Autosave Indicator -->
-        <div v-if="selectedCourse && activeTab === 'today' && selectedDate === todayStr && !auth.isMonitoring && isEditable" class="flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-100 dark:border-slate-850 h-[46px]">
-          <div v-if="autosaveStatus === 'saving'" class="flex items-center gap-1.5 text-[9px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">
+        <div v-if="selectedCourse && activeTab === 'today' && selectedDate === todayStr && !auth.isMonitoring && isEditable" class="flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-slate-50 dark:bg-slate-800/60 rounded-xl sm:rounded-2xl border border-slate-100 dark:border-slate-850 h-[40px] sm:h-[46px]">
+          <div v-if="autosaveStatus === 'saving'" class="flex items-center gap-1.5 text-[9px] sm:text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">
             <Loader2 class="w-3.5 h-3.5 animate-spin" />
             <span>Guardando...</span>
           </div>
-          <div v-else-if="autosaveStatus === 'saved'" class="flex items-center gap-1.5 text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
+          <div v-else-if="autosaveStatus === 'saved'" class="flex items-center gap-1.5 text-[9px] sm:text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
             <CheckCircle class="w-3.5 h-3.5" />
             <span>Guardado</span>
           </div>
-          <div v-else-if="autosaveStatus === 'error'" class="flex items-center gap-1.5 text-[9px] font-black text-red-600 dark:text-red-400 uppercase tracking-widest" :title="autosaveErrorMsg">
+          <div v-else-if="autosaveStatus === 'error'" class="flex items-center gap-1.5 text-[9px] sm:text-[10px] font-black text-red-600 dark:text-red-400 uppercase tracking-widest" :title="autosaveErrorMsg">
             <AlertCircle class="w-3.5 h-3.5" />
             <span>Error</span>
           </div>
@@ -623,50 +623,50 @@ onMounted(() => {
           v-if="selectedCourse && activeTab === 'today' && selectedDate === todayStr && !auth.isMonitoring"
           @click="saveAllAttendance(false)"
           :disabled="saving || !isEditable"
-          class="bg-emerald-600 dark:bg-emerald-500 text-white px-8 py-3 rounded-2xl font-bold shadow-lg shadow-emerald-100 dark:shadow-none hover:bg-emerald-700 dark:hover:bg-emerald-600 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          class="bg-emerald-600 dark:bg-emerald-500 text-white px-5 sm:px-8 py-2 sm:py-3 rounded-xl sm:rounded-2xl font-bold shadow-lg shadow-emerald-100 dark:shadow-none hover:bg-emerald-700 dark:hover:bg-emerald-600 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm cursor-pointer"
         >
-          <Loader2 v-if="saving" class="w-5 h-5 animate-spin" />
-          <Save v-else :size="20" />
-          {{ saving ? 'Guardando...' : 'Guardar Asistencia' }}
+          <Loader2 v-if="saving" class="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
+          <Save v-else :size="16" class="sm:w-5 sm:h-5" />
+          <span>{{ saving ? 'Guardando...' : 'Guardar Asistencia' }}</span>
         </button>
         <div 
           v-if="auth.isMonitoring && selectedCourse"
-          class="flex items-center gap-2 text-amber-600 font-bold text-sm bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 px-5 py-3 rounded-2xl"
+          class="flex items-center gap-2 text-amber-600 font-bold text-xs sm:text-sm bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 px-3.5 sm:px-5 py-2 sm:py-3 rounded-xl sm:rounded-2xl"
         >
           Solo Lectura
         </div>
       </div>
     </div>
 
-    <div class="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col md:flex-row md:items-end gap-6 transition-colors">
-      <div class="flex-1 grid grid-cols-1 sm:grid-cols-4 gap-4">
-        <div class="space-y-2">
-          <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-2">Grado</label>
-          <select v-model="selectedGradeName" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-emerald-500 dark:focus:ring-emerald-600 transition-all outline-none">
+    <div class="bg-white dark:bg-slate-900 p-4 sm:p-6 md:p-8 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col md:flex-row md:items-end gap-4 sm:gap-6 transition-colors">
+      <div class="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div class="space-y-1.5">
+          <label class="text-[10px] sm:text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Grado</label>
+          <select v-model="selectedGradeName" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-emerald-500 dark:focus:ring-emerald-600 transition-all outline-none cursor-pointer">
             <option :value="null">Selecciona</option>
             <option v-for="g in gradeOptions" :key="g" :value="g">{{ g }}</option>
           </select>
         </div>
 
-        <div class="space-y-2">
-          <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-2">Sección</label>
-          <select v-model="selectedSection" :disabled="!selectedGradeName" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-emerald-500 dark:focus:ring-emerald-600 transition-all outline-none disabled:opacity-50">
+        <div class="space-y-1.5">
+          <label class="text-[10px] sm:text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Sección</label>
+          <select v-model="selectedSection" :disabled="!selectedGradeName" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-emerald-500 dark:focus:ring-emerald-600 transition-all outline-none disabled:opacity-50 cursor-pointer">
             <option :value="null">Selecciona</option>
             <option v-for="s in sectionOptions" :key="s" :value="s">{{ s }}</option>
           </select>
         </div>
 
-        <div class="space-y-2">
-          <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-2">Jornada</label>
-          <select v-model="selectedJornada" :disabled="!selectedSection" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-emerald-500 dark:focus:ring-emerald-600 transition-all outline-none disabled:opacity-50">
+        <div class="space-y-1.5">
+          <label class="text-[10px] sm:text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Jornada</label>
+          <select v-model="selectedJornada" :disabled="!selectedSection" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-emerald-500 dark:focus:ring-emerald-600 transition-all outline-none disabled:opacity-50 cursor-pointer">
             <option :value="null">Selecciona</option>
             <option v-for="j in jornadaOptions" :key="j" :value="j">{{ j }}</option>
           </select>
         </div>
 
-        <div class="space-y-2">
-          <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-2">Materia</label>
-          <select v-model="selectedSubjectId" :disabled="!selectedJornada" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-emerald-500 dark:focus:ring-emerald-600 transition-all outline-none disabled:opacity-50">
+        <div class="space-y-1.5">
+          <label class="text-[10px] sm:text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Materia</label>
+          <select v-model="selectedSubjectId" :disabled="!selectedJornada" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-emerald-500 dark:focus:ring-emerald-600 transition-all outline-none disabled:opacity-50 cursor-pointer">
             <option :value="null">Selecciona</option>
             <option v-for="s in subjectsOptions" :key="s.id" :value="s.id">{{ s.label }}</option>
           </select>
@@ -1054,11 +1054,11 @@ onMounted(() => {
           </div>
 
           <!-- History Traversal side column -->
-          <div class="lg:col-span-1 space-y-6">
-            <div class="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-4 transition-colors">
+          <div class="lg:col-span-1 space-y-4 sm:space-y-6">
+            <div class="bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-3 sm:space-y-4 transition-colors">
               <h3 class="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
                 <Calendar :size="18" class="text-emerald-600 dark:text-emerald-500" />
-                Historial de Fechas
+                <span>Historial de Fechas</span>
               </h3>
               <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed transition-colors">
                 Selecciona una de las siguientes fechas registradas para ver su control de asistencia detallado (sólo lectura).

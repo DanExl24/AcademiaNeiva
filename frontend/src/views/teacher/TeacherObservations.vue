@@ -538,28 +538,27 @@ onMounted(() => {
   fetchObservationTypes()
 })
 </script>
-
 <template>
   <div class="space-y-4 animate-in fade-in duration-500 pb-4">
     
     <!-- Top Header Bar -->
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
       <div>
-        <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
-          <MessageSquare :size="28" class="text-amber-600 dark:text-amber-500" />
-          Observador del Estudiante
+        <h1 class="text-xl sm:text-2xl md:text-3xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2.5 sm:gap-3">
+          <MessageSquare :size="24" class="text-amber-600 dark:text-amber-500 sm:w-7 sm:h-7" />
+          <span>Observador del Estudiante</span>
         </h1>
-        <p class="text-slate-500 dark:text-slate-400 text-xs mt-0.5">Vista Acoplada en 3 Columnas: consulta historial y redacta en pantalla fija sin scroll.</p>
+        <p class="text-slate-500 dark:text-slate-400 text-xs mt-0.5">Consulta historial integral y redacta observaciones formativas del periodo.</p>
       </div>
 
       <!-- Quick Progress Badge -->
-      <div v-if="selectedCourse && selectedPeriodId && students.length > 0" class="flex items-center gap-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-2.5 px-4 rounded-2xl shadow-sm">
-        <div class="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-950/50 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0 font-black text-xs">
+      <div v-if="selectedCourse && selectedPeriodId && students.length > 0" class="flex items-center gap-2.5 sm:gap-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-2 sm:p-2.5 px-3 sm:px-4 rounded-xl sm:rounded-2xl shadow-sm self-start sm:self-auto">
+        <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-amber-100 dark:bg-amber-950/50 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0 font-black text-xs">
           {{ rosterStats.percentage }}%
         </div>
         <div>
           <div class="flex items-center gap-2">
-            <span class="text-xs font-black text-slate-800 dark:text-slate-200">Progreso Grupo</span>
+            <span class="text-xs font-black text-slate-800 dark:text-slate-200">Progreso</span>
             <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400">
               {{ rosterStats.completed }}/{{ rosterStats.total }} Evaluados
             </span>
@@ -569,11 +568,11 @@ onMounted(() => {
     </div>
 
     <!-- Cascade Context Filters Bar (Compact Header) -->
-    <div class="bg-white dark:bg-slate-900 p-3 sm:p-4 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm transition-colors">
+    <div class="bg-white dark:bg-slate-900 p-3 sm:p-4 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm transition-colors">
       <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2.5">
         <div class="space-y-1">
           <label class="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Grado</label>
-          <select v-model="selectedGradeName" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 outline-none">
+          <select v-model="selectedGradeName" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2 sm:p-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 outline-none cursor-pointer">
             <option :value="null">Selecciona</option>
             <option v-for="g in gradeOptions" :key="g" :value="g">{{ g }}</option>
           </select>
@@ -581,7 +580,7 @@ onMounted(() => {
 
         <div class="space-y-1">
           <label class="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Sección</label>
-          <select v-model="selectedSection" :disabled="!selectedGradeName" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 outline-none disabled:opacity-50">
+          <select v-model="selectedSection" :disabled="!selectedGradeName" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2 sm:p-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 outline-none disabled:opacity-50 cursor-pointer">
             <option :value="null">Selecciona</option>
             <option v-for="s in sectionOptions" :key="s" :value="s">{{ s }}</option>
           </select>
@@ -589,7 +588,7 @@ onMounted(() => {
 
         <div class="space-y-1">
           <label class="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Jornada</label>
-          <select v-model="selectedJornada" :disabled="!selectedSection" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 outline-none disabled:opacity-50">
+          <select v-model="selectedJornada" :disabled="!selectedSection" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2 sm:p-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 outline-none disabled:opacity-50 cursor-pointer">
             <option :value="null">Selecciona</option>
             <option v-for="j in jornadaOptions" :key="j" :value="j">{{ j }}</option>
           </select>
@@ -597,7 +596,7 @@ onMounted(() => {
 
         <div class="space-y-1">
           <label class="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Materia</label>
-          <select v-model="selectedSubjectId" :disabled="!selectedJornada" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 outline-none disabled:opacity-50">
+          <select v-model="selectedSubjectId" :disabled="!selectedJornada" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2 sm:p-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 outline-none disabled:opacity-50 cursor-pointer">
             <option :value="null">Selecciona</option>
             <option v-for="s in subjectsOptions" :key="s.id" :value="s.id">{{ s.label }}</option>
           </select>
@@ -605,18 +604,17 @@ onMounted(() => {
 
         <div class="space-y-1">
           <label class="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Periodo</label>
-          <select v-model="selectedPeriodId" :disabled="periods.length === 0" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 outline-none disabled:opacity-50">
-            <option :value="null">Selecciona</option>
+          <select v-model="selectedPeriodId" :disabled="periods.length === 0" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2 sm:p-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-amber-500 outline-none disabled:opacity-50 cursor-pointer">
             <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo">
-              {{ p.nombre }}
+              {{ p.nombre }} {{ p.estado === 'CERRADO' ? '(Cerrado)' : '' }}
             </option>
           </select>
         </div>
       </div>
     </div>
 
-    <!-- Status Lock Warning -->
-    <div v-if="selectedCourse && selectedPeriodId && !isEditable" class="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-2xl p-3 flex items-center gap-3">
+    <!-- Read-Only Banner When Period is Closed or Read Only -->
+    <div v-if="selectedCourse && selectedPeriodId && isReadOnly" class="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-2xl p-3 px-4 flex items-center gap-3">
       <AlertCircle class="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
       <div>
         <h4 class="font-bold text-xs text-amber-900 dark:text-amber-200">Modo de Solo Lectura</h4>
@@ -625,18 +623,18 @@ onMounted(() => {
     </div>
 
     <!-- Empty Prompt: Course Not Selected -->
-    <div v-if="!selectedCourse || !selectedPeriodId" class="bg-slate-50 dark:bg-slate-800/40 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-3xl p-14 text-center">
-      <div class="w-14 h-14 bg-white dark:bg-slate-800 rounded-full shadow-sm flex items-center justify-center mx-auto mb-3">
-        <Eye class="w-7 h-7 text-slate-300 dark:text-slate-600" />
+    <div v-if="!selectedCourse || !selectedPeriodId" class="bg-slate-50 dark:bg-slate-800/40 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl sm:rounded-3xl p-10 sm:p-14 text-center">
+      <div class="w-12 h-12 sm:w-14 sm:h-14 bg-white dark:bg-slate-800 rounded-full shadow-sm flex items-center justify-center mx-auto mb-3">
+        <Eye class="w-6 h-6 sm:w-7 sm:h-7 text-slate-300 dark:text-slate-600" />
       </div>
-      <h3 class="text-base font-bold text-slate-500 dark:text-slate-400">Selecciona grado, materia y periodo para activar la mesa de trabajo en 3 columnas</h3>
+      <h3 class="text-sm sm:text-base font-bold text-slate-500 dark:text-slate-400">Selecciona grado, materia y periodo para activar la mesa de trabajo</h3>
     </div>
 
-    <!-- MAIN WORKSPACE: 3 COLUMNS COUPLED VIEW (CERO SCROLL) -->
-    <div v-else class="grid grid-cols-1 lg:grid-cols-12 gap-3.5 items-start h-[calc(100vh-13.5rem)] min-h-[520px]">
+    <!-- MAIN WORKSPACE: 3 COLUMNS COUPLED VIEW (RESPONSIVE STACK) -->
+    <div v-else class="grid grid-cols-1 lg:grid-cols-12 gap-3.5 items-start h-auto lg:h-[calc(100vh-13.5rem)] min-h-[520px]">
 
       <!-- COLUMN 1: STUDENT ROSTER (~25% / col-span-3) -->
-      <div class="lg:col-span-3 h-full flex flex-col bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden p-3.5 space-y-3">
+      <div class="lg:col-span-3 h-[360px] lg:h-full flex flex-col bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden p-3.5 space-y-3">
         
         <!-- Search & Roster Filters -->
         <div class="space-y-2 shrink-0">
@@ -730,7 +728,7 @@ onMounted(() => {
       </div>
 
       <!-- COLUMN 2: STUDENT PREVIOUS HISTORY TIMELINE (~38% / col-span-4) -->
-      <div class="lg:col-span-4 h-full flex flex-col bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden p-3.5 space-y-3">
+      <div class="lg:col-span-4 h-[400px] lg:h-full flex flex-col bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden p-3 sm:p-3.5 space-y-3">
         
         <!-- Header & Type Filter (ALWAYS VISIBLE - NEVER BREAKS OR VANISHES) -->
         <div class="pb-2 border-b border-slate-100 dark:border-slate-800 space-y-2 shrink-0">
@@ -786,13 +784,13 @@ onMounted(() => {
               </div>
 
               <div v-if="isEditable && !auth.isMonitoring" class="flex items-center gap-1">
-                <button @click="startEditObservation(obs)" class="p-1 text-slate-400 hover:text-amber-600 transition-colors" title="Editar">
+                <button @click="startEditObservation(obs)" class="p-1 text-slate-400 hover:text-amber-600 transition-colors cursor-pointer" title="Editar">
                   <Pencil :size="12" />
                 </button>
-                <button v-if="confirmDeleteId !== obs.id_observacion" @click="confirmDeleteId = obs.id_observacion" class="p-1 text-rose-400 hover:text-rose-600 transition-colors" title="Eliminar">
+                <button v-if="confirmDeleteId !== obs.id_observacion" @click="confirmDeleteId = obs.id_observacion" class="p-1 text-rose-400 hover:text-rose-600 transition-colors cursor-pointer" title="Eliminar">
                   <Trash2 :size="12" />
                 </button>
-                <button v-else @click="deleteObservation(obs.id_observacion)" class="bg-rose-600 text-white px-2 py-0.5 rounded text-[9px] font-bold">
+                <button v-else @click="deleteObservation(obs.id_observacion)" class="bg-rose-600 text-white px-2 py-0.5 rounded text-[9px] font-bold cursor-pointer">
                   Confirmar
                 </button>
               </div>
@@ -808,7 +806,7 @@ onMounted(() => {
       </div>
 
       <!-- COLUMN 3: DIRECT OBSERVATION FORM (~37% / col-span-5) -->
-      <div class="lg:col-span-5 h-full flex flex-col bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden p-4 space-y-3">
+      <div class="lg:col-span-5 h-auto lg:h-full flex flex-col bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden p-3.5 sm:p-4 space-y-3">
         
         <div v-if="!activeStudent" class="p-8 text-center my-auto space-y-2">
           <Users class="w-10 h-10 text-slate-300 mx-auto" />
