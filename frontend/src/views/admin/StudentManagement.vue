@@ -501,27 +501,27 @@ const exportToSIMAT = () => {
 </script>
 
 <template>
-  <div class="max-w-[1400px] mx-auto space-y-6">
+  <div class="max-w-[1400px] mx-auto space-y-4 sm:space-y-6">
     <!-- Header -->
-    <div class="bg-white dark:bg-slate-900 rounded-[28px] border border-slate-100 dark:border-slate-800 shadow-sm px-8 py-7 flex flex-col sm:flex-row sm:items-center justify-between gap-5">
-      <div class="flex items-center gap-4">
-        <div class="p-3.5 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl text-indigo-600 dark:text-indigo-400">
-          <GraduationCap :size="28" />
+    <div class="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[28px] border border-slate-100 dark:border-slate-800 shadow-sm px-4 sm:px-8 py-5 sm:py-7 flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-5">
+      <div class="flex items-center gap-3 sm:gap-4">
+        <div class="p-2.5 sm:p-3.5 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl text-indigo-600 dark:text-indigo-400 shrink-0">
+          <GraduationCap :size="24" class="sm:w-7 sm:h-7" />
         </div>
         <div>
-          <h1 class="text-xl font-black text-slate-900 dark:text-white">Gestión de Estudiantes</h1>
-          <p class="text-slate-400 dark:text-slate-500 text-sm font-medium">Administra matrículas, estados y asignaciones escolares.</p>
+          <h1 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white">Gestión de Estudiantes</h1>
+          <p class="text-slate-400 dark:text-slate-500 text-xs sm:text-sm font-medium">Administra matrículas, estados y asignaciones escolares.</p>
         </div>
       </div>
       <button 
         v-if="students.length > 0"
         @click="exportToSIMAT"
-        class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 shadow-md transition-all active:scale-95 text-sm shrink-0"
+        class="w-full sm:w-auto justify-center bg-indigo-600 hover:bg-indigo-700 text-white px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl font-bold flex items-center gap-2 shadow-md transition-all active:scale-95 text-xs sm:text-sm shrink-0 cursor-pointer"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 sm:h-5 sm:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
         </svg>
-        Exportar SIMAT (CSV)
+        <span>Exportar SIMAT (CSV)</span>
       </button>
     </div>
 
@@ -787,28 +787,28 @@ const exportToSIMAT = () => {
     <!-- Modals -->
     
     <!-- Edit Student -->
-    <div v-if="studentModalOpen" class="fixed inset-0 z-[300] flex items-center justify-center p-4">
+    <div v-if="studentModalOpen" class="fixed inset-0 z-[300] flex items-center justify-center p-3 sm:p-4">
       <div class="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" @click="studentModalOpen = false"></div>
-      <div class="relative w-full max-w-xl bg-white dark:bg-slate-900 rounded-[32px] overflow-hidden shadow-2xl">
-        <div class="p-8 border-b border-slate-50 dark:border-slate-800">
-          <h2 class="text-xl font-black text-slate-900 dark:text-white uppercase">{{ isEditing ? 'Editar Estudiante' : 'Nuevo Estudiante' }}</h2>
-          <p class="text-slate-400 text-sm font-medium mt-1">Actualiza la información básica de la ficha del alumno.</p>
+      <div class="relative w-full max-w-xl bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[32px] overflow-hidden shadow-2xl max-h-[90dvh] flex flex-col">
+        <div class="p-5 sm:p-8 border-b border-slate-100 dark:border-slate-800 shrink-0">
+          <h2 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white uppercase">{{ isEditing ? 'Editar Estudiante' : 'Nuevo Estudiante' }}</h2>
+          <p class="text-slate-400 text-xs sm:text-sm font-medium mt-0.5 sm:mt-1">Actualiza la información básica de la ficha del alumno.</p>
         </div>
-        <div class="p-8 space-y-4">
-          <div class="grid grid-cols-2 gap-4">
+        <div class="p-5 sm:p-8 space-y-4 overflow-y-auto flex-1">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div class="space-y-1">
               <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nombres</label>
-              <input v-model="studentForm.nombre" type="text" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-3 text-sm font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20" />
+              <input v-model="studentForm.nombre" type="text" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-3 text-xs sm:text-sm font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20" />
             </div>
             <div class="space-y-1">
               <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Apellidos</label>
-              <input v-model="studentForm.apellido" type="text" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-3 text-sm font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20" />
+              <input v-model="studentForm.apellido" type="text" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-3 text-xs sm:text-sm font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20" />
             </div>
           </div>
-          <div class="grid grid-cols-2 gap-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div class="space-y-1">
               <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tipo Doc.</label>
-              <select v-model="studentForm.id_tipodocumento" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-3 text-sm font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20">
+              <select v-model="studentForm.id_tipodocumento" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-3 text-xs sm:text-sm font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20">
                 <option :value="2">Tarjeta de Identidad (TI)</option>
                 <option :value="1">Registro Civil (RC)</option>
                 <option :value="3">Cédula de Ciudadanía (CC)</option>
@@ -819,16 +819,16 @@ const exportToSIMAT = () => {
             </div>
             <div class="space-y-1">
               <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Documento</label>
-              <input v-model="studentForm.documento" type="text" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-3 text-sm font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20" />
+              <input v-model="studentForm.documento" type="text" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-3 text-xs sm:text-sm font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20" />
             </div>
           </div>
           <div class="space-y-1">
             <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Código Estudiantil</label>
-            <input v-model="studentForm.codigo" type="text" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-3 text-sm font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20" />
+            <input v-model="studentForm.codigo" type="text" class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-3 text-xs sm:text-sm font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/20" />
           </div>
 
           <!-- Justificación del Cambio (Modo Supervisión) -->
-          <div v-if="isSupervision" class="space-y-2 bg-amber-50/50 dark:bg-amber-950/15 border border-amber-200/50 dark:border-amber-900/30 p-5 rounded-2xl">
+          <div v-if="isSupervision" class="space-y-2 bg-amber-50/50 dark:bg-amber-950/15 border border-amber-200/50 dark:border-amber-900/30 p-4 sm:p-5 rounded-2xl">
             <span class="text-xs font-black text-amber-800 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1"><ShieldAlert :size="14" /> Justificación del Cambio (Auditoría) *</span>
             <textarea 
               v-model="justification" 
@@ -838,9 +838,9 @@ const exportToSIMAT = () => {
             ></textarea>
           </div>
 
-          <div class="flex gap-3 pt-4">
-             <button @click="studentModalOpen = false" class="flex-1 py-3.5 rounded-2xl font-black text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all text-sm uppercase tracking-widest">Cancelar</button>
-             <button @click="saveStudent" class="flex-2 bg-indigo-600 text-white py-3.5 rounded-2xl font-black shadow-lg shadow-indigo-100 dark:shadow-none hover:bg-indigo-700 transition-all text-sm uppercase tracking-widest">Guardar Cambios</button>
+          <div class="flex flex-col-reverse sm:flex-row gap-3 pt-4 shrink-0">
+             <button @click="studentModalOpen = false" class="w-full sm:w-auto flex-1 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl font-black text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all text-xs sm:text-sm uppercase tracking-widest cursor-pointer">Cancelar</button>
+             <button @click="saveStudent" class="w-full sm:w-auto flex-2 bg-indigo-600 text-white py-3 sm:py-3.5 rounded-xl sm:rounded-2xl font-black shadow-lg shadow-indigo-100 dark:shadow-none hover:bg-indigo-700 transition-all text-xs sm:text-sm uppercase tracking-widest cursor-pointer">Guardar Cambios</button>
           </div>
         </div>
       </div>

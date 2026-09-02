@@ -352,15 +352,15 @@ watch(schoolId, () => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-50 dark:bg-slate-900 p-6 space-y-6 text-slate-800 dark:text-slate-100">
+  <div class="min-h-screen bg-slate-50 dark:bg-slate-900 p-4 sm:p-6 space-y-4 sm:space-y-6 text-slate-800 dark:text-slate-100">
     <!-- Header -->
-    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
       <div>
-        <h1 class="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-          <Users class="w-7 h-7 text-indigo-600 dark:text-indigo-400" />
-          Gestión de Padres de Familia
+        <h1 class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+          <Users class="w-6 h-6 sm:w-7 sm:h-7 text-indigo-600 dark:text-indigo-400" />
+          <span>Gestión de Padres de Familia</span>
         </h1>
-        <p class="text-sm text-slate-500 dark:text-slate-400">
+        <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
           Consola directiva de control, filtros interactivos y seguimiento de acudientes
         </p>
       </div>
@@ -815,11 +815,11 @@ watch(schoolId, () => {
     </div>
 
     <!-- Edit Modal -->
-    <div v-if="editModalOpen" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
-      <div class="bg-white dark:bg-slate-800 rounded-xl max-w-md w-full p-6 space-y-5 border border-slate-200 dark:border-slate-700 shadow-2xl">
+    <div v-if="editModalOpen" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+      <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full p-4 sm:p-6 space-y-4 sm:space-y-5 border border-slate-200 dark:border-slate-700 shadow-2xl max-h-[90dvh] overflow-y-auto">
         <div class="flex justify-between items-center border-b border-slate-100 dark:border-slate-700 pb-3">
-          <h3 class="font-bold text-lg text-slate-900 dark:text-white">Editar Datos del Acudiente</h3>
-          <button @click="editModalOpen = false" class="text-slate-400 hover:text-slate-600">
+          <h3 class="font-bold text-base sm:text-lg text-slate-900 dark:text-white">Editar Datos del Acudiente</h3>
+          <button @click="editModalOpen = false" class="text-slate-400 hover:text-slate-600 p-1 cursor-pointer">
             <X class="w-5 h-5" />
           </button>
         </div>

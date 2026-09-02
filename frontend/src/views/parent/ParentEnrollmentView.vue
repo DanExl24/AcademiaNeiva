@@ -180,20 +180,20 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="space-y-6 animate-in fade-in duration-500 pb-16">
+  <div class="space-y-4 sm:space-y-6 animate-in fade-in duration-500 pb-16">
     
     <!-- Top Header -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
       <div>
-        <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
-          <FileText :size="28" class="text-indigo-600 dark:text-indigo-400" />
-          Matrícula y Expediente Digital
+        <h1 class="text-xl sm:text-2xl md:text-3xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2.5 sm:gap-3">
+          <FileText :size="24" class="text-indigo-600 dark:text-indigo-400 sm:w-7 sm:h-7" />
+          <span>Matrícula y Expediente Digital</span>
         </h1>
         <p class="text-slate-500 dark:text-slate-400 text-xs mt-1">Consulta el estado oficial de la matrícula de tu hijo y visualiza sus documentos adjuntos entregados.</p>
       </div>
 
       <!-- Child Selector Pills -->
-      <div v-if="children.length > 1" class="flex items-center gap-2 overflow-x-auto pb-1">
+      <div v-if="children.length > 1" class="flex items-center gap-2 overflow-x-auto pb-1 max-w-full">
         <button
           v-for="child in children"
           :key="child.id_estudiante"
@@ -270,22 +270,22 @@ onMounted(async () => {
         </div>
       </div>
 
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 items-start">
       
       <!-- LEFT COLUMN: FICHA OFICIAL + RESUMEN DOCUMENTOS (~42% / col-span-5) -->
-      <div class="lg:col-span-5 space-y-5">
+      <div class="lg:col-span-5 space-y-4 sm:space-y-5">
         
         <!-- Official Active Enrollment Card -->
-        <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-6 shadow-sm space-y-4">
+        <div class="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 p-4 sm:p-6 shadow-sm space-y-4">
           
           <div class="flex items-start justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
             <div class="flex items-center gap-3">
-              <div class="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
-                <School :size="24" />
+              <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
+                <School :size="20" class="sm:w-6 sm:h-6" />
               </div>
               <div>
-                <h3 class="font-black text-slate-900 dark:text-white text-base leading-tight">{{ enrollmentData.school_name || 'Institución Educativa' }}</h3>
-                <p class="text-xs text-indigo-600 dark:text-indigo-400 font-bold mt-0.5">Año Lectivo: {{ enrollmentData.year_label || 'Vigente' }}</p>
+                <h3 class="font-black text-slate-900 dark:text-white text-sm sm:text-base leading-tight">{{ enrollmentData.school_name || 'Institución Educativa' }}</h3>
+                <p class="text-[11px] sm:text-xs text-indigo-600 dark:text-indigo-400 font-bold mt-0.5">Año Lectivo: {{ enrollmentData.year_label || 'Vigente' }}</p>
               </div>
             </div>
 
@@ -295,7 +295,7 @@ onMounted(async () => {
           </div>
 
           <!-- Student Profile Summary -->
-          <div class="bg-slate-50/80 dark:bg-slate-800/50 p-4 rounded-2xl space-y-2 text-xs">
+          <div class="bg-slate-50/80 dark:bg-slate-800/50 p-3.5 sm:p-4 rounded-2xl space-y-2 text-xs">
             <div class="flex items-center justify-between">
               <span class="text-slate-400 font-semibold">Estudiante:</span>
               <strong class="text-slate-800 dark:text-slate-200 font-bold">{{ enrollmentData.student_firstname }} {{ enrollmentData.student_lastname }}</strong>
@@ -311,16 +311,16 @@ onMounted(async () => {
           </div>
 
           <!-- Academic Group & Section Details -->
-          <div class="grid grid-cols-2 gap-3 pt-1">
-            <div class="p-3 bg-indigo-50/50 dark:bg-indigo-950/20 rounded-2xl border border-indigo-100/50 dark:border-indigo-900/40">
+          <div class="grid grid-cols-2 gap-2.5 sm:gap-3 pt-1">
+            <div class="p-2.5 sm:p-3 bg-indigo-50/50 dark:bg-indigo-950/20 rounded-2xl border border-indigo-100/50 dark:border-indigo-900/40">
               <span class="text-[9px] font-black uppercase text-indigo-600 dark:text-indigo-400 tracking-wider block">Grado y Salón</span>
-              <p class="font-black text-slate-800 dark:text-slate-200 text-sm mt-0.5">
+              <p class="font-black text-slate-800 dark:text-slate-200 text-xs sm:text-sm mt-0.5">
                 {{ enrollmentData.tipo_grado }} ({{ enrollmentData.seccion }})
               </p>
             </div>
-            <div class="p-3 bg-purple-50/50 dark:bg-purple-950/20 rounded-2xl border border-purple-100/50 dark:border-purple-900/40">
+            <div class="p-2.5 sm:p-3 bg-purple-50/50 dark:bg-purple-950/20 rounded-2xl border border-purple-100/50 dark:border-purple-900/40">
               <span class="text-[9px] font-black uppercase text-purple-600 dark:text-purple-400 tracking-wider block">Jornada Escolar</span>
-              <p class="font-black text-slate-800 dark:text-slate-200 text-sm mt-0.5">
+              <p class="font-black text-slate-800 dark:text-slate-200 text-xs sm:text-sm mt-0.5">
                 {{ enrollmentData.jornada }}
               </p>
             </div>
@@ -334,7 +334,7 @@ onMounted(async () => {
         </div>
 
         <!-- Document Checklist Summary (UNIFICADO POR TIPO) -->
-        <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-5 shadow-sm space-y-3">
+        <div class="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 p-4 sm:p-5 shadow-sm space-y-3">
           <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
             <h4 class="font-black text-xs uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-2">
               <ShieldCheck :size="16" class="text-indigo-600" />
@@ -377,7 +377,7 @@ onMounted(async () => {
       </div>
 
       <!-- RIGHT COLUMN: INTERACTIVE DOCUMENT VISOR (~58% / col-span-7) -->
-      <div class="lg:col-span-7 bg-slate-900 rounded-3xl overflow-hidden shadow-xl flex flex-col min-h-[580px] border border-slate-800">
+      <div class="lg:col-span-7 bg-slate-900 rounded-2xl sm:rounded-3xl overflow-hidden shadow-xl flex flex-col min-h-[420px] sm:min-h-[580px] border border-slate-800">
         
         <!-- Visor Header Bar -->
         <div class="p-4 bg-slate-800/90 border-b border-slate-700 flex flex-wrap items-center justify-between gap-3">

@@ -177,27 +177,27 @@ const getTypeLabel = (type: string) => {
 </script>
 
 <template>
-  <div class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
+  <div class="space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
     
     <!-- Top Header & Child Selector -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
       <div>
-        <h1 class="text-3xl font-black text-slate-800 dark:text-white flex items-center gap-3">
-          <MessageSquare :size="32" class="text-indigo-600 dark:text-indigo-400" />
-          Observaciones Académicas
+        <h1 class="text-2xl sm:text-3xl font-black text-slate-800 dark:text-white flex items-center gap-2.5 sm:gap-3">
+          <MessageSquare :size="28" class="text-indigo-600 dark:text-indigo-400 sm:w-8 sm:h-8" />
+          <span>Observaciones Académicas</span>
         </h1>
-        <p class="text-slate-500 dark:text-slate-400 mt-1 font-medium italic">
+        <p class="text-slate-500 dark:text-slate-400 mt-1 text-xs sm:text-sm font-medium italic">
           Consulta el seguimiento y recomendaciones de tus hijos
         </p>
       </div>
 
       <!-- Child Selector & Export -->
-      <div class="flex flex-wrap items-center gap-4">
-        <div v-if="children.length > 0" class="flex items-center gap-3 bg-white dark:bg-slate-900 px-6 py-3 rounded-2xl border border-indigo-100 dark:border-indigo-900/50 shadow-sm transition-all focus-within:ring-4 focus-within:ring-indigo-500/10">
-          <GraduationCap :size="20" class="text-indigo-500" />
+      <div class="flex flex-wrap items-center gap-3 sm:gap-4">
+        <div v-if="children.length > 0" class="w-full sm:w-auto flex items-center gap-2.5 sm:gap-3 bg-white dark:bg-slate-900 px-4 sm:px-6 py-2.5 sm:py-3 rounded-2xl border border-indigo-100 dark:border-indigo-900/50 shadow-sm transition-all focus-within:ring-4 focus-within:ring-indigo-500/10">
+          <GraduationCap :size="18" class="text-indigo-500 shrink-0" />
           <select 
             v-model="selectedChildId" 
-            class="bg-transparent border-none text-sm font-black text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer"
+            class="w-full bg-transparent border-none text-xs sm:text-sm font-black text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer truncate"
           >
             <option v-for="child in children" :key="child.id_estudiante" :value="child.id_estudiante">
               {{ child.nombre }} {{ child.apellido }} {{ child.colegio_nombre ? '· ' + child.colegio_nombre : '' }}
@@ -215,47 +215,47 @@ const getTypeLabel = (type: string) => {
     </div>
 
     <!-- Student Info & Filters -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 sm:p-6 bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
       <div v-if="studentInfo" class="flex-1">
         <div class="flex items-center gap-2 mb-1 flex-wrap">
           <span class="text-[10px] font-black uppercase tracking-widest text-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-md">Grado Actual</span>
-          <span class="text-sm font-bold text-slate-700 dark:text-slate-200">{{ studentInfo.grado }} - Grupo {{ studentInfo.grupo }}</span>
+          <span class="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200">{{ studentInfo.grado }} - Grupo {{ studentInfo.grupo }}</span>
           <span v-if="children.find(c => c.id_estudiante === selectedChildId)?.colegio_nombre" class="text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md">
             {{ children.find(c => c.id_estudiante === selectedChildId)?.colegio_nombre }}
           </span>
         </div>
         <p class="text-xs text-slate-400 dark:text-slate-500 flex items-center gap-2">
           <CreditCard :size="14" />
-          Código Estudiantil: <span class="font-bold font-mono">{{ studentInfo.codigo }}</span>
+          <span>Código Estudiantil: <span class="font-bold font-mono">{{ studentInfo.codigo }}</span></span>
         </p>
       </div>
 
-      <div class="flex flex-wrap items-center gap-3">
+      <div class="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
         <!-- Year Filter -->
-        <div class="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700">
-          <Calendar :size="18" class="text-slate-400" />
-          <select v-model="selectedYear" class="bg-transparent border-none text-xs font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer">
+        <div class="flex-1 sm:flex-initial flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border border-slate-200 dark:border-slate-700">
+          <Calendar :size="16" class="text-slate-400 shrink-0" />
+          <select v-model="selectedYear" class="w-full bg-transparent border-none text-xs font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer">
             <option v-for="y in years" :key="y.id_anio" :value="y.id_anio">Año {{ y.calendario }}</option>
           </select>
         </div>
 
         <!-- Period Filter -->
-        <div class="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700">
-          <Filter :size="18" class="text-slate-400" />
-          <select v-model="selectedPeriod" class="bg-transparent border-none text-xs font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer" :disabled="periods.length === 0">
+        <div class="flex-1 sm:flex-initial flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border border-slate-200 dark:border-slate-700">
+          <Filter :size="16" class="text-slate-400 shrink-0" />
+          <select v-model="selectedPeriod" class="w-full bg-transparent border-none text-xs font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer" :disabled="periods.length === 0">
             <option v-if="periods.length === 0" disabled value="">No hay periodos disponibles</option>
             <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo">{{ p.nombre }}{{ p.estado === 'ABIERTO' ? ' - En Curso' : '' }}</option>
           </select>
         </div>
 
         <!-- Type Filter -->
-        <div class="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700">
-          <HelpCircle :size="18" class="text-slate-400" />
-          <select v-model="selectedType" class="bg-transparent border-none text-xs font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer">
+        <div class="flex-1 sm:flex-initial flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border border-slate-200 dark:border-slate-700">
+          <Layers :size="16" class="text-slate-400 shrink-0" />
+          <select v-model="selectedType" class="w-full bg-transparent border-none text-xs font-bold text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer">
             <option value="all">Tipo: Todos</option>
-            <option value="ACADEMICA">Académica</option>
-            <option value="DISCIPLINARIA">Disciplinaria</option>
-            <option value="CONVIVENCIAL">Convivencial</option>
+            <option value="ACADEMICA">Académicas</option>
+            <option value="DISCIPLINARIA">Disciplinarias</option>
+            <option value="CONVIVENCIAL">Convivenciales</option>
           </select>
         </div>
       </div>

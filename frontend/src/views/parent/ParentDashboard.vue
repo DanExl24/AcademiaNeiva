@@ -516,64 +516,64 @@ const barChartOptions = computed(() => ({
     <PeriodCountdownBanner :period-info="dashboardData?.activePeriod" />
 
     <div class="relative overflow-hidden group">
-      <div class="bg-slate-900 border border-slate-800 rounded-[3rem] p-10 text-white shadow-2xl relative z-10 transition-colors duration-500">
-        <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-10">
-          <div class="space-y-6">
-            <div class="inline-flex items-center gap-2 bg-white/10 backdrop-blur-xl px-4 py-2 rounded-2xl text-xs font-black uppercase tracking-widest text-indigo-300">
-              <Zap :size="16" class="text-amber-400 animate-pulse" />
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl sm:rounded-[3rem] p-5 sm:p-8 lg:p-10 text-white shadow-2xl relative z-10 transition-colors duration-500">
+        <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 sm:gap-10">
+          <div class="space-y-4 sm:space-y-6">
+            <div class="inline-flex items-center gap-2 bg-white/10 backdrop-blur-xl px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl sm:rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-widest text-indigo-300">
+              <Zap :size="14" class="text-amber-400 animate-pulse sm:w-4 sm:h-4" />
               Intelligence Core Family
             </div>
-            <h1 class="text-4xl md:text-6xl font-black tracking-tighter leading-tight">
+            <h1 class="text-2xl sm:text-4xl md:text-6xl font-black tracking-tighter leading-tight">
               {{ (auth.isMonitoring && auth.monitoringUser) ? auth.monitoringUser.nombre : (auth.user?.name?.split(' ')[0] || 'Acudiente') }}, <span class="text-indigo-400 italic">análisis familiar.</span>
             </h1>
             
-            <div class="flex flex-wrap items-center gap-4">
+            <div class="flex flex-wrap items-center gap-2.5 sm:gap-4">
               <button 
                 @click="router.push('/soporte?tipo_incidencia=REINGRESO')"
-                class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-lg flex items-center gap-2"
+                class="w-full sm:w-auto px-4 sm:px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl sm:rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer"
               >
                 🔄 Solicitar Reingreso Estudiantil
               </button>
 
               <button 
                 @click="router.push('/dashboard/matricula-hijos')"
-                class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-lg flex items-center gap-2"
+                class="w-full sm:w-auto px-4 sm:px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl sm:rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer"
               >
                 📄 Matrícula y Expediente Digital
               </button>
 
               <!-- Child Switcher -->
-      <div v-if="dashboardData?.children?.length > 1" class="flex flex-wrap items-center gap-2 bg-white/5 p-2 rounded-2xl border border-white/10">
-        <button 
-          @click="selectedChildId = null"
-          :class="[
-            'px-6 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap',
-            selectedChildId === null ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'
-          ]"
-        >
-          Todos
-        </button>
-        <button 
-          v-for="child in dashboardData.children" 
-          :key="child.id_estudiante"
-          @click="selectedChildId = child.id_estudiante"
-          :class="[
-            'px-6 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap flex items-center gap-2',
-            selectedChildId === child.id_estudiante ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'
-          ]"
-        >
-          <span>{{ child.nombre }}</span>
-          <span v-if="child.colegio_nombre" :class="selectedChildId === child.id_estudiante ? 'bg-white/20 text-white' : 'bg-white/10 text-slate-300'" class="px-2 py-0.5 rounded-lg text-[9px] font-bold">
-            {{ child.colegio_nombre }}
-          </span>
-        </button>
-      </div>
+              <div v-if="dashboardData?.children?.length > 1" class="flex flex-wrap items-center gap-1.5 sm:gap-2 bg-white/5 p-1.5 sm:p-2 rounded-xl sm:rounded-2xl border border-white/10">
+                <button 
+                  @click="selectedChildId = null"
+                  :class="[
+                    'px-4 sm:px-6 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer',
+                    selectedChildId === null ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'
+                  ]"
+                >
+                  Todos
+                </button>
+                <button 
+                  v-for="child in dashboardData.children" 
+                  :key="child.id_estudiante"
+                  @click="selectedChildId = child.id_estudiante"
+                  :class="[
+                    'px-4 sm:px-6 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap flex items-center gap-1.5 sm:gap-2 cursor-pointer',
+                    selectedChildId === child.id_estudiante ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'
+                  ]"
+                >
+                  <span>{{ child.nombre }}</span>
+                  <span v-if="child.colegio_nombre" :class="selectedChildId === child.id_estudiante ? 'bg-white/20 text-white' : 'bg-white/10 text-slate-300'" class="px-2 py-0.5 rounded-lg text-[9px] font-bold">
+                    {{ child.colegio_nombre }}
+                  </span>
+                </button>
+              </div>
 
               <!-- Period Selector -->
-              <div v-if="dashboardData?.periods?.length > 0" class="flex items-center gap-2 bg-white/5 p-2 rounded-2xl border border-white/10">
+              <div v-if="dashboardData?.periods?.length > 0" class="flex items-center gap-2 bg-white/5 p-1.5 sm:p-2 rounded-xl sm:rounded-2xl border border-white/10">
                 <select 
                   v-model="selectedPeriodId"
-                  class="bg-transparent text-white text-xs font-black uppercase tracking-wider px-4 py-2 outline-none cursor-pointer appearance-none"
+                  class="bg-transparent text-white text-xs font-black uppercase tracking-wider px-3 sm:px-4 py-1.5 sm:py-2 outline-none cursor-pointer appearance-none"
                 >
                   <option value="all" class="bg-slate-900 text-white">Todos los Periodos</option>
                   <option v-for="p in dashboardData.periods" :key="p.id_periodo" :value="p.id_periodo" class="bg-slate-900 text-white">
@@ -585,15 +585,15 @@ const barChartOptions = computed(() => ({
             </div>
           </div>
 
-          <div v-if="activeStats" class="flex gap-4 w-full lg:w-auto">
-            <div class="flex-1 lg:w-48 bg-white/5 backdrop-blur-md rounded-[2.5rem] p-6 border border-white/10 text-center flex flex-col justify-center">
+          <div v-if="activeStats" class="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full lg:w-auto">
+            <div class="flex-1 lg:w-48 bg-white/5 backdrop-blur-md rounded-2xl sm:rounded-[2.5rem] p-4 sm:p-6 border border-white/10 text-center flex flex-col justify-center">
               <p class="text-[10px] font-black text-indigo-300 uppercase tracking-widest mb-1">Promedio Actual</p>
-              <p class="text-5xl font-black">{{ activeStats.average > 0 ? activeStats.average : 'S/C' }}</p>
+              <p class="text-4xl sm:text-5xl font-black">{{ activeStats.average > 0 ? activeStats.average : 'S/C' }}</p>
               <p v-if="!activeStats.average || activeStats.average === 0" class="text-[10px] text-indigo-300/80 font-bold uppercase tracking-wider mt-1">Sin Calificaciones</p>
             </div>
-            <div class="flex-1 lg:w-48 bg-emerald-600/20 backdrop-blur-md rounded-[2.5rem] p-6 border border-emerald-500/20 text-center flex flex-col justify-center">
+            <div class="flex-1 lg:w-48 bg-emerald-600/20 backdrop-blur-md rounded-2xl sm:rounded-[2.5rem] p-4 sm:p-6 border border-emerald-500/20 text-center flex flex-col justify-center">
               <p class="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Asistencia</p>
-              <p class="text-5xl font-black text-emerald-400">{{ hasAttendanceData ? `${activeStats.attendanceRate}%` : '100%' }}</p>
+              <p class="text-4xl sm:text-5xl font-black text-emerald-400">{{ hasAttendanceData ? `${activeStats.attendanceRate}%` : '100%' }}</p>
               <p v-if="!hasAttendanceData" class="text-[10px] text-emerald-300/80 font-bold uppercase tracking-wider mt-1">Sin Inasistencias</p>
             </div>
           </div>
@@ -603,14 +603,14 @@ const barChartOptions = computed(() => ({
     </div>
 
     <!-- Family Overview (Global) - ONLY SHOW IN "TODOS" MODE -->
-    <div v-if="selectedChildId === null && dashboardData?.children?.length > 1" class="bg-white dark:bg-slate-900 p-8 rounded-[3rem] border border-slate-100 dark:border-slate-800 shadow-sm animate-in zoom-in-95 duration-500">
-      <div class="flex items-center justify-between mb-8">
+    <div v-if="selectedChildId === null && dashboardData?.children?.length > 1" class="bg-white dark:bg-slate-900 p-5 sm:p-8 rounded-2xl sm:rounded-[3rem] border border-slate-100 dark:border-slate-800 shadow-sm animate-in zoom-in-95 duration-500">
+      <div class="flex items-center justify-between mb-6 sm:mb-8">
         <div>
-          <h2 class="text-2xl font-black text-slate-800 dark:text-white">Comparativa Familiar</h2>
-          <p class="text-sm text-slate-500 font-medium italic">Rendimiento general de todos los hijos</p>
+          <h2 class="text-xl sm:text-2xl font-black text-slate-800 dark:text-white">Comparativa Familiar</h2>
+          <p class="text-xs sm:text-sm text-slate-500 font-medium italic">Rendimiento general de todos los hijos</p>
         </div>
-        <div class="p-3 bg-slate-50 dark:bg-slate-800 rounded-2xl text-slate-400">
-          <BarChart3 :size="24" />
+        <div class="p-2.5 sm:p-3 bg-slate-50 dark:bg-slate-800 rounded-2xl text-slate-400">
+          <BarChart3 :size="20" class="sm:w-6 sm:h-6" />
         </div>
       </div>
       <div class="h-64">
@@ -698,18 +698,18 @@ const barChartOptions = computed(() => ({
         </div>
 
         <!-- Gráfica de Evolución (Solo si se selecciona "Todos los periodos") -->
-        <div v-if="selectedPeriodId === 'all'" class="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm animate-in fade-in duration-500">
-          <div class="flex items-center justify-between mb-8">
-            <h3 class="text-xl font-black text-slate-800 dark:text-white flex items-center gap-3">
-              <TrendingUp :size="24" class="text-indigo-600" />
-              Evolución del Rendimiento
+        <div v-if="selectedPeriodId === 'all'" class="bg-white dark:bg-slate-900 p-5 sm:p-8 rounded-2xl sm:rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm animate-in fade-in duration-500">
+          <div class="flex items-center justify-between mb-6 sm:mb-8">
+            <h3 class="text-lg sm:text-xl font-black text-slate-800 dark:text-white flex items-center gap-2.5 sm:gap-3">
+              <TrendingUp :size="20" class="text-indigo-600 sm:w-6 sm:h-6" />
+              <span>Evolución del Rendimiento</span>
             </h3>
-            <div class="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
+            <div class="flex items-center gap-1.5 sm:gap-2 text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400">
               <Info :size="14" />
-              Promedios por Periodo
+              <span class="hidden xs:inline">Promedios por Periodo</span>
             </div>
           </div>
-          <div class="h-80 w-full">
+          <div class="h-64 sm:h-80 w-full">
             <Line v-if="hasEvolutionData" :data="lineChartData" :options="lineChartOptions" />
             <EmptyChartState 
               v-else 
@@ -721,12 +721,12 @@ const barChartOptions = computed(() => ({
         </div>
 
         <!-- Gráfica de Top 5 Materias (Solo si se selecciona un periodo individual) -->
-        <div v-else class="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col justify-between animate-in fade-in duration-500">
+        <div v-else class="bg-white dark:bg-slate-900 p-5 sm:p-8 rounded-2xl sm:rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col justify-between animate-in fade-in duration-500">
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div>
-              <h3 class="text-xl font-black text-slate-800 dark:text-white flex items-center gap-3">
-                <BarChart3 :size="24" class="text-indigo-600" />
-                Rendimiento por Materias
+              <h3 class="text-lg sm:text-xl font-black text-slate-800 dark:text-white flex items-center gap-2.5 sm:gap-3">
+                <BarChart3 :size="20" class="text-indigo-600 sm:w-6 sm:h-6" />
+                <span>Rendimiento por Materias</span>
               </h3>
               <p class="text-xs text-slate-400 font-medium">Top 5 materias con promedios extremos en el periodo</p>
             </div>
@@ -735,7 +735,7 @@ const barChartOptions = computed(() => ({
               <button 
                 @click="activeChartTab = 'best'"
                 :class="[
-                  'px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all cursor-pointer',
+                  'px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all cursor-pointer',
                   activeChartTab === 'best' 
                     ? 'bg-indigo-600 text-white shadow-sm' 
                     : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
@@ -746,7 +746,7 @@ const barChartOptions = computed(() => ({
               <button 
                 @click="activeChartTab = 'worst'"
                 :class="[
-                  'px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all cursor-pointer',
+                  'px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all cursor-pointer',
                   activeChartTab === 'worst' 
                     ? 'bg-rose-600 text-white shadow-sm' 
                     : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
@@ -756,7 +756,7 @@ const barChartOptions = computed(() => ({
               </button>
             </div>
           </div>
-          <div class="h-80 relative">
+          <div class="h-64 sm:h-80 relative">
             <Bar v-if="hasSubjectGrades" :data="barChartData" :options="barChartOptions" />
             <EmptyChartState 
               v-else 
@@ -767,10 +767,10 @@ const barChartOptions = computed(() => ({
           </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-           <div class="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm">
-             <h3 class="text-xl font-black text-slate-800 dark:text-white mb-6">Asistencia Anual</h3>
-             <div class="h-60 flex items-center justify-center">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
+           <div class="bg-white dark:bg-slate-900 p-5 sm:p-8 rounded-2xl sm:rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm">
+             <h3 class="text-lg sm:text-xl font-black text-slate-800 dark:text-white mb-4 sm:mb-6">Asistencia Anual</h3>
+             <div class="h-52 sm:h-60 flex items-center justify-center">
                <Doughnut v-if="hasAttendanceData" :data="doughnutChartData" :options="doughnutChartOptions" />
                <EmptyChartState 
                  v-else 
@@ -783,10 +783,10 @@ const barChartOptions = computed(() => ({
              </div>
            </div>
 
-           <div class="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+           <div class="bg-white dark:bg-slate-900 p-5 sm:p-8 rounded-2xl sm:rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col justify-between">
              <div class="flex items-center justify-between mb-4">
-               <h3 class="text-xl font-black text-slate-800 dark:text-white italic">Perfil Académico</h3>
-               <span v-if="selectedChild" class="px-3 py-1 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-300 rounded-xl text-[10px] font-black uppercase tracking-widest border border-indigo-100 dark:border-indigo-800">
+               <h3 class="text-lg sm:text-xl font-black text-slate-800 dark:text-white italic">Perfil Académico</h3>
+               <span v-if="selectedChild" class="px-2.5 sm:px-3 py-1 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-300 rounded-xl text-[10px] font-black uppercase tracking-widest border border-indigo-100 dark:border-indigo-800">
                  {{ selectedChild.nombre }}
                </span>
              </div>

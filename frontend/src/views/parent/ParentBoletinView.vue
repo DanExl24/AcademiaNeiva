@@ -112,26 +112,26 @@ watch(selectedYear, async (newVal) => {
 </script>
 
 <template>
-  <div class="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
+  <div class="max-w-5xl mx-auto space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
     
     <!-- Header -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
       <div>
-        <h1 class="text-3xl font-black text-slate-800 dark:text-white flex items-center gap-3">
-          <FileDown :size="32" class="text-indigo-600 dark:text-indigo-400" />
-          Boletines de Hijos
+        <h1 class="text-2xl sm:text-3xl font-black text-slate-800 dark:text-white flex items-center gap-2.5 sm:gap-3">
+          <FileDown :size="28" class="text-indigo-600 dark:text-indigo-400 sm:w-8 sm:h-8" />
+          <span>Boletines de Hijos</span>
         </h1>
-        <p class="text-slate-500 dark:text-slate-400 mt-1 font-medium italic">
+        <p class="text-slate-500 dark:text-slate-400 mt-1 text-xs sm:text-sm font-medium italic">
           Genera y descarga los reportes académicos de tu familia
         </p>
       </div>
 
       <!-- Child Selector -->
-      <div v-if="children.length > 0" class="flex items-center gap-3 bg-white dark:bg-slate-900 px-6 py-3 rounded-2xl border border-indigo-100 dark:border-indigo-900/50 shadow-sm transition-all focus-within:ring-4 focus-within:ring-indigo-500/10">
-        <GraduationCap :size="20" class="text-indigo-500" />
+      <div v-if="children.length > 0" class="w-full sm:w-auto flex items-center gap-2.5 sm:gap-3 bg-white dark:bg-slate-900 px-4 sm:px-6 py-2.5 sm:py-3 rounded-2xl border border-indigo-100 dark:border-indigo-900/50 shadow-sm transition-all focus-within:ring-4 focus-within:ring-indigo-500/10">
+        <GraduationCap :size="18" class="text-indigo-500 shrink-0" />
         <select 
           v-model="selectedChildId" 
-          class="bg-transparent border-none text-sm font-black text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer min-w-[200px]"
+          class="w-full bg-transparent border-none text-xs sm:text-sm font-black text-slate-700 dark:text-slate-200 focus:ring-0 outline-none cursor-pointer truncate min-w-0 sm:min-w-[200px]"
         >
           <option v-for="child in children" :key="child.id_estudiante" :value="child.id_estudiante">
             {{ child.nombre }} {{ child.apellido }} {{ child.colegio_nombre ? '· ' + child.colegio_nombre : '' }}
@@ -141,13 +141,13 @@ watch(selectedYear, async (newVal) => {
     </div>
 
     <!-- Main Configuration Card -->
-    <div class="bg-white dark:bg-slate-900 rounded-[2.5rem] p-10 border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-[2.5rem] p-5 sm:p-8 lg:p-10 border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden">
       <!-- Background Accent -->
       <div class="absolute -right-20 -top-20 h-64 w-64 bg-indigo-50 dark:bg-indigo-950/20 rounded-full blur-3xl opacity-50"></div>
       
-      <div class="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-        <div class="space-y-8">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div class="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-12 items-center">
+        <div class="space-y-6 sm:space-y-8">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             <div class="space-y-2">
               <label class="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
                 <Calendar :size="14" />
@@ -155,7 +155,7 @@ watch(selectedYear, async (newVal) => {
               </label>
               <select 
                 v-model="selectedYear"
-                class="w-full h-12 bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-xl px-4 font-bold text-sm text-slate-700 dark:text-slate-200 focus:border-indigo-500 transition-all cursor-pointer outline-none"
+                class="w-full h-11 sm:h-12 bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-xl px-3 sm:px-4 font-bold text-xs sm:text-sm text-slate-700 dark:text-slate-200 focus:border-indigo-500 transition-all cursor-pointer outline-none"
               >
                 <option v-if="years.length === 0" disabled value="">Sin años</option>
                 <option v-for="y in years" :key="y.id_anio" :value="y.id_anio">Año {{ y.calendario }}</option>
@@ -169,7 +169,7 @@ watch(selectedYear, async (newVal) => {
               </label>
               <select 
                 v-model="selectedPeriodId"
-                class="w-full h-12 bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-xl px-4 font-bold text-sm text-slate-700 dark:text-slate-200 focus:border-indigo-500 transition-all cursor-pointer outline-none"
+                class="w-full h-11 sm:h-12 bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-xl px-3 sm:px-4 font-bold text-xs sm:text-sm text-slate-700 dark:text-slate-200 focus:border-indigo-500 transition-all cursor-pointer outline-none"
               >
                 <option v-if="periods.length === 0" disabled value="">No hay periodos cerrados disponibles</option>
                 <option v-for="p in periods" :key="p.id_periodo" :value="p.id_periodo">{{ p.nombre }}</option>
