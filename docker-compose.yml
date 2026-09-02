@@ -24,6 +24,7 @@ services:
     volumes:
       - uploads_data:/app/uploads
       - ./guides:/app/guides:ro
+      - ./README.md:/app/README.md:ro
     depends_on:
       postgres:
         condition: service_healthy

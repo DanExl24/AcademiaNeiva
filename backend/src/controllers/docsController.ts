@@ -36,11 +36,13 @@ export const getRootReadmePath = async (): Promise<string | null> => {
   const basePath = await getGuidesBasePath();
   const candidates = [
     path.resolve(basePath, "../README.md"),
+    path.resolve(basePath, "PROJECT_README.md"),
     path.resolve(process.cwd(), "README.md"),
     path.resolve(process.cwd(), "../README.md"),
     path.resolve(__dirname, "../../../README.md"),
     path.resolve(__dirname, "../../../../README.md"),
-    "/app/README.md"
+    "/app/README.md",
+    path.join(basePath, "README.md")
   ];
 
   for (const p of candidates) {
