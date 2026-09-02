@@ -23,15 +23,17 @@ BEGIN
         SELECT 1 FROM information_schema.columns
         WHERE table_name = 'docente' AND column_name = 'email_institucional'
     ) THEN
-        INSERT INTO public.usuario_colegio_email (id_usuario, id_colegio, email_institucional)
-        SELECT d.id_usuario, d.id_colegio, LOWER(TRIM(d.email_institucional))
-        FROM public.docente d
-        WHERE d.email_institucional IS NOT NULL
-          AND TRIM(d.email_institucional) <> ''
-          AND d.id_usuario IS NOT NULL
-        ON CONFLICT (id_usuario, id_colegio) DO UPDATE
-          SET email_institucional = EXCLUDED.email_institucional;
+        EXECUTE '
+            INSERT INTO public.usuario_colegio_email (id_usuario, id_colegio, email_institucional)
+            SELECT d.id_usuario, d.id_colegio, LOWER(TRIM(d.email_institucional))
+            FROM public.docente d
+            WHERE d.email_institucional IS NOT NULL
+              AND TRIM(d.email_institucional) <> ''''
+              AND d.id_usuario IS NOT NULL
+            ON CONFLICT (id_usuario, id_colegio) DO UPDATE
+              SET email_institucional = EXCLUDED.email_institucional;
+        ';
 
-        ALTER TABLE public.docente DROP COLUMN email_institucional;
+        EXECUTE 'ALTER TABLE public.docente DROP COLUMN email_institucional;';
     END IF;
 END $$;

@@ -63,13 +63,27 @@ CREATE TABLE IF NOT EXISTS public.traslado_aprobacion (
 
 CREATE INDEX IF NOT EXISTS idx_traslado_aprobacion_sol ON public.traslado_aprobacion(id_solicitud);
 
--- 5. Poblar usuario_colegio a partir de las relaciones activas existentes en usuario y usuario_rol
-INSERT INTO public.usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio)
-SELECT u.id_usuario, u.id_colegio, ur.id_rol, 'ACTIVO', CURRENT_TIMESTAMP
-FROM public.usuario u
-JOIN public.usuario_rol ur ON u.id_usuario = ur.id_usuario
-WHERE u.id_colegio IS NOT NULL
-ON CONFLICT (id_usuario, id_colegio, id_rol) DO NOTHING;
+-- 5. Poblar usuario_colegio a partir de las relaciones activas existentes en usuario y usuario_rol (si la columna id_colegio aún existe)
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+          AND table_name = 'usuario' 
+          AND column_name = 'id_colegio'
+    ) THEN
+        EXECUTE '
+            INSERT INTO public.usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio)
+            SELECT u.id_usuario, u.id_colegio, ur.id_rol, ''ACTIVO'', CURRENT_TIMESTAMP
+            FROM public.usuario u
+            JOIN public.usuario_rol ur ON u.id_usuario = ur.id_usuario
+            WHERE u.id_colegio IS NOT NULL
+            ON CONFLICT (id_usuario, id_colegio, id_rol) DO NOTHING;
+        ';
 
--- 6. Hacer usuario.id_colegio NULLABLE para permitir la desvinculación o usuarios globales
-ALTER TABLE public.usuario ALTER COLUMN id_colegio DROP NOT NULL;
+        -- 6. Hacer usuario.id_colegio NULLABLE para permitir la desvinculación o usuarios globales
+        EXECUTE 'ALTER TABLE public.usuario ALTER COLUMN id_colegio DROP NOT NULL;';
+    END IF;
+END $$;
+
