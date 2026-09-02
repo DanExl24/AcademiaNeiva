@@ -680,7 +680,7 @@ const formatRenewalStateLabel = (state?: string) => {
                   <div class="flex items-center gap-2 flex-wrap">
                     <p class="font-black text-slate-900 dark:text-white text-sm">{{ documentLabels[doc.tipo_documento] || doc.tipo_documento }}</p>
                     <span :class="[getDocStatusClass(doc.estado), 'text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full']">{{ doc.estado }}</span>
-                    <span v-if="(matricula?.tipo === 'REINGRESO' || matricula?.tipo === 'RENOVACION') && doc.estado_renovacion" :class="[getRenewalBadgeClass(doc.estado_renovacion), 'text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border']">
+                    <span v-if="matricula?.tipo === 'REINGRESO' && doc.estado_renovacion" :class="[getRenewalBadgeClass(doc.estado_renovacion), 'text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border']">
                       {{ formatRenewalStateLabel(doc.estado_renovacion) }}
                     </span>
                   </div>

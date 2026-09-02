@@ -242,6 +242,7 @@ export class MatriculaService {
               estado: 'PENDIENTE',
               fecha: new Date(),
               id_colegio: resolvedColegioId,
+              estado_renovacion: null,
               contenido: file.buffer || null,
               mime_type: file.mimetype || null,
               nombre_original: file.originalname || filename,
@@ -598,6 +599,7 @@ export class MatriculaService {
     for (const docRow of rawDocs) {
       const docWithToken = {
         ...docRow,
+        estado_renovacion: mat.tipo === 'REINGRESO' ? docRow.estado_renovacion : null,
         token_acceso: generateDocumentAccessToken(docRow.id_documento)
       };
       const key = docRow.tipo_documento;
@@ -991,6 +993,7 @@ export class MatriculaService {
 
     const docsWithToken = docs.map(d => ({
       ...d,
+      estado_renovacion: mat.tipo === 'REINGRESO' ? d.estado_renovacion : null,
       token_acceso: generateDocumentAccessToken(d.id_documento)
     }));
 
@@ -1054,6 +1057,7 @@ export class MatriculaService {
             estado: 'PENDIENTE',
             fecha: new Date(),
             id_colegio: schoolId,
+            estado_renovacion: null,
             version: nextVersion,
             contenido: file.buffer || null,
             mime_type: file.mimetype || null,
