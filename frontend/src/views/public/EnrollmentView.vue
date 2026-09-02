@@ -17,7 +17,9 @@ import {
   RefreshCw, 
   Phone,
   Sparkles,
-  Check
+  Check,
+  FileText,
+  Camera
 } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -332,16 +334,16 @@ const handleFileUpload = (event: Event, key: string) => {
 const notify = useNotificationStore()
 
 const docLabels: Record<string, string> = {
-  registroCivil: 'Registro Civil',
+  registroCivil: 'Registro Civil (Si aplica)',
   documentoIdentidad: 'Doc. Identidad Estudiante',
   documentoPadre: 'Doc. Identidad Acudiente',
-  vacunas: 'Carné de Vacunas',
-  salud: 'Certificado Salud',
-  foto: 'Foto 3x4',
+  vacunas: 'Carné de Vacunas / PAI',
+  salud: 'Certificado Salud (SGSSS)',
+  foto: 'Foto 3x4 (Fondo blanco)',
   reciboPublico: 'Recibo Servicio Público',
-  visa: 'Visa / PPT',
+  visa: 'Visa / PPT / Extranjería',
   certificadoDiscapacidad: 'Diagnóstico Médico',
-  certificadosEscolaridad: 'Certificados de Escolaridad'
+  certificadosEscolaridad: 'Certificados Grados Anteriores'
 }
 
 const isEmailVerified = ref(false)
@@ -785,33 +787,40 @@ const submitEnrollment = async () => {
             </div>
           </div>
 
-          <!-- PASO 2: Documentación Requerida -->
+          <!-- PASO 2: Carga de Documentos (Diseño Original Restaurado) -->
           <div v-else-if="step === 2" class="space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div class="border-b border-slate-100 pb-5 sm:pb-6 flex items-center justify-between">
+            <div class="border-b border-slate-100 pb-5 sm:pb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div>
-                <h3 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Documentación Requerida</h3>
-                <p class="text-slate-500 text-xs sm:text-sm mt-1">Adjunta archivos claros en formato PDF o imagen (máximo 5MB por archivo).</p>
+                <h3 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Documentación</h3>
+                <p class="text-slate-500 text-xs sm:text-sm mt-1">Sube los archivos requeridos para el nivel {{ levels.find(l => l.id === level)?.name || '' }}.</p>
               </div>
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
               <template v-for="(label, key) in docLabels" :key="key">
-                <div v-if="showDoc(key as string)" class="p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-200 bg-slate-50/50 space-y-2.5 sm:space-y-3 hover:border-indigo-200 transition-all">
-                  <div class="flex items-center justify-between">
-                    <span class="text-[11px] sm:text-xs font-black uppercase tracking-wider text-slate-700">{{ label }}</span>
-                    <span v-if="files[key]" class="text-emerald-600 text-xs font-bold flex items-center gap-1">
-                      <CheckCircle2 :size="14" /> Listo
-                    </span>
-                  </div>
+                <div v-if="showDoc(key as string)" class="relative">
+                  <label 
+                    class="block p-5 sm:p-6 rounded-2xl sm:rounded-3xl border-2 border-dashed transition-all cursor-pointer group h-full"
+                    :class="[files[key] ? 'border-emerald-500 bg-emerald-50/30' : 'border-slate-200 hover:border-indigo-400 bg-slate-50/50 hover:bg-white shadow-xs']"
+                  >
+                    <input type="file" class="hidden" @change="e => handleFileUpload(e, key as string)" accept=".pdf,image/*">
+                    
+                    <div class="flex flex-col items-center text-center">
+                      <div :class="[files[key] ? 'text-emerald-600 bg-emerald-100' : 'text-slate-400 bg-slate-100 group-hover:text-indigo-600 transition-colors', 'p-3 rounded-2xl mb-3 sm:mb-4']">
+                        <component :is="key === 'foto' ? Camera : (files[key] ? CheckCircle2 : FileText)" :size="28" />
+                      </div>
+                      <span class="text-xs sm:text-sm font-bold text-slate-800 leading-tight">{{ label }}</span>
+                      
+                      <!-- Regla específica de certificados escolaridad -->
+                      <span v-if="key === 'certificadosEscolaridad'" class="mt-2 text-[10px] text-slate-400 leading-none">
+                        Grado 5° (Primaria) o 9° (Secundaria) o año anterior.
+                      </span>
 
-                  <div class="relative">
-                    <input 
-                      type="file" 
-                      @change="(e) => handleFileUpload(e, key as string)"
-                      accept=".pdf,.png,.jpg,.jpeg"
-                      class="block w-full text-xs text-slate-500 file:mr-3 sm:file:mr-4 file:py-2 sm:file:py-2.5 file:px-3 sm:file:px-4 file:rounded-xl file:border-0 file:text-[11px] sm:file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
-                    >
-                  </div>
+                      <span class="mt-auto pt-3 sm:pt-4 text-xs truncate w-full px-2" :class="files[key] ? 'text-emerald-600 font-bold' : 'text-slate-400'">
+                        {{ files[key] ? files[key]?.name : 'Subir archivo (PDF/IMG)' }}
+                      </span>
+                    </div>
+                  </label>
                 </div>
               </template>
             </div>
@@ -819,17 +828,17 @@ const submitEnrollment = async () => {
             <div class="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-6 border-t border-slate-100">
               <button 
                 type="button" 
-                @click="prevStep"
+                @click="prevStep" 
                 class="w-full sm:w-auto px-5 sm:px-6 py-3 sm:py-3.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs sm:text-sm hover:bg-slate-50 transition-all cursor-pointer text-center"
               >
-                ← Volver al Paso 1
+                ← Volver
               </button>
               <button 
                 type="button" 
-                @click="nextStep"
+                @click="nextStep" 
                 class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3.5 sm:py-4 px-6 sm:px-8 rounded-xl sm:rounded-2xl text-xs sm:text-sm shadow-xl shadow-indigo-100 transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
-                <span>Siguiente: Finalizar Solicitud</span>
+                <span>Continuar</span>
                 <ArrowLeft :size="16" class="rotate-180" />
               </button>
             </div>
