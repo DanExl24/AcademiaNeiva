@@ -68,6 +68,60 @@ BEGIN
   END IF;
 END $$;
 
+DO $$
+BEGIN
+  -- 1. Asegurar secuencia para id_competencia
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_class WHERE relkind = 'S' AND relname = 'competencias_id_competencia_seq'
+  ) THEN
+    CREATE SEQUENCE public.competencias_id_competencia_seq START WITH 1 INCREMENT BY 1;
+  END IF;
+
+  -- 2. Asignar default nextval a id_competencia si no lo tiene
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'competencias' AND column_name = 'id_competencia'
+      AND (column_default IS NULL OR column_default NOT LIKE '%nextval%')
+  ) THEN
+    ALTER TABLE public.competencias ALTER COLUMN id_competencia SET DEFAULT nextval('public.competencias_id_competencia_seq'::regclass);
+    PERFORM setval('public.competencias_id_competencia_seq', COALESCE((SELECT MAX(id_competencia) FROM public.competencias), 0) + 1, false);
+  END IF;
+
+  -- 3. Asegurar Primary Key en public.competencias(id_competencia)
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'competencias'
+  ) AND NOT EXISTS (
+    SELECT 1 
+    FROM pg_constraint c
+    JOIN pg_class t ON c.conrelid = t.oid
+    WHERE t.relname = 'competencias' AND c.contype = 'p'
+  ) THEN
+    ALTER TABLE public.competencias ALTER COLUMN id_competencia SET NOT NULL;
+    ALTER TABLE public.competencias ADD CONSTRAINT competencias_pkey PRIMARY KEY (id_competencia);
+  END IF;
+
+  -- 4. Asegurar Primary Key en public.actividad_materia(id_actividadmateria)
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'actividad_materia'
+  ) AND NOT EXISTS (
+    SELECT 1 
+    FROM pg_constraint c
+    JOIN pg_class t ON c.conrelid = t.oid
+    WHERE t.relname = 'actividad_materia' AND c.contype = 'p'
+  ) THEN
+    ALTER TABLE public.actividad_materia ALTER COLUMN id_actividadmateria SET NOT NULL;
+    ALTER TABLE public.actividad_materia ADD CONSTRAINT actividad_materia_pkey PRIMARY KEY (id_actividadmateria);
+  END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS public.evidencia_aprendizaje (
+  id_evidencia    SERIAL PRIMARY KEY,
+  id_competencia  INTEGER NOT NULL REFERENCES public.competencias(id_competencia) ON DELETE CASCADE,
+  descripcion     TEXT NOT NULL,
+  orden           INTEGER NOT NULL DEFAULT 0,
+  id_colegio      INTEGER NOT NULL REFERENCES public.colegio(id_colegio) ON DELETE CASCADE
+);
+
 ALTER TABLE public.competencias
   ADD COLUMN IF NOT EXISTS descripcion text NOT NULL DEFAULT '${DEFAULT_COMPETENCY_DESCRIPTION}';
 
