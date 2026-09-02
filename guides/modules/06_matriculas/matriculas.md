@@ -16,6 +16,8 @@ Abarca cuatro modalidades operativas:
 3. **Reingreso de Estudiantes Retirados:** Reactivación de expedientes de alumnos previamente en estado `RETIRADO` mediante matriz documental inteligente (conservando archivos vigentes y solicitando únicamente los vencidos), configuración de aula con validación de cupos y transición irreversible del ticket de soporte a `EN_PROCESO`.
 4. **Renovación Anual para Familias Existentes:** Detección automática de hermanos o hijos asociados al buzón del acudiente (`renovacion.candidates`), con selector obligatorio en la consola directiva entre renovar a un hijo existente o registrar a un nuevo hijo sin duplicar la cuenta del padre.
 
+> 📖 **Documento de Referencia Rápida:** Para el desglose exhaustivo de cada tipo, estado y el diagrama interactivo de transiciones de matrícula, consulta [estados_y_tipos_matricula.md](file:///c:/Users/alejo/Downloads/segundoProyecto/guides/modules/06_matriculas/estados_y_tipos_matricula.md).
+
 Asimismo, implementa almacenamiento binario seguro (`BYTEA`) en PostgreSQL para los documentos adjuntos con control de versiones (`version = version + 1`), enlaces de visualización protegidos por tokens JWT efímeros (`verifyDocumentToken`), bloqueo físico de concurrencia Pessimistic `FOR UPDATE` en la asignación de cupos, y vinculación multi-rol (`usuario_colegio`) para padres que simultáneamente laboran como personal institucional (docentes/directivos).
 
 ---
