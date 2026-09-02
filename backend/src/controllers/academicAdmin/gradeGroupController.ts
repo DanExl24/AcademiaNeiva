@@ -786,8 +786,9 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
       await autoSwitchPeriodsForYear(pool, schoolId, currentYearId);
     }
 
-    // Only run heavy competency harmonization if competencies are explicitly requested or on full load
-    const runCompetencyHarmonization = !requestedKeys || requestedKeys.includes('competencies');
+    // Only run heavy competency harmonization if explicitly requested via query param (e.g. harmonize=true)
+    // to prevent blocking read requests with hundreds of sequential writes and row locks.
+    const runCompetencyHarmonization = req.query.harmonize === 'true';
     if (runCompetencyHarmonization) {
       const competencyClient = await pool.connect();
       try {

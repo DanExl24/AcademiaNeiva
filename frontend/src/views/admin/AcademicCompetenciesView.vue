@@ -365,9 +365,12 @@ const competencyStats = computed(() => {
   }
 })
 
+let activeLoadRequestId = 0
+
 const loadData = async () => {
   if (!schoolId.value) return
 
+  const currentRequestId = ++activeLoadRequestId
   try {
     loading.value = true
     const params: any = { keys: 'periods,assignments,competencies,dimensions' }
@@ -375,14 +378,48 @@ const loadData = async () => {
       params.yearId = yearStore.selectedYearId
     }
     const response = await academicService.getSettings(schoolId.value, params)
+    if (currentRequestId !== activeLoadRequestId) return
+
     periods.value = response.periods || []
-    assignments.value = response.assignments
-    competencies.value = response.competencies
+    assignments.value = response.assignments || []
+    competencies.value = response.competencies || []
     dimensions.value = response.dimensions || []
   } catch (error) {
-    console.error('Error loading academic competencies:', error)
+    if (currentRequestId === activeLoadRequestId) {
+      console.error('Error loading academic competencies:', error)
+    }
   } finally {
-    loading.value = false
+    if (currentRequestId === activeLoadRequestId) {
+      loading.value = false
+    }
+  }
+}
+
+const harmonizing = ref(false)
+const harmonizeCompetencies = async () => {
+  if (!schoolId.value || harmonizing.value) return
+
+  try {
+    harmonizing.value = true
+    notify.addNotification('Sincronizando competencias entre cursos paralelos...', 'info')
+    const params: any = { keys: 'periods,assignments,competencies,dimensions', harmonize: 'true' }
+    if (yearStore.selectedYearId) {
+      params.yearId = yearStore.selectedYearId
+    }
+    const response = await academicService.getSettings(schoolId.value, params)
+    periods.value = response.periods || []
+    assignments.value = response.assignments || []
+    competencies.value = response.competencies || []
+    dimensions.value = response.dimensions || []
+    if (selectedGrade.value && selectedSubject.value) {
+      await fetchDiagnostic()
+    }
+    notify.addNotification('Cursos y competencias sincronizados correctamente.', 'success')
+  } catch (error: any) {
+    console.error('Error harmonizing competencies:', error)
+    notify.addNotification('No fue posible completar la sincronización.', 'error')
+  } finally {
+    harmonizing.value = false
   }
 }
 
@@ -767,12 +804,21 @@ const applyDbaEnunciado = (enunciado: string) => {
   notify.addNotification('Enunciado del DBA asignado a la descripción', 'info')
 }
 
-onMounted(() => {
-  yearStore.loadYearsForSchool(schoolId.value, auth.token || undefined)
-  loadData()
+onMounted(async () => {
+  if (!yearStore.availableYears.length) {
+    await yearStore.loadYearsForSchool(schoolId.value, auth.token || undefined)
+  }
+  await loadData()
 })
 
-watch(() => yearStore.selectedYearId, loadData)
+watch(
+  () => yearStore.selectedYearId,
+  (newVal, oldVal) => {
+    if (newVal && newVal !== oldVal && oldVal !== undefined) {
+      loadData()
+    }
+  }
+)
 </script>
 
 <template>
@@ -793,14 +839,27 @@ watch(() => yearStore.selectedYearId, loadData)
           </p>
         </div>
 
-        <button
-          type="button"
-          @click="openCreateModal"
-          class="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-white px-6 py-4 text-sm font-black text-emerald-700 shadow-lg shadow-black/10 transition hover:bg-emerald-50 uppercase tracking-widest"
-        >
-          <Plus class="h-4 w-4" />
-          Asignar competencia
-        </button>
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <button
+            type="button"
+            @click="harmonizeCompetencies"
+            :disabled="harmonizing || loading"
+            class="inline-flex min-h-14 items-center justify-center gap-2.5 rounded-2xl border border-white/20 bg-white/10 px-5 py-4 text-xs font-black text-white shadow-sm transition hover:bg-white/20 disabled:opacity-50 uppercase tracking-widest backdrop-blur-sm"
+            title="Sincronizar y reparar competencias entre cursos paralelos del mismo grado"
+          >
+            <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': harmonizing }" />
+            {{ harmonizing ? 'Sincronizando...' : 'Sincronizar cursos' }}
+          </button>
+
+          <button
+            type="button"
+            @click="openCreateModal"
+            class="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-white px-6 py-4 text-sm font-black text-emerald-700 shadow-lg shadow-black/10 transition hover:bg-emerald-50 uppercase tracking-widest"
+          >
+            <Plus class="h-4 w-4" />
+            Asignar competencia
+          </button>
+        </div>
       </div>
 
       <div class="mt-8 grid grid-cols-1 gap-4 md:grid-cols-5">
