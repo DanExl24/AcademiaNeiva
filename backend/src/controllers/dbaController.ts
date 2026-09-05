@@ -597,16 +597,39 @@ export const importarDBAPDF = async (req: AuthRequest, res: Response): Promise<v
 
     const scriptPath = path.join(__dirname, `../../scripts/${scriptName}`);
 
-    console.log(`Iniciando importación por Python: script=${scriptPath}, pdf=${file.path}, area=${area}, version=${version_curricular}, start_page=${startPageVal}`);
+    if (!fs.existsSync(scriptPath)) {
+      console.error(`Script de importación no encontrado: ${scriptPath}`);
+      if (fs.existsSync(file.path)) {
+        fs.unlinkSync(file.path);
+      }
+      res.status(500).json({
+        error: "El script de importación de DBA no se encuentra en el servidor",
+        details: scriptPath
+      });
+      return;
+    }
+
+    const pythonBin = process.env.PYTHON_BIN || (process.platform === "win32" ? "python" : "python3");
+
+    console.log(`Iniciando importación por Python (${pythonBin}): script=${scriptPath}, pdf=${file.path}, area=${area}, version=${version_curricular}, start_page=${startPageVal}`);
 
     // Spawn python child process
-    const python = spawn("python", [
+    const python = spawn(pythonBin, [
       scriptPath,
       "--pdf", file.path,
       "--area", area,
       "--version", version_curricular,
       "--start-page", String(startPageVal)
-    ]);
+    ], {
+      env: {
+        ...process.env,
+        DB_HOST: process.env.DB_HOST || "localhost",
+        DB_PORT: process.env.DB_PORT || "5432",
+        DB_NAME: process.env.DB_NAME || "AcademiaNeiva",
+        DB_USER: process.env.DB_USER || "postgres",
+        DB_PASSWORD: process.env.DB_PASSWORD || "postgres",
+      }
+    });
 
     let stdoutData = "";
     let stderrData = "";
@@ -617,6 +640,21 @@ export const importarDBAPDF = async (req: AuthRequest, res: Response): Promise<v
 
     python.stderr.on("data", (data) => {
       stderrData += data.toString();
+    });
+
+    python.on("error", (err) => {
+      console.error("Error ejecutando el intérprete de Python:", err);
+      try {
+        if (fs.existsSync(file.path)) {
+          fs.unlinkSync(file.path);
+        }
+      } catch (_) {}
+      if (!res.headersSent) {
+        res.status(500).json({
+          error: "Error al iniciar el proceso de Python en el servidor",
+          details: err.message
+        });
+      }
     });
 
     python.on("close", (code) => {
