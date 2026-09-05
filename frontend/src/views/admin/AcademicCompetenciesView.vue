@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { 
   ArrowLeft, Plus, Search, BookOpenCheck, Sparkles, RefreshCw, 
-  PenSquare, Trash2, Check, X, AlertTriangle 
+  PenSquare, Trash2, Check, X, AlertTriangle, Lock 
 } from 'lucide-vue-next'
 import { academicService } from '../../services/academicService'
 import { useAuthStore } from '../../stores/auth'
@@ -48,17 +48,17 @@ interface CompetencyItem {
   tipo_grado_nombre: string
   seccion_nombre: string
   jornada_nombre: string
-  usa_dba?: boolean
-  id_dimension?: number | null
-  dimension_nombre?: string | null
-  evidencias: {
+  id_dimension?: number
+  dimension_nombre?: string
+  evidencias?: Array<{
     id_evidencia: number
     descripcion: string
-    orden: number
-    id_evidencia_dba?: number | null
-    numero_dba?: number | null
-    dba_enunciado?: string | null
-  }[]
+    id_evidencia_dba?: number
+    numero_dba?: number
+    dba_enunciado?: string
+  }>
+  usa_dba?: boolean
+  sync_uuid?: string
 }
 
 import { useAcademicYearStore } from '../../stores/academicYear'
@@ -67,6 +67,7 @@ const auth = useAuthStore()
 const yearStore = useAcademicYearStore()
 const notify = useNotificationStore()
 const schoolId = computed(() => Number(auth.user?.schoolId || 0))
+const isClosedYear = computed(() => Boolean(yearStore.isClosedYear))
 
 const loading = ref(true)
 const saving = ref(false)
@@ -96,6 +97,7 @@ const competencies = ref<CompetencyItem[]>([])
 const dimensions = ref<{ id_dimension: number; nombre: string }[]>([])
 
 const isPeriodClosed = (id_periodo: any): boolean => {
+  if (isClosedYear.value) return true
   if (!id_periodo) return false
   const p = periods.value.find(p => String(p.id_periodo) === String(id_periodo))
   return p?.estado === 'CERRADO'
@@ -590,6 +592,10 @@ const editingEvidencia = ref<number | null>(null)
 const editEvidenciaText = ref('')
 
 const addEvidencia = async (competencia: CompetencyItem) => {
+  if (isClosedYear.value) {
+    toast.error('El año lectivo se encuentra cerrado. No se pueden agregar evidencias.')
+    return
+  }
   const desc = newEvidencia.value[competencia.id_competencia]?.trim()
   if (!desc) return
 
@@ -611,11 +617,13 @@ const addEvidencia = async (competencia: CompetencyItem) => {
 }
 
 const startEditEvidencia = (evidencia: any) => {
+  if (isClosedYear.value) return
   editingEvidencia.value = evidencia.id_evidencia
   editEvidenciaText.value = evidencia.descripcion
 }
 
 const saveEditEvidencia = async (evidencia: any) => {
+  if (isClosedYear.value) return
   const desc = editEvidenciaText.value.trim()
   if (!desc || desc === evidencia.descripcion) {
     editingEvidencia.value = null
@@ -639,6 +647,10 @@ const saveEditEvidencia = async (evidencia: any) => {
 }
 
 const removeEvidencia = async (competencia: CompetencyItem, evidenciaId: number) => {
+  if (isClosedYear.value) {
+    toast.error('El año lectivo se encuentra cerrado. No se pueden eliminar evidencias.')
+    return
+  }
   const ok = await confirm({
     title: 'Eliminar Evidencia Curricular',
     message: '¿Está seguro de que desea eliminar esta evidencia?',
@@ -650,7 +662,9 @@ const removeEvidencia = async (competencia: CompetencyItem, evidenciaId: number)
   try {
     saving.value = true
     await academicService.deleteCurriculumEvidence(evidenciaId, schoolId.value)
-    competencia.evidencias = competencia.evidencias.filter((e: any) => e.id_evidencia !== evidenciaId)
+    if (competencia.evidencias) {
+      competencia.evidencias = competencia.evidencias.filter((e: any) => e.id_evidencia !== evidenciaId)
+    }
     toast.success('Evidencia eliminada correctamente')
   } catch (error: any) {
     toast.error(error.response?.data?.error || 'Error al eliminar evidencia')
@@ -661,6 +675,10 @@ const removeEvidencia = async (competencia: CompetencyItem, evidenciaId: number)
 
 
 const openDbaModal = async (competencia: CompetencyItem) => {
+  if (isClosedYear.value) {
+    toast.error('El año lectivo se encuentra cerrado. No se pueden vincular evidencias DBA.')
+    return
+  }
   selectedCompetenciaForDba.value = competencia
   dbaModal.value = true
   loadingDba.value = true
@@ -669,7 +687,7 @@ const openDbaModal = async (competencia: CompetencyItem) => {
   dbaSearch.value = ''
   
   // Initialize checked evidences
-  checkedDbaEvidences.value = competencia.evidencias
+  checkedDbaEvidences.value = (competencia.evidencias || [])
     .filter(e => e.id_evidencia_dba)
     .map(e => e.id_evidencia_dba as number)
 
@@ -843,7 +861,7 @@ watch(
           <button
             type="button"
             @click="harmonizeCompetencies"
-            :disabled="harmonizing || loading"
+            :disabled="harmonizing || loading || isClosedYear"
             class="w-full sm:w-auto inline-flex min-h-12 sm:min-h-14 items-center justify-center gap-2.5 rounded-xl sm:rounded-2xl border border-white/20 bg-white/10 px-4 sm:px-5 py-3 sm:py-4 text-xs font-black text-white shadow-sm transition hover:bg-white/20 disabled:opacity-50 uppercase tracking-widest backdrop-blur-sm cursor-pointer"
             title="Sincronizar y reparar competencias entre cursos paralelos del mismo grado"
           >
@@ -852,6 +870,7 @@ watch(
           </button>
 
           <button
+            v-if="!isClosedYear"
             type="button"
             @click="openCreateModal"
             class="w-full sm:w-auto inline-flex min-h-12 sm:min-h-14 items-center justify-center gap-2.5 sm:gap-3 rounded-xl sm:rounded-2xl bg-white px-5 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-black text-emerald-700 shadow-lg shadow-black/10 transition hover:bg-emerald-50 uppercase tracking-widest cursor-pointer"
@@ -883,6 +902,19 @@ watch(
           <p class="text-[9px] sm:text-[10px] uppercase font-black tracking-widest text-emerald-50/70">Definidas</p>
           <p class="mt-1.5 sm:mt-2 text-2xl sm:text-3xl font-black text-emerald-300">{{ competencyStats.defined }}</p>
         </div>
+      </div>
+    </div>
+
+    <!-- Closed Year Warning Banner -->
+    <div v-if="isClosedYear" class="bg-amber-50 dark:bg-amber-950/40 border-2 border-amber-300 dark:border-amber-800/80 rounded-2xl sm:rounded-3xl p-4 sm:p-5 flex items-center gap-3.5 sm:gap-4 text-amber-950 dark:text-amber-200 shadow-sm animate-in fade-in duration-300">
+      <div class="p-2.5 sm:p-3 bg-amber-500 text-white rounded-xl sm:rounded-2xl shrink-0 shadow-md">
+        <Lock class="h-5 w-5 sm:h-6 sm:w-6" />
+      </div>
+      <div class="flex-1 min-w-0">
+        <h3 class="text-xs sm:text-sm font-black uppercase tracking-wider">Año Lectivo {{ yearStore.selectedYear?.calendario }} — CERRADO (Solo Lectura)</h3>
+        <p class="text-xs text-amber-800 dark:text-amber-300 font-medium mt-0.5 leading-relaxed">
+          Este año académico se encuentra cerrado. Toda la planeación curricular, competencias y evidencias se presentan en modo histórico y no pueden ser modificadas.
+        </p>
       </div>
     </div>
 
@@ -1049,8 +1081,9 @@ watch(
                   <Trash2 class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   Eliminar
                 </button>
-                <span v-else class="inline-flex min-h-10 sm:min-h-11 items-center justify-center rounded-xl sm:rounded-2xl bg-slate-100 px-4 sm:px-5 py-2.5 sm:py-3 text-xs font-black uppercase text-slate-400 dark:bg-slate-800 dark:text-slate-500 tracking-wider">
-                  Periodo Cerrado
+                <span v-else class="inline-flex min-h-10 sm:min-h-11 items-center justify-center gap-1.5 rounded-xl sm:rounded-2xl bg-slate-100 px-4 sm:px-5 py-2.5 sm:py-3 text-xs font-black uppercase text-slate-400 dark:bg-slate-800 dark:text-slate-500 tracking-wider">
+                  <Lock class="h-3.5 w-3.5" />
+                  {{ isClosedYear ? 'Año Cerrado' : 'Periodo Cerrado' }}
                 </span>
               </div>
             </div>

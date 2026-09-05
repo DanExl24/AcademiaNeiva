@@ -21,6 +21,7 @@ const yearStore = useAcademicYearStore()
 const { confirm } = useConfirm()
 const toast = useToast()
 const schoolId = computed(() => Number(auth.user?.schoolId || 0))
+const isClosedYear = computed(() => Boolean(yearStore.isClosedYear))
 
 
 const loading = ref(true)
@@ -360,6 +361,10 @@ const totalAssignmentsCount = computed(() => {
 
 const attemptClosePeriod = async (force = false) => {
   if (!selectedPeriodId.value) return
+  if (isClosedYear.value) {
+    toast.error('El año lectivo se encuentra cerrado. No se pueden realizar cierres de periodos.')
+    return
+  }
   try {
     closingPeriod.value = true
     await periodClosureService.closePeriod(selectedPeriodId.value, schoolId.value, force)
@@ -390,6 +395,10 @@ const reopeningPeriod = ref(false)
 
 const attemptReopenPeriod = async () => {
   if (!selectedPeriodId.value) return
+  if (isClosedYear.value) {
+    toast.error('El año lectivo se encuentra cerrado. No se puede reabrir un periodo en un año cerrado.')
+    return
+  }
   const ok = await confirm({
     title: 'Reabrir Periodo Académico',
     message: '¿Estás seguro de que deseas REABRIR el periodo académico? Esto cambiará globalmente el estado del periodo de nuevo a ABIERTO.',
@@ -421,6 +430,10 @@ const reopeningSubject = ref<number | null>(null)
 
 const attemptReopenSubject = async (curso: any) => {
   if (!selectedPeriodId.value) return
+  if (isClosedYear.value) {
+    toast.error('El año lectivo se encuentra cerrado. No se pueden habilitar materias en un año cerrado.')
+    return
+  }
   const ok = await confirm({
     title: 'Deshacer Cierre de Materia',
     message: `¿Estás seguro de que deseas DESHACER el cierre de ${curso.grado || curso.materia_nombre}? El docente podrá volver a modificar e ingresar notas.`,
@@ -460,6 +473,21 @@ onMounted(() => {
       <div>
         <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">Control de Cierre de Periodo</h1>
         <p class="mt-0.5 sm:mt-1 text-xs sm:text-sm text-slate-500 dark:text-slate-400">Supervisa qué docentes han finalizado la carga académica y ejecuta cierres formales de notas.</p>
+      </div>
+    </div>
+
+    <!-- Closed Year Warning Banner -->
+    <div v-if="isClosedYear" class="rounded-2xl sm:rounded-3xl border border-amber-200 bg-amber-50/80 p-4 sm:p-5 dark:border-amber-900/40 dark:bg-amber-950/20 text-amber-800 dark:text-amber-300 shadow-sm">
+      <div class="flex items-center gap-3">
+        <div class="rounded-xl bg-amber-100 dark:bg-amber-900/40 p-2 text-amber-700 dark:text-amber-400 shrink-0">
+          <Lock class="h-5 w-5" />
+        </div>
+        <div>
+          <h3 class="text-sm sm:text-base font-bold">Año Lectivo Cerrado (Modo Lectura)</h3>
+          <p class="text-xs sm:text-sm text-amber-700/80 dark:text-amber-400/80">
+            Este ciclo escolar se encuentra cerrado. Las acciones de cierre y reapertura de periodos y materias están deshabilitadas para preservar el historial académico.
+          </p>
+        </div>
       </div>
     </div>
 
@@ -558,6 +586,7 @@ onMounted(() => {
 
               <template v-if="periodDetails.estado === 'ABIERTO'">
                 <button
+                  v-if="!isClosedYear"
                   type="button"
                   @click="attemptClosePeriod(false)"
                   :disabled="closingPeriod"
@@ -566,6 +595,10 @@ onMounted(() => {
                   <Lock class="h-4 w-4" />
                   {{ closingPeriod ? 'Procesando...' : 'Proceder con Cierre' }}
                 </button>
+                <div v-else class="px-4 py-2.5 sm:px-5 sm:py-3 bg-slate-100 dark:bg-slate-800 rounded-xl sm:rounded-2xl text-slate-500 dark:text-slate-400 font-bold text-xs sm:text-sm flex gap-2 items-center border border-slate-200 dark:border-slate-700">
+                  <Lock class="w-4 h-4 sm:w-5 sm:h-5" />
+                  Año Lectivo Cerrado
+                </div>
               </template>
               <template v-else-if="periodDetails.estado === 'PENDIENTE'">
                 <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 w-full sm:w-auto">
@@ -587,6 +620,7 @@ onMounted(() => {
                   Cierre Completado
                 </div>
                 <button
+                  v-if="!isClosedYear"
                   type="button"
                   @click="attemptReopenPeriod"
                   :disabled="reopeningPeriod"
@@ -883,7 +917,7 @@ onMounted(() => {
                   <td class="py-4 px-6 text-right">
                     <div class="flex justify-end items-center gap-2">
                       <button
-                        v-if="asig.estado === 'CERRADO'"
+                        v-if="asig.estado === 'CERRADO' && !isClosedYear"
                         @click="attemptReopenSubject(asig)"
                         :disabled="reopeningSubject === asig.id_detallegrado"
                         class="inline-flex items-center justify-center gap-1.5 rounded-2xl bg-amber-50 px-4 py-2 text-xs font-black text-amber-700 hover:bg-amber-100 transition-all dark:bg-amber-950/20 dark:text-amber-400 dark:hover:bg-amber-950/40 disabled:opacity-50 border border-amber-200/30 cursor-pointer"
@@ -959,10 +993,10 @@ onMounted(() => {
                         </span>
 
                         <button
-                          v-if="asig.estado === 'CERRADO'"
+                          v-if="asig.estado === 'CERRADO' && !isClosedYear"
                           @click="attemptReopenSubject(asig)"
                           :disabled="reopeningSubject === asig.id_detallegrado"
-                          class="p-1.5 rounded-xl bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 hover:bg-amber-200 transition-colors"
+                          class="p-1.5 rounded-xl bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 hover:bg-amber-200 transition-colors cursor-pointer"
                           title="Habilitar materia"
                         >
                           <Unlock class="w-3.5 h-3.5" />
@@ -1032,10 +1066,10 @@ onMounted(() => {
                         </span>
 
                         <button
-                          v-if="asig.estado === 'CERRADO'"
+                          v-if="asig.estado === 'CERRADO' && !isClosedYear"
                           @click="attemptReopenSubject(asig)"
                           :disabled="reopeningSubject === asig.id_detallegrado"
-                          class="p-1.5 rounded-xl bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 hover:bg-amber-200 transition-colors"
+                          class="p-1.5 rounded-xl bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 hover:bg-amber-200 transition-colors cursor-pointer"
                           title="Habilitar materia"
                         >
                           <Unlock class="w-3.5 h-3.5" />

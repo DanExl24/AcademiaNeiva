@@ -1525,17 +1525,23 @@ export const reopenSubjectClosure = async (req: Request, res: Response): Promise
   }
 
   try {
-    // 1. Verify period is from the same school
+    // 1. Verify period is from the same school and academic year is open
     const periodCheck = await pool.query(
-      `SELECT id_periodo
-       FROM periodo_academico
-       WHERE id_periodo = $1
-         AND id_colegio = $2`,
+      `SELECT p.id_periodo, p.id_anio, a.estado as anio_estado, a.calendario
+       FROM periodo_academico p
+       JOIN anio_lectivo a ON a.id_anio = p.id_anio
+       WHERE p.id_periodo = $1
+         AND p.id_colegio = $2`,
       [periodId, schoolId]
     );
 
     if (periodCheck.rows.length === 0) {
       res.status(404).json({ error: "Periodo no encontrado o no es de tu colegio" });
+      return;
+    }
+
+    if (periodCheck.rows[0].anio_estado === 'CERRADO') {
+      res.status(400).json({ error: `El año lectivo ${periodCheck.rows[0].calendario || ''} se encuentra CERRADO. No es posible modificar ni reabrir materias en un ciclo escolar cerrado.` });
       return;
     }
 

@@ -30,6 +30,7 @@ const auth = useAuthStore()
 const yearStore = useAcademicYearStore()
 const schoolId = computed(() => Number(auth.user?.schoolId || auth.supervision?.id_colegio || 0))
 const isSupervision = computed(() => auth.activeRole === 'admin_general')
+const isClosedYear = computed(() => Boolean(yearStore.isClosedYear))
 
 const loading = ref(true)
 const loadingConfig = ref(false)
@@ -146,6 +147,10 @@ const showMessage = (text: string, type: 'success' | 'error' | 'warning') => {
 }
 
 const handleSave = async () => {
+  if (isClosedYear.value) {
+    showMessage('El año lectivo seleccionado se encuentra CERRADO. No es posible modificar las fechas de matrícula.', 'error')
+    return
+  }
   if (!selectedYearId.value) {
     showMessage('Por favor selecciona un año lectivo.', 'error')
     return
@@ -246,6 +251,19 @@ onMounted(() => {
       </div>
     </div>
 
+    <!-- Closed Year Warning Banner -->
+    <div v-if="isClosedYear" class="bg-amber-50 dark:bg-amber-950/40 border-2 border-amber-300 dark:border-amber-800/80 rounded-2xl sm:rounded-3xl p-4 sm:p-5 flex items-center gap-3.5 sm:gap-4 text-amber-950 dark:text-amber-200 shadow-sm animate-in fade-in duration-300">
+      <div class="p-2.5 sm:p-3 bg-amber-500 text-white rounded-xl sm:rounded-2xl shrink-0 shadow-md">
+        <Lock class="h-5 w-5 sm:h-6 sm:w-6" />
+      </div>
+      <div class="flex-1 min-w-0">
+        <h3 class="text-xs sm:text-sm font-black uppercase tracking-wider">Año Lectivo {{ yearStore.selectedYear?.calendario }} — CERRADO (Solo Lectura)</h3>
+        <p class="text-xs text-amber-800 dark:text-amber-300 font-medium mt-0.5 leading-relaxed">
+          Este ciclo lectivo está formalmente cerrado. El calendario de inscripciones y formalización de matrículas es histórico y no admite modificaciones.
+        </p>
+      </div>
+    </div>
+
     <!-- Alert Message -->
     <div v-if="message" 
       :class="[
@@ -281,6 +299,8 @@ onMounted(() => {
               <input 
                 type="datetime-local" 
                 v-model="localFechaInicio"
+                :disabled="isClosedYear"
+                :class="isClosedYear ? 'opacity-60 cursor-not-allowed bg-slate-100 dark:bg-slate-800/80' : ''"
                 class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl sm:rounded-2xl p-3 sm:p-4 text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-violet-500 transition-all"
               />
             </div>
@@ -299,6 +319,8 @@ onMounted(() => {
               <input 
                 type="datetime-local" 
                 v-model="localFechaCierre"
+                :disabled="isClosedYear"
+                :class="isClosedYear ? 'opacity-60 cursor-not-allowed bg-slate-100 dark:bg-slate-800/80' : ''"
                 class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl sm:rounded-2xl p-3 sm:p-4 text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-violet-500 transition-all"
               />
             </div>
@@ -318,8 +340,8 @@ onMounted(() => {
                 Permite habilitar o deshabilitar el formulario de matrícula en cualquier momento. Si se deshabilita, se impedirá la creación de nuevas solicitudes independientemente de las fechas configuradas.
               </p>
             </div>
-            <label class="relative inline-flex items-center cursor-pointer shrink-0 self-end sm:self-center">
-              <input type="checkbox" v-model="localHabilitada" class="sr-only peer">
+            <label :class="isClosedYear ? 'opacity-60 cursor-not-allowed pointer-events-none' : 'cursor-pointer'" class="relative inline-flex items-center shrink-0 self-end sm:self-center">
+              <input type="checkbox" v-model="localHabilitada" :disabled="isClosedYear" class="sr-only peer">
               <div class="w-12 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
             </label>
           </div>
@@ -336,6 +358,7 @@ onMounted(() => {
             <textarea 
               v-model="justification" 
               rows="3" 
+              :disabled="isClosedYear"
               class="w-full bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-900 rounded-xl sm:rounded-2xl p-3 sm:p-4 text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-amber-500 transition-all"
               placeholder="Explica por qué estás modificando la configuración de inscripciones..."
             ></textarea>
@@ -345,11 +368,13 @@ onMounted(() => {
           <div class="md:col-span-2 flex justify-end pt-4 border-t border-slate-100 dark:border-slate-800/80">
             <button 
               @click="handleSave"
-              :disabled="saving"
-              class="w-full sm:w-auto bg-violet-600 hover:bg-violet-700 text-white font-bold py-3.5 sm:py-4 px-6 sm:px-8 rounded-xl sm:rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-violet-500/10 active:scale-95 disabled:opacity-50 transition-all text-xs sm:text-sm cursor-pointer"
+              :disabled="saving || isClosedYear"
+              :class="isClosedYear ? 'bg-slate-400 dark:bg-slate-700 cursor-not-allowed opacity-60' : 'bg-violet-600 hover:bg-violet-700 cursor-pointer'"
+              class="w-full sm:w-auto text-white font-bold py-3.5 sm:py-4 px-6 sm:px-8 rounded-xl sm:rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-violet-500/10 active:scale-95 disabled:opacity-50 transition-all text-xs sm:text-sm"
             >
-              <Save :size="18" />
-              <span>{{ saving ? 'Guardando...' : 'Guardar Configuración' }}</span>
+              <Lock v-if="isClosedYear" :size="18" />
+              <Save v-else :size="18" />
+              <span>{{ isClosedYear ? 'Año Cerrado' : (saving ? 'Guardando...' : 'Guardar Configuración') }}</span>
             </button>
           </div>
 

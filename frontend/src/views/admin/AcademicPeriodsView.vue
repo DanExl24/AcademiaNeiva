@@ -240,13 +240,15 @@ watch(selectedYearId, (newVal) => {
 })
 
 const selectedYearObj = computed(() =>
-  academicYears.value.find(y => y.id_anio === selectedYearId.value)
+  academicYears.value.find(y => Number(y.id_anio) === Number(selectedYearId.value))
 )
 
 const isYearClosed = computed(() => {
-  if (!selectedYearObj.value) return false
-  const status = String(selectedYearObj.value.estado || '').toUpperCase()
-  return status === 'CERRADO' || status === 'INACTIVO'
+  if (selectedYearObj.value) {
+    const status = String(selectedYearObj.value.estado || '').toUpperCase()
+    return status === 'CERRADO' || status === 'INACTIVO'
+  }
+  return Boolean(yearStore.isClosedYear)
 })
 
 watch(isYearClosed, (closed) => {

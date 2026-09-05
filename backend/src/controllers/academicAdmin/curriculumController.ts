@@ -904,10 +904,11 @@ export const upsertCompetencyByAdmin = async (req: Request, res: Response): Prom
 
   try {
     const period = await db
-      .selectFrom("periodo_academico")
-      .select(["id_anio", "estado"])
-      .where("id_periodo", "=", periodId)
-      .where("id_colegio", "=", schoolId)
+      .selectFrom("periodo_academico as p")
+      .innerJoin("anio_lectivo as a", "a.id_anio", "p.id_anio")
+      .select(["p.id_anio", "p.estado as period_estado", "a.estado as anio_estado"])
+      .where("p.id_periodo", "=", periodId)
+      .where("p.id_colegio", "=", schoolId)
       .executeTakeFirst();
 
     if (!period) {
@@ -915,7 +916,12 @@ export const upsertCompetencyByAdmin = async (req: Request, res: Response): Prom
       return;
     }
 
-    if (period.estado === "CERRADO") {
+    if (period.anio_estado === "CERRADO") {
+      res.status(409).json({ error: "El año lectivo se encuentra CERRADO. Los datos son de solo lectura y no se permiten modificaciones." });
+      return;
+    }
+
+    if (period.period_estado === "CERRADO") {
       res.status(409).json({ error: "No se pueden asignar ni modificar competencias en periodos cerrados." });
       return;
     }
@@ -1090,13 +1096,18 @@ export const deleteCompetencyByAdmin = async (req: Request, res: Response): Prom
       const check = await trx
         .selectFrom("competencias as c")
         .innerJoin("periodo_academico as p", "p.id_periodo", "c.id_periodo")
-        .select(["c.id_competencia", "c.sync_uuid", "p.estado as period_estado"])
+        .innerJoin("anio_lectivo as a", "a.id_anio", "p.id_anio")
+        .select(["c.id_competencia", "c.sync_uuid", "p.estado as period_estado", "a.estado as anio_estado"])
         .where("c.id_competencia", "=", competencyId)
         .where("c.id_colegio", "=", schoolId)
         .executeTakeFirst();
 
       if (!check) {
         throw new Error("NOT_FOUND");
+      }
+
+      if (check.anio_estado === "CERRADO") {
+        throw new Error("YEAR_CLOSED");
       }
 
       if (check.period_estado === "CERRADO") {
@@ -1165,6 +1176,10 @@ export const deleteCompetencyByAdmin = async (req: Request, res: Response): Prom
   } catch (error: any) {
     if (error.message === "NOT_FOUND") {
       res.status(404).json({ error: "Competencia no encontrada" });
+      return;
+    }
+    if (error.message === "YEAR_CLOSED") {
+      res.status(409).json({ error: "El año lectivo se encuentra CERRADO. Los datos son de solo lectura y no se permiten modificaciones." });
       return;
     }
     if (error.message === "PERIOD_CLOSED") {
@@ -1274,13 +1289,19 @@ export const createEvidencia = async (req: Request, res: Response): Promise<void
     const check = await db
       .selectFrom("competencias as c")
       .innerJoin("periodo_academico as p", "p.id_periodo", "c.id_periodo")
-      .select(["c.id_competencia", "p.estado as period_estado"])
+      .innerJoin("anio_lectivo as a", "a.id_anio", "p.id_anio")
+      .select(["c.id_competencia", "p.estado as period_estado", "a.estado as anio_estado"])
       .where("c.id_competencia", "=", competenciaId)
       .where("c.id_colegio", "=", schoolId)
       .executeTakeFirst();
 
     if (!check) {
       res.status(404).json({ error: "Competencia no encontrada" });
+      return;
+    }
+
+    if (check.anio_estado === "CERRADO") {
+      res.status(409).json({ error: "El año lectivo se encuentra CERRADO. Los datos son de solo lectura y no se permiten modificaciones." });
       return;
     }
 
@@ -1330,13 +1351,19 @@ export const updateEvidencia = async (req: Request, res: Response): Promise<void
       .selectFrom("evidencia_aprendizaje as ea")
       .innerJoin("competencias as c", "c.id_competencia", "ea.id_competencia")
       .innerJoin("periodo_academico as p", "p.id_periodo", "c.id_periodo")
-      .select(["ea.id_evidencia", "p.estado as period_estado"])
+      .innerJoin("anio_lectivo as a", "a.id_anio", "p.id_anio")
+      .select(["ea.id_evidencia", "p.estado as period_estado", "a.estado as anio_estado"])
       .where("ea.id_evidencia", "=", evidenciaId)
       .where("ea.id_colegio", "=", schoolId)
       .executeTakeFirst();
 
     if (!check) {
       res.status(404).json({ error: "Evidencia no encontrada" });
+      return;
+    }
+
+    if (check.anio_estado === "CERRADO") {
+      res.status(409).json({ error: "El año lectivo se encuentra CERRADO. Los datos son de solo lectura y no se permiten modificaciones." });
       return;
     }
 
@@ -1379,13 +1406,19 @@ export const deleteEvidencia = async (req: Request, res: Response): Promise<void
       .selectFrom("evidencia_aprendizaje as ea")
       .innerJoin("competencias as c", "c.id_competencia", "ea.id_competencia")
       .innerJoin("periodo_academico as p", "p.id_periodo", "c.id_periodo")
-      .select(["ea.id_evidencia", "p.estado as period_estado"])
+      .innerJoin("anio_lectivo as a", "a.id_anio", "p.id_anio")
+      .select(["ea.id_evidencia", "p.estado as period_estado", "a.estado as anio_estado"])
       .where("ea.id_evidencia", "=", evidenciaId)
       .where("ea.id_colegio", "=", schoolId)
       .executeTakeFirst();
 
     if (!check) {
       res.status(404).json({ error: "Evidencia no encontrada" });
+      return;
+    }
+
+    if (check.anio_estado === "CERRADO") {
+      res.status(409).json({ error: "El año lectivo se encuentra CERRADO. Los datos son de solo lectura y no se permiten modificaciones." });
       return;
     }
 
@@ -1762,14 +1795,19 @@ export const vincularEvidenciasDbaACompetencia = async (req: Request, res: Respo
           .execute();
       }
 
-      // 2. Verificar estado del periodo
+      // 2. Verificar estado del anio y periodo
       const period = await trx
-        .selectFrom("periodo_academico")
-        .select("estado")
-        .where("id_periodo", "=", comp.id_periodo)
+        .selectFrom("periodo_academico as p")
+        .innerJoin("anio_lectivo as a", "a.id_anio", "p.id_anio")
+        .select(["p.estado as period_estado", "a.estado as anio_estado"])
+        .where("p.id_periodo", "=", comp.id_periodo)
         .executeTakeFirst();
 
-      if (period?.estado === "CERRADO") {
+      if (period?.anio_estado === "CERRADO") {
+        throw new Error("YEAR_CLOSED");
+      }
+
+      if (period?.period_estado === "CERRADO") {
         throw new Error("PERIOD_CLOSED");
       }
 
@@ -1924,6 +1962,10 @@ export const vincularEvidenciasDbaACompetencia = async (req: Request, res: Respo
   } catch (error: any) {
     if (error.message === "COMPETENCY_NOT_FOUND") {
       res.status(404).json({ error: "Competencia no encontrada" });
+      return;
+    }
+    if (error.message === "YEAR_CLOSED") {
+      res.status(409).json({ error: "El año lectivo se encuentra CERRADO. Los datos son de solo lectura y no se permiten modificaciones." });
       return;
     }
     if (error.message === "PERIOD_CLOSED") {

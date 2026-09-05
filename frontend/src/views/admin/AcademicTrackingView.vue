@@ -143,12 +143,13 @@ const schoolId = computed(() => auth.selectedSchoolId || (auth.user as any)?.id_
 
 // Determinar si el año lectivo seleccionado está cerrado
 const isYearClosed = computed(() => {
-  if (!selectedYearId.value) return yearStore.isClosedYear
+  if (!selectedYearId.value) return Boolean(yearStore.isClosedYear)
   const selectedYear = years.value.find((y: any) => Number(y.id_anio) === Number(selectedYearId.value))
   if (selectedYear) {
-    return selectedYear.estado === 'CERRADO' || selectedYear.cerrado === true
+    const estado = String(selectedYear.estado || '').toUpperCase()
+    return estado === 'CERRADO' || estado === 'INACTIVO' || selectedYear.cerrado === true
   }
-  return yearStore.isClosedYear
+  return Boolean(yearStore.isClosedYear)
 })
 
 // Cargar catálogos iniciales
@@ -369,6 +370,12 @@ const fetchDataForActiveTab = () => {
 // Observadores de filtros locales
 watch([selectedYearId, selectedPeriodId, isCumulativeMode, cumulativePeriodOrder, selectedGradeId, selectedGroupId], () => {
   fetchDataForActiveTab()
+})
+
+watch(selectedYearId, (newVal) => {
+  if (newVal && Number(newVal) !== Number(yearStore.selectedYearId)) {
+    yearStore.setSelectedYearId(Number(newVal))
+  }
 })
 
 watch(activeTab, () => {
