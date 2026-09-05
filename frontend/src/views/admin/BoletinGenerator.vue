@@ -186,6 +186,7 @@
           {{ idx + 1 }}
         </div>
       </div>
+    </div>
   </div>
 </template>
 

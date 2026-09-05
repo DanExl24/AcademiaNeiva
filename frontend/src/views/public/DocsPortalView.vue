@@ -43,7 +43,7 @@ import {
   MailCheck,
   Network,
   Zap,
-  CornerDownLeft,
+  Award,
   Trash2,
   History
 } from 'lucide-vue-next'
@@ -121,7 +121,6 @@ const searchModalOpen = ref(false)
 const searchQuery = ref('')
 const searching = ref(false)
 const searchResults = ref<DocSearchResult[]>([])
-const searchFilterType = ref<'all' | 'rules' | 'hus' | 'database' | 'maestro'>('all')
 
 // Responsive mobile menu
 const mobileSidebarOpen = ref(false)

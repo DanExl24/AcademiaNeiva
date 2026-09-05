@@ -1205,7 +1205,10 @@ watch(() => yearStore.selectedYearId, () => {
           <!-- Active Cupo Filter Bar Banner -->
           <div v-if="cupoFilter !== 'TODOS'" class="px-4 sm:px-6 py-2 bg-indigo-50/80 dark:bg-indigo-950/40 border-b border-indigo-100/60 dark:border-indigo-900/60 flex items-center justify-between text-xs font-bold text-indigo-700 dark:text-indigo-300">
             <span>Filtro: {{ getCupoFilterLabel(cupoFilter) }} ({{ visibleGroups.length }})</span>
-            <button @click="cupoFilter = 'TODOS'" class="underline hover:text-indigo-900 dark:hover:text-white text-[11px]           <div class="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50/30 dark:bg-slate-950/10 custom-scrollbar">
+            <button @click="cupoFilter = 'TODOS'" class="underline hover:text-indigo-900 dark:hover:text-white text-[11px]">Limpiar filtro</button>
+          </div>
+
+          <div class="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50/30 dark:bg-slate-950/10 custom-scrollbar">
             <div v-if="grupos.length === 0" class="h-full flex flex-col items-center justify-center text-slate-400 py-10">
               <School2 :size="64" class="mb-4 opacity-20" />
               <p class="font-bold text-sm">No hay cursos configurados</p>
@@ -1289,9 +1292,10 @@ watch(() => yearStore.selectedYearId, () => {
         </div>
       </div>
     </div>
+  </div>
 
+  <div v-else-if="activeMainTab === 'jornadas'" class="space-y-6 animate-in fade-in duration-300">
     <!-- SUB-VIEW 2: GESTIÓN Y ANÁLISIS DE JORNADAS -->
-    <div v-else-if="activeMainTab === 'jornadas'" class="space-y-6 animate-in fade-in duration-300">
       
       <!-- Top Overview Stats Bar -->
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">

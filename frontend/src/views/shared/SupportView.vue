@@ -1498,11 +1498,6 @@ const getObservationText = (obs: any) => {
           Enviar Otro Reporte
         </button>
       </div>
-    </div>unded-2xl font-bold text-xs uppercase tracking-widest transition-all"
-        >
-          Enviar Otro Reporte
-        </button>
-      </div>
     </div>
 
     <!-- Modal Autorizar Matrícula Extraordinaria por Ticket -->

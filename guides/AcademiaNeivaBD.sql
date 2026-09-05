@@ -2,10 +2,10 @@
 -- PostgreSQL database dump
 --
 
-\restrict lkQ9u4THAvAnP29AImDe3qreZ7DEdTTkDYdBbdJgexrxv9bW4IlNnw5rYThtDUr
+\restrict uJH4iUx6qc9MBX09gNQJXosxMn6bSfaloXFrRQmnbpauNEZF1ojacnFydIYneO4
 
--- Dumped from database version 18.4
--- Dumped by pg_dump version 18.4
+-- Dumped from database version 18.6
+-- Dumped by pg_dump version 18.6
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -419,6 +419,19 @@ CREATE TYPE public.tipo_traslado AS ENUM (
 ALTER TYPE public.tipo_traslado OWNER TO postgres;
 
 --
+-- Name: tipo_verificacion_email; Type: TYPE; Schema: public; Owner: postgres
+--
+
+CREATE TYPE public.tipo_verificacion_email AS ENUM (
+    'MATRICULA_NUEVA',
+    'CAMBIO_CORREO',
+    'RECUPERACION_PASSWORD'
+);
+
+
+ALTER TYPE public.tipo_verificacion_email OWNER TO postgres;
+
+--
 -- Name: fn_bloquear_periodo_cerrado(); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -510,6 +523,43 @@ $$;
 
 
 ALTER FUNCTION public.fn_bloquear_periodo_cerrado() OWNER TO postgres;
+
+--
+-- Name: fn_prohibir_mutacion_calificaciones_cerradas(); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.fn_prohibir_mutacion_calificaciones_cerradas() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    materia_cerrada BOOLEAN;
+BEGIN
+    -- Comprobar si la materia y periodo de la actividad asociada estan formalmente cerrados
+    SELECT EXISTS (
+        SELECT 1 
+        FROM public.actividad_materia am
+        JOIN public.cierre_materia cm 
+          ON am.id_detallegrado = cm.id_detallegrado 
+         AND am.id_periodo = cm.id_periodo
+        WHERE am.id_actividadmateria = OLD.id_actividadmateria
+          AND cm.estado = 'CERRADO'
+    ) INTO materia_cerrada;
+
+    IF materia_cerrada THEN
+        RAISE EXCEPTION 'VIOLACION_DE_INTEGRIDAD: La calificacion pertenece a una materia con acta formalmente CERRADA en el periodo. Mutacion rechazada conforme al Decreto 1290/2009.'
+            USING ERRCODE = 'integrity_constraint_violation';
+    END IF;
+
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    ELSE
+        RETURN NEW;
+    END IF;
+END;
+$$;
+
+
+ALTER FUNCTION public.fn_prohibir_mutacion_calificaciones_cerradas() OWNER TO postgres;
 
 --
 -- Name: fn_sync_estudiante_sancion(); Type: FUNCTION; Schema: public; Owner: postgres
@@ -754,7 +804,8 @@ CREATE TABLE public.actividad_materia (
     fecha_creacion timestamp with time zone DEFAULT now(),
     motivo_extra character varying(100) DEFAULT NULL::character varying,
     justificacion_extra text,
-    id_docente_creador integer
+    id_docente_creador integer,
+    CONSTRAINT chk_actividad_pct CHECK (((porcentaje > 0.00) AND (porcentaje <= 100.00)))
 );
 
 
@@ -941,6 +992,46 @@ ALTER SEQUENCE public.cierre_materia_id_cierremateria_seq OWNED BY public.cierre
 
 
 --
+-- Name: codigo_verificacion_email; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.codigo_verificacion_email (
+    id_verificacion integer NOT NULL,
+    email character varying(255) NOT NULL,
+    codigo character varying(6) NOT NULL,
+    tipo public.tipo_verificacion_email NOT NULL,
+    id_usuario integer,
+    expires_at timestamp with time zone NOT NULL,
+    verified boolean DEFAULT false NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP
+);
+
+
+ALTER TABLE public.codigo_verificacion_email OWNER TO postgres;
+
+--
+-- Name: codigo_verificacion_email_id_verificacion_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.codigo_verificacion_email_id_verificacion_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.codigo_verificacion_email_id_verificacion_seq OWNER TO postgres;
+
+--
+-- Name: codigo_verificacion_email_id_verificacion_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.codigo_verificacion_email_id_verificacion_seq OWNED BY public.codigo_verificacion_email.id_verificacion;
+
+
+--
 -- Name: colegio; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -1114,7 +1205,8 @@ CREATE TABLE public.configuracion_colegio (
     nota_minima numeric(5,2) DEFAULT 0 NOT NULL,
     nota_maxima numeric(5,2) DEFAULT 5 NOT NULL,
     nota_aprobacion numeric(5,2) DEFAULT 3 NOT NULL,
-    escala_modo character varying(20) DEFAULT 'AUTOMATICO'::character varying NOT NULL
+    escala_modo character varying(20) DEFAULT 'AUTOMATICO'::character varying NOT NULL,
+    materias_reprobatorias_promocion integer DEFAULT 3 NOT NULL
 );
 
 
@@ -1256,7 +1348,8 @@ CREATE TABLE public.criterio_evaluacion (
     id_evidencia integer,
     descripcion text NOT NULL,
     porcentaje numeric(5,2) NOT NULL,
-    id_colegio integer NOT NULL
+    id_colegio integer NOT NULL,
+    CONSTRAINT chk_criterio_pct CHECK (((porcentaje > 0.00) AND (porcentaje <= 100.00)))
 );
 
 
@@ -1352,7 +1445,9 @@ CREATE TABLE public.decision_promocion_directivo (
     id_grado_asignado integer,
     id_usuario_decision integer NOT NULL,
     fecha_decision timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
-    observacion text
+    observacion text,
+    id_tipo_grado_anterior integer,
+    id_tipo_grado_asignado integer
 );
 
 
@@ -1425,7 +1520,7 @@ CREATE TABLE public.detalle_grados (
     id_materia integer NOT NULL,
     id_docente integer NOT NULL,
     id_colegio integer NOT NULL,
-    id_grupo integer,
+    id_grupo integer NOT NULL,
     id_anio integer NOT NULL
 );
 
@@ -1462,7 +1557,9 @@ CREATE TABLE public.detalle_padrefamilia (
     id_detallepadrefamilia integer NOT NULL,
     id_padrefamilia integer NOT NULL,
     id_estudiante integer NOT NULL,
-    id_colegio integer NOT NULL
+    id_colegio integer NOT NULL,
+    parentesco character varying(50) DEFAULT 'ACUDIENTE'::character varying,
+    es_acudiente_principal boolean DEFAULT true
 );
 
 
@@ -1535,7 +1632,8 @@ CREATE TABLE public.directivo (
     cargo character varying(100),
     estado public.estado_usuario_sistema DEFAULT 'ACTIVO'::public.estado_usuario_sistema NOT NULL,
     fecha_vinculacion timestamp with time zone DEFAULT now() NOT NULL,
-    fecha_desvinculacion timestamp with time zone
+    fecha_desvinculacion timestamp with time zone,
+    id_persona integer
 );
 
 
@@ -1574,7 +1672,8 @@ CREATE TABLE public.docente (
     id_contratodocente integer,
     id_colegio integer NOT NULL,
     id_usuario integer,
-    estado character varying(20) DEFAULT 'ACTIVO'::character varying NOT NULL
+    estado character varying(20) DEFAULT 'ACTIVO'::character varying NOT NULL,
+    id_persona integer
 );
 
 
@@ -1649,45 +1748,6 @@ ALTER SEQUENCE public.documento_matriculas_id_documento_seq OWNED BY public.docu
 
 
 --
--- Name: email_change_tokens; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.email_change_tokens (
-    id integer NOT NULL,
-    id_usuario integer,
-    nuevo_email character varying(255) NOT NULL,
-    codigo character varying(6) NOT NULL,
-    expires_at timestamp with time zone NOT NULL,
-    used boolean DEFAULT false,
-    created_at timestamp with time zone DEFAULT now()
-);
-
-
-ALTER TABLE public.email_change_tokens OWNER TO postgres;
-
---
--- Name: email_change_tokens_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
---
-
-CREATE SEQUENCE public.email_change_tokens_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER SEQUENCE public.email_change_tokens_id_seq OWNER TO postgres;
-
---
--- Name: email_change_tokens_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
---
-
-ALTER SEQUENCE public.email_change_tokens_id_seq OWNED BY public.email_change_tokens.id;
-
-
---
 -- Name: escala_valoracion; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -1737,7 +1797,8 @@ CREATE TABLE public.estudiante (
     id_colegio integer NOT NULL,
     id_usuario integer,
     estado public.estado_estudiante DEFAULT 'ACTIVO'::public.estado_estudiante,
-    motivo_estado text
+    motivo_estado text,
+    id_persona integer
 );
 
 
@@ -1957,6 +2018,30 @@ ALTER SEQUENCE public.jornada_id_jornada_seq OWNED BY public.jornada.id_jornada;
 
 
 --
+-- Name: legacy_grados_archive; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.legacy_grados_archive (
+    id_grado integer,
+    nivel character varying(50),
+    tipo_grado character varying(50),
+    id_jornada integer,
+    id_colegio integer,
+    cupos_totales integer,
+    seccion character varying(10)
+);
+
+
+ALTER TABLE public.legacy_grados_archive OWNER TO postgres;
+
+--
+-- Name: TABLE legacy_grados_archive; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON TABLE public.legacy_grados_archive IS 'Respaldo inmutable del historico de la entidad arcaica grados previo a su deprecacion formal.';
+
+
+--
 -- Name: materias; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -2125,8 +2210,10 @@ CREATE TABLE public.notas_actividad (
     id_actividadmateria integer NOT NULL,
     id_estudiante integer NOT NULL,
     id_escalavaloracion integer NOT NULL,
-    nota numeric(5,2) NOT NULL,
-    id_colegio integer NOT NULL
+    nota numeric(5,2),
+    id_colegio integer NOT NULL,
+    CONSTRAINT chk_nota_o_escala_obligatoria CHECK (((nota IS NOT NULL) OR (id_escalavaloracion IS NOT NULL))),
+    CONSTRAINT chk_nota_valida CHECK (((nota IS NULL) OR ((nota >= 0.00) AND (nota <= 100.00))))
 );
 
 
@@ -2219,6 +2306,47 @@ ALTER TABLE public.notificacion_supervision ALTER COLUMN id_notificacion ADD GEN
 
 
 --
+-- Name: notificaciones; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.notificaciones (
+    id_notificacion integer NOT NULL,
+    id_usuario_destinatario integer,
+    id_colegio integer,
+    tipo_contexto character varying(50) NOT NULL,
+    titulo character varying(150),
+    mensaje text NOT NULL,
+    leida boolean DEFAULT false NOT NULL,
+    metadata jsonb,
+    fecha_creacion timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+ALTER TABLE public.notificaciones OWNER TO postgres;
+
+--
+-- Name: notificaciones_id_notificacion_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.notificaciones_id_notificacion_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.notificaciones_id_notificacion_seq OWNER TO postgres;
+
+--
+-- Name: notificaciones_id_notificacion_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.notificaciones_id_notificacion_seq OWNED BY public.notificaciones.id_notificacion;
+
+
+--
 -- Name: observacion_estudiante; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -2269,7 +2397,8 @@ CREATE TABLE public.padre_familia (
     nombre character varying(50) NOT NULL,
     apellido character varying(50) NOT NULL,
     id_colegio integer,
-    id_usuario integer
+    id_usuario integer,
+    id_persona integer
 );
 
 
@@ -2417,6 +2546,50 @@ ALTER SEQUENCE public.periodo_academico_id_periodo_seq OWNED BY public.periodo_a
 
 
 --
+-- Name: persona; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.persona (
+    id_persona integer NOT NULL,
+    id_tipodocumento integer,
+    documento character varying(50),
+    nombre character varying(100) NOT NULL,
+    apellido character varying(100) NOT NULL,
+    fecha_nacimiento date,
+    genero character varying(20),
+    telefono character varying(50),
+    direccion character varying(255),
+    estado character varying(20) DEFAULT 'ACTIVO'::character varying NOT NULL,
+    fecha_creacion timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    fecha_actualizacion timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+ALTER TABLE public.persona OWNER TO postgres;
+
+--
+-- Name: persona_id_persona_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.persona_id_persona_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.persona_id_persona_seq OWNER TO postgres;
+
+--
+-- Name: persona_id_persona_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.persona_id_persona_seq OWNED BY public.persona.id_persona;
+
+
+--
 -- Name: registro_asistencia; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -2433,6 +2606,45 @@ CREATE TABLE public.registro_asistencia (
 
 
 ALTER TABLE public.registro_asistencia OWNER TO postgres;
+
+--
+-- Name: registro_asistencia_detalle; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.registro_asistencia_detalle (
+    id_asistencia_detalle integer NOT NULL,
+    id_registroasistencia integer NOT NULL,
+    numero_bloque integer NOT NULL,
+    estado character varying(20) NOT NULL,
+    hora_registro time without time zone,
+    observacion text,
+    CONSTRAINT chk_bloque_positivo CHECK (((numero_bloque > 0) AND (numero_bloque <= 12)))
+);
+
+
+ALTER TABLE public.registro_asistencia_detalle OWNER TO postgres;
+
+--
+-- Name: registro_asistencia_detalle_id_asistencia_detalle_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.registro_asistencia_detalle_id_asistencia_detalle_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.registro_asistencia_detalle_id_asistencia_detalle_seq OWNER TO postgres;
+
+--
+-- Name: registro_asistencia_detalle_id_asistencia_detalle_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.registro_asistencia_detalle_id_asistencia_detalle_seq OWNED BY public.registro_asistencia_detalle.id_asistencia_detalle;
+
 
 --
 -- Name: registro_asistencia_id_registroasistencia_seq; Type: SEQUENCE; Schema: public; Owner: postgres
@@ -2508,7 +2720,8 @@ CREATE TABLE public.resultado_academico (
     estado public.estado_resultado NOT NULL,
     fecha_cierre timestamp with time zone NOT NULL,
     id_docente integer NOT NULL,
-    observacion text
+    observacion text,
+    CONSTRAINT chk_promedio_valido CHECK (((promedio >= 0.00) AND (promedio <= 100.00)))
 );
 
 
@@ -2663,6 +2876,7 @@ CREATE TABLE public.solicitud_traslado (
     creado_por integer NOT NULL,
     fecha_creacion timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
     fecha_finalizacion timestamp with time zone,
+    id_grupo_destino integer,
     CONSTRAINT chk_origen_destino_diff CHECK ((id_colegio_origen <> id_colegio_destino))
 );
 
@@ -2689,6 +2903,43 @@ ALTER SEQUENCE public.solicitud_traslado_id_solicitud_seq OWNER TO postgres;
 --
 
 ALTER SEQUENCE public.solicitud_traslado_id_solicitud_seq OWNED BY public.solicitud_traslado.id_solicitud;
+
+
+--
+-- Name: ticket_observaciones; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.ticket_observaciones (
+    id_observacion integer NOT NULL,
+    id_ticket integer NOT NULL,
+    id_usuario integer,
+    contenido text NOT NULL,
+    fecha_creacion timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+ALTER TABLE public.ticket_observaciones OWNER TO postgres;
+
+--
+-- Name: ticket_observaciones_id_observacion_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.ticket_observaciones_id_observacion_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.ticket_observaciones_id_observacion_seq OWNER TO postgres;
+
+--
+-- Name: ticket_observaciones_id_observacion_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.ticket_observaciones_id_observacion_seq OWNED BY public.ticket_observaciones.id_observacion;
 
 
 --
@@ -2879,6 +3130,47 @@ ALTER SEQUENCE public.token_blacklist_id_seq OWNED BY public.token_blacklist.id;
 
 
 --
+-- Name: tokens_verificacion; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.tokens_verificacion (
+    id_token integer NOT NULL,
+    id_usuario integer,
+    tipo_token character varying(50) NOT NULL,
+    token_hash character varying(255) NOT NULL,
+    codigo_verificacion character varying(50),
+    metadata jsonb,
+    usado boolean DEFAULT false NOT NULL,
+    fecha_expiracion timestamp with time zone NOT NULL,
+    fecha_creacion timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+ALTER TABLE public.tokens_verificacion OWNER TO postgres;
+
+--
+-- Name: tokens_verificacion_id_token_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.tokens_verificacion_id_token_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.tokens_verificacion_id_token_seq OWNER TO postgres;
+
+--
+-- Name: tokens_verificacion_id_token_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.tokens_verificacion_id_token_seq OWNED BY public.tokens_verificacion.id_token;
+
+
+--
 -- Name: traslado_aprobacion; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -2889,7 +3181,8 @@ CREATE TABLE public.traslado_aprobacion (
     rol character varying(50) NOT NULL,
     accion public.accion_aprobacion_traslado NOT NULL,
     comentario text,
-    fecha timestamp with time zone DEFAULT CURRENT_TIMESTAMP
+    fecha timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+    id_grupo_destino integer
 );
 
 
@@ -2937,6 +3230,7 @@ CREATE TABLE public.usuario (
     id_tipodocumento integer,
     documento character varying(50),
     telefono character varying(50),
+    id_persona integer,
     CONSTRAINT chk_usuario_documento_format CHECK (((documento IS NULL) OR ((documento)::text ~ '^[a-zA-Z0-9]+$'::text)))
 );
 
@@ -2955,11 +3249,48 @@ CREATE TABLE public.usuario_colegio (
     estado character varying(20) DEFAULT 'ACTIVO'::character varying NOT NULL,
     fecha_inicio timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
     fecha_fin timestamp with time zone,
-    CONSTRAINT usuario_colegio_estado_check CHECK (((estado)::text = ANY ((ARRAY['ACTIVO'::character varying, 'INACTIVO'::character varying, 'SUSPENDIDO'::character varying])::text[])))
+    CONSTRAINT usuario_colegio_estado_check CHECK (((estado)::text = ANY (ARRAY[('ACTIVO'::character varying)::text, ('INACTIVO'::character varying)::text, ('SUSPENDIDO'::character varying)::text])))
 );
 
 
 ALTER TABLE public.usuario_colegio OWNER TO postgres;
+
+--
+-- Name: usuario_colegio_email; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.usuario_colegio_email (
+    id integer NOT NULL,
+    id_usuario integer NOT NULL,
+    id_colegio integer NOT NULL,
+    email_institucional character varying(255) NOT NULL,
+    fecha_asignacion timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.usuario_colegio_email OWNER TO postgres;
+
+--
+-- Name: usuario_colegio_email_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.usuario_colegio_email_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.usuario_colegio_email_id_seq OWNER TO postgres;
+
+--
+-- Name: usuario_colegio_email_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.usuario_colegio_email_id_seq OWNED BY public.usuario_colegio_email.id;
+
 
 --
 -- Name: usuario_colegio_id_usuario_colegio_seq; Type: SEQUENCE; Schema: public; Owner: postgres
@@ -3159,6 +3490,13 @@ ALTER TABLE ONLY public.cierre_materia ALTER COLUMN id_cierremateria SET DEFAULT
 
 
 --
+-- Name: codigo_verificacion_email id_verificacion; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.codigo_verificacion_email ALTER COLUMN id_verificacion SET DEFAULT nextval('public.codigo_verificacion_email_id_verificacion_seq'::regclass);
+
+
+--
 -- Name: colegio id_colegio; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -3278,13 +3616,6 @@ ALTER TABLE ONLY public.documento_matriculas ALTER COLUMN id_documento SET DEFAU
 
 
 --
--- Name: email_change_tokens id; Type: DEFAULT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.email_change_tokens ALTER COLUMN id SET DEFAULT nextval('public.email_change_tokens_id_seq'::regclass);
-
-
---
 -- Name: escala_valoracion id_escalavaloracion; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -3369,6 +3700,13 @@ ALTER TABLE ONLY public.notas_actividad ALTER COLUMN id_notaactividad SET DEFAUL
 
 
 --
+-- Name: notificaciones id_notificacion; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.notificaciones ALTER COLUMN id_notificacion SET DEFAULT nextval('public.notificaciones_id_notificacion_seq'::regclass);
+
+
+--
 -- Name: observacion_estudiante id_observacion; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -3404,10 +3742,24 @@ ALTER TABLE ONLY public.periodo_academico ALTER COLUMN id_periodo SET DEFAULT ne
 
 
 --
+-- Name: persona id_persona; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.persona ALTER COLUMN id_persona SET DEFAULT nextval('public.persona_id_persona_seq'::regclass);
+
+
+--
 -- Name: registro_asistencia id_registroasistencia; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.registro_asistencia ALTER COLUMN id_registroasistencia SET DEFAULT nextval('public.registro_asistencia_id_registroasistencia_seq'::regclass);
+
+
+--
+-- Name: registro_asistencia_detalle id_asistencia_detalle; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.registro_asistencia_detalle ALTER COLUMN id_asistencia_detalle SET DEFAULT nextval('public.registro_asistencia_detalle_id_asistencia_detalle_seq'::regclass);
 
 
 --
@@ -3453,6 +3805,13 @@ ALTER TABLE ONLY public.solicitud_traslado ALTER COLUMN id_solicitud SET DEFAULT
 
 
 --
+-- Name: ticket_observaciones id_observacion; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.ticket_observaciones ALTER COLUMN id_observacion SET DEFAULT nextval('public.ticket_observaciones_id_observacion_seq'::regclass);
+
+
+--
 -- Name: tickets_soporte id_ticket; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -3488,6 +3847,13 @@ ALTER TABLE ONLY public.token_blacklist ALTER COLUMN id SET DEFAULT nextval('pub
 
 
 --
+-- Name: tokens_verificacion id_token; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.tokens_verificacion ALTER COLUMN id_token SET DEFAULT nextval('public.tokens_verificacion_id_token_seq'::regclass);
+
+
+--
 -- Name: traslado_aprobacion id_aprobacion; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -3506,6 +3872,13 @@ ALTER TABLE ONLY public.usuario ALTER COLUMN id_usuario SET DEFAULT nextval('pub
 --
 
 ALTER TABLE ONLY public.usuario_colegio ALTER COLUMN id_usuario_colegio SET DEFAULT nextval('public.usuario_colegio_id_usuario_colegio_seq'::regclass);
+
+
+--
+-- Name: usuario_colegio_email id; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.usuario_colegio_email ALTER COLUMN id SET DEFAULT nextval('public.usuario_colegio_email_id_seq'::regclass);
 
 
 --
@@ -3554,6 +3927,14 @@ ALTER TABLE ONLY public.anio_lectivo
 
 ALTER TABLE ONLY public.cierre_materia
     ADD CONSTRAINT cierre_materia_pkey PRIMARY KEY (id_cierremateria);
+
+
+--
+-- Name: codigo_verificacion_email codigo_verificacion_email_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.codigo_verificacion_email
+    ADD CONSTRAINT codigo_verificacion_email_pkey PRIMARY KEY (id_verificacion);
 
 
 --
@@ -3749,14 +4130,6 @@ ALTER TABLE ONLY public.documento_matriculas
 
 
 --
--- Name: email_change_tokens email_change_tokens_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.email_change_tokens
-    ADD CONSTRAINT email_change_tokens_pkey PRIMARY KEY (id);
-
-
---
 -- Name: escala_valoracion escala_valoracion_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -3893,6 +4266,14 @@ ALTER TABLE ONLY public.notificacion_supervision
 
 
 --
+-- Name: notificaciones notificaciones_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.notificaciones
+    ADD CONSTRAINT notificaciones_pkey PRIMARY KEY (id_notificacion);
+
+
+--
 -- Name: observacion_estudiante observacion_estudiante_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -3946,6 +4327,22 @@ ALTER TABLE ONLY public.password_reset_tokens
 
 ALTER TABLE ONLY public.periodo_academico
     ADD CONSTRAINT periodo_academico_pkey PRIMARY KEY (id_periodo);
+
+
+--
+-- Name: persona persona_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.persona
+    ADD CONSTRAINT persona_pkey PRIMARY KEY (id_persona);
+
+
+--
+-- Name: registro_asistencia_detalle registro_asistencia_detalle_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.registro_asistencia_detalle
+    ADD CONSTRAINT registro_asistencia_detalle_pkey PRIMARY KEY (id_asistencia_detalle);
 
 
 --
@@ -4029,6 +4426,14 @@ ALTER TABLE ONLY public.solicitud_traslado
 
 
 --
+-- Name: ticket_observaciones ticket_observaciones_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.ticket_observaciones
+    ADD CONSTRAINT ticket_observaciones_pkey PRIMARY KEY (id_observacion);
+
+
+--
 -- Name: tickets_soporte tickets_soporte_codigo_ticket_key; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -4093,6 +4498,14 @@ ALTER TABLE ONLY public.token_blacklist
 
 
 --
+-- Name: tokens_verificacion tokens_verificacion_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.tokens_verificacion
+    ADD CONSTRAINT tokens_verificacion_pkey PRIMARY KEY (id_token);
+
+
+--
 -- Name: traslado_aprobacion traslado_aprobacion_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -4117,6 +4530,30 @@ ALTER TABLE ONLY public.configuracion_sistema
 
 
 --
+-- Name: actividad_materia uq_actividad_materia_tenant; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.actividad_materia
+    ADD CONSTRAINT uq_actividad_materia_tenant UNIQUE (id_actividadmateria, id_colegio);
+
+
+--
+-- Name: registro_asistencia_detalle uq_asistencia_bloque; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.registro_asistencia_detalle
+    ADD CONSTRAINT uq_asistencia_bloque UNIQUE (id_registroasistencia, numero_bloque);
+
+
+--
+-- Name: cierre_materia uq_cierre_materia_periodo; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.cierre_materia
+    ADD CONSTRAINT uq_cierre_materia_periodo UNIQUE (id_detallegrado, id_periodo);
+
+
+--
 -- Name: configuracion_inscripcion uq_colegio_anio; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -4133,11 +4570,35 @@ ALTER TABLE ONLY public.colegio_version_curricular
 
 
 --
+-- Name: criterio_evaluacion uq_criterio_evaluacion_tenant; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.criterio_evaluacion
+    ADD CONSTRAINT uq_criterio_evaluacion_tenant UNIQUE (id_criterio, id_colegio);
+
+
+--
 -- Name: dba uq_dba_area_grado_num_version; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.dba
     ADD CONSTRAINT uq_dba_area_grado_num_version UNIQUE (area, grado, numero_dba, version_curricular);
+
+
+--
+-- Name: matricula uq_matricula_estudiante_anio_colegio; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.matricula
+    ADD CONSTRAINT uq_matricula_estudiante_anio_colegio UNIQUE (id_estudiante, id_anio, id_colegio);
+
+
+--
+-- Name: matricula uq_matricula_tenant; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.matricula
+    ADD CONSTRAINT uq_matricula_tenant UNIQUE (id_matricula, id_colegio);
 
 
 --
@@ -4149,11 +4610,27 @@ ALTER TABLE ONLY public.tipo_grado
 
 
 --
+-- Name: usuario_colegio_email uq_usuario_colegio_email; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.usuario_colegio_email
+    ADD CONSTRAINT uq_usuario_colegio_email UNIQUE (id_usuario, id_colegio);
+
+
+--
 -- Name: usuario_colegio uq_usuario_colegio_rol; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.usuario_colegio
     ADD CONSTRAINT uq_usuario_colegio_rol UNIQUE (id_usuario, id_colegio, id_rol);
+
+
+--
+-- Name: usuario_colegio_email usuario_colegio_email_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.usuario_colegio_email
+    ADD CONSTRAINT usuario_colegio_email_pkey PRIMARY KEY (id);
 
 
 --
@@ -4200,6 +4677,13 @@ CREATE INDEX idx_actividad_evidencia_dba_act ON public.actividad_evidencia_dba U
 --
 
 CREATE INDEX idx_actividad_evidencia_dba_ev ON public.actividad_evidencia_dba USING btree (id_evidencia_dba);
+
+
+--
+-- Name: idx_asistencia_detalle_padre; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_asistencia_detalle_padre ON public.registro_asistencia_detalle USING btree (id_registroasistencia);
 
 
 --
@@ -4273,6 +4757,13 @@ CREATE INDEX idx_audit_sup_fecha ON public.auditoria_supervision USING btree (fe
 
 
 --
+-- Name: idx_codigo_verificacion_email; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_codigo_verificacion_email ON public.codigo_verificacion_email USING btree (email, codigo, tipo);
+
+
+--
 -- Name: idx_colegio_estado; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -4298,6 +4789,13 @@ CREATE INDEX idx_competencias_sync_uuid ON public.competencias USING btree (sync
 --
 
 CREATE INDEX idx_config_inscripcion_colegio ON public.configuracion_inscripcion USING btree (id_colegio);
+
+
+--
+-- Name: idx_contrato_docente_colegio; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_contrato_docente_colegio ON public.contrato_docente USING btree (id_colegio);
 
 
 --
@@ -4336,6 +4834,48 @@ CREATE INDEX idx_decision_promocion_estudiante ON public.decision_promocion_dire
 
 
 --
+-- Name: idx_decision_promocion_tg_ant; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_decision_promocion_tg_ant ON public.decision_promocion_directivo USING btree (id_tipo_grado_anterior);
+
+
+--
+-- Name: idx_decision_promocion_tg_asig; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_decision_promocion_tg_asig ON public.decision_promocion_directivo USING btree (id_tipo_grado_asignado);
+
+
+--
+-- Name: idx_detalle_grados_anio; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_detalle_grados_anio ON public.detalle_grados USING btree (id_anio);
+
+
+--
+-- Name: idx_detalle_grados_docente; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_detalle_grados_docente ON public.detalle_grados USING btree (id_docente);
+
+
+--
+-- Name: idx_detalle_grados_grupo; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_detalle_grados_grupo ON public.detalle_grados USING btree (id_grupo);
+
+
+--
+-- Name: idx_detalle_grados_materia; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_detalle_grados_materia ON public.detalle_grados USING btree (id_materia);
+
+
+--
 -- Name: idx_detalle_padrefamilia_padrefamilia; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -4343,17 +4883,38 @@ CREATE INDEX idx_detalle_padrefamilia_padrefamilia ON public.detalle_padrefamili
 
 
 --
--- Name: idx_email_change_codigo; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_directivo_persona; Type: INDEX; Schema: public; Owner: postgres
 --
 
-CREATE INDEX idx_email_change_codigo ON public.email_change_tokens USING btree (codigo);
+CREATE INDEX idx_directivo_persona ON public.directivo USING btree (id_persona);
 
 
 --
--- Name: idx_email_change_usuario; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_docente_persona; Type: INDEX; Schema: public; Owner: postgres
 --
 
-CREATE INDEX idx_email_change_usuario ON public.email_change_tokens USING btree (id_usuario);
+CREATE INDEX idx_docente_persona ON public.docente USING btree (id_persona);
+
+
+--
+-- Name: idx_documento_matriculas_colegio; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_documento_matriculas_colegio ON public.documento_matriculas USING btree (id_colegio);
+
+
+--
+-- Name: idx_documento_matriculas_matricula; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_documento_matriculas_matricula ON public.documento_matriculas USING btree (id_matricula);
+
+
+--
+-- Name: idx_estudiante_persona; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_estudiante_persona ON public.estudiante USING btree (id_persona);
 
 
 --
@@ -4385,6 +4946,20 @@ CREATE INDEX idx_grupos_tipo_grado ON public.grupos USING btree (id_tipo_grado);
 
 
 --
+-- Name: idx_matricula_anio; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_matricula_anio ON public.matricula USING btree (id_anio);
+
+
+--
+-- Name: idx_matricula_colegio; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_matricula_colegio ON public.matricula USING btree (id_colegio);
+
+
+--
 -- Name: idx_matricula_estudiante; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -4396,6 +4971,20 @@ CREATE INDEX idx_matricula_estudiante ON public.matricula USING btree (id_estudi
 --
 
 CREATE UNIQUE INDEX idx_matricula_estudiante_anio_colegio_activo ON public.matricula USING btree (id_estudiante, id_anio, id_colegio) WHERE (estado <> ALL (ARRAY['CANCELADA'::public.estado_matricula, 'RECHAZADA'::public.estado_matricula]));
+
+
+--
+-- Name: idx_matricula_grupo; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_matricula_grupo ON public.matricula USING btree (id_grupo);
+
+
+--
+-- Name: idx_nota_criterio_colegio; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_nota_criterio_colegio ON public.nota_criterio USING btree (id_colegio);
 
 
 --
@@ -4455,6 +5044,20 @@ CREATE INDEX idx_notif_sup_leida ON public.notificacion_supervision USING btree 
 
 
 --
+-- Name: idx_notificaciones_colegio; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_notificaciones_colegio ON public.notificaciones USING btree (id_colegio);
+
+
+--
+-- Name: idx_notificaciones_destinatario; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_notificaciones_destinatario ON public.notificaciones USING btree (id_usuario_destinatario, leida);
+
+
+--
 -- Name: idx_observacion_estudiante; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -4462,10 +5065,80 @@ CREATE INDEX idx_observacion_estudiante ON public.observacion_estudiante USING b
 
 
 --
+-- Name: idx_padre_familia_persona; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_padre_familia_persona ON public.padre_familia USING btree (id_persona);
+
+
+--
 -- Name: idx_password_reset_token; Type: INDEX; Schema: public; Owner: postgres
 --
 
 CREATE INDEX idx_password_reset_token ON public.password_reset_tokens USING btree (token);
+
+
+--
+-- Name: idx_persona_documento; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_persona_documento ON public.persona USING btree (documento);
+
+
+--
+-- Name: idx_persona_nombre_apellido; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_persona_nombre_apellido ON public.persona USING btree (apellido, nombre);
+
+
+--
+-- Name: idx_registro_asistencia_detallegrado; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_registro_asistencia_detallegrado ON public.registro_asistencia USING btree (id_detallegrado);
+
+
+--
+-- Name: idx_resultado_academico_detallegrado; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_resultado_academico_detallegrado ON public.resultado_academico USING btree (id_detallegrado);
+
+
+--
+-- Name: idx_resultado_academico_estudiante; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_resultado_academico_estudiante ON public.resultado_academico USING btree (id_estudiante);
+
+
+--
+-- Name: idx_resultado_academico_periodo; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_resultado_academico_periodo ON public.resultado_academico USING btree (id_periodo);
+
+
+--
+-- Name: idx_sancion_directivo; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_sancion_directivo ON public.sancion USING btree (id_directivo);
+
+
+--
+-- Name: idx_sancion_estudiante; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_sancion_estudiante ON public.sancion USING btree (id_estudiante);
+
+
+--
+-- Name: idx_sancion_tipo_sancion; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_sancion_tipo_sancion ON public.sancion USING btree (id_tipo_sancion);
 
 
 --
@@ -4487,6 +5160,20 @@ CREATE INDEX idx_solicitud_traslado_origen ON public.solicitud_traslado USING bt
 --
 
 CREATE INDEX idx_solicitud_traslado_usr ON public.solicitud_traslado USING btree (id_usuario);
+
+
+--
+-- Name: idx_ticket_obs_ticket; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_ticket_obs_ticket ON public.ticket_observaciones USING btree (id_ticket);
+
+
+--
+-- Name: idx_ticket_obs_usuario; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_ticket_obs_usuario ON public.ticket_observaciones USING btree (id_usuario);
 
 
 --
@@ -4525,6 +5212,20 @@ CREATE INDEX idx_token_blacklist_expires_at ON public.token_blacklist USING btre
 
 
 --
+-- Name: idx_tokens_verificacion_hash; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_tokens_verificacion_hash ON public.tokens_verificacion USING btree (token_hash);
+
+
+--
+-- Name: idx_tokens_verificacion_usuario; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_tokens_verificacion_usuario ON public.tokens_verificacion USING btree (id_usuario, tipo_token);
+
+
+--
 -- Name: idx_traslado_aprobacion_sol; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -4532,10 +5233,17 @@ CREATE INDEX idx_traslado_aprobacion_sol ON public.traslado_aprobacion USING btr
 
 
 --
--- Name: idx_usuario_colegio; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_uce_colegio; Type: INDEX; Schema: public; Owner: postgres
 --
 
-CREATE INDEX idx_usuario_colegio ON public.usuario USING btree (id_colegio);
+CREATE INDEX idx_uce_colegio ON public.usuario_colegio_email USING btree (id_colegio);
+
+
+--
+-- Name: idx_uce_usuario; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_uce_usuario ON public.usuario_colegio_email USING btree (id_usuario);
 
 
 --
@@ -4553,10 +5261,24 @@ CREATE INDEX idx_usuario_colegio_col ON public.usuario_colegio USING btree (id_c
 
 
 --
+-- Name: idx_usuario_colegio_colegio_rol; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_usuario_colegio_colegio_rol ON public.usuario_colegio USING btree (id_colegio, id_rol);
+
+
+--
 -- Name: idx_usuario_colegio_usr; Type: INDEX; Schema: public; Owner: postgres
 --
 
 CREATE INDEX idx_usuario_colegio_usr ON public.usuario_colegio USING btree (id_usuario);
+
+
+--
+-- Name: idx_usuario_colegio_usuario_colegio; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_usuario_colegio_usuario_colegio ON public.usuario_colegio USING btree (id_usuario, id_colegio);
 
 
 --
@@ -4581,6 +5303,20 @@ CREATE INDEX idx_usuario_estado ON public.usuario USING btree (estado);
 
 
 --
+-- Name: idx_usuario_persona; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_usuario_persona ON public.usuario USING btree (id_persona);
+
+
+--
+-- Name: uq_persona_documento_activo; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX uq_persona_documento_activo ON public.persona USING btree (id_tipodocumento, documento) WHERE ((documento IS NOT NULL) AND ((estado)::text = 'ACTIVO'::text));
+
+
+--
 -- Name: registro_asistencia trg_bloquear_asistencia_periodo; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -4599,6 +5335,13 @@ CREATE TRIGGER trg_bloquear_notas_periodo BEFORE INSERT OR DELETE OR UPDATE ON p
 --
 
 CREATE TRIGGER trg_bloquear_observacion_periodo BEFORE INSERT OR DELETE OR UPDATE ON public.observacion_estudiante FOR EACH ROW EXECUTE FUNCTION public.fn_bloquear_periodo_cerrado();
+
+
+--
+-- Name: notas_actividad trg_bloqueo_mutacion_notas; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE TRIGGER trg_bloqueo_mutacion_notas BEFORE DELETE OR UPDATE ON public.notas_actividad FOR EACH ROW EXECUTE FUNCTION public.fn_prohibir_mutacion_calificaciones_cerradas();
 
 
 --
@@ -4697,14 +5440,6 @@ ALTER TABLE ONLY public.actividad_materia
 
 
 --
--- Name: actividad_materia actividad_materia_id_detallegrado_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.actividad_materia
-    ADD CONSTRAINT actividad_materia_id_detallegrado_fkey FOREIGN KEY (id_detallegrado) REFERENCES public.detalle_grados(id_detallegrado) ON DELETE CASCADE;
-
-
---
 -- Name: actividad_materia actividad_materia_id_docente_creador_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -4793,6 +5528,14 @@ ALTER TABLE ONLY public.cierre_materia
 
 
 --
+-- Name: codigo_verificacion_email codigo_verificacion_email_id_usuario_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.codigo_verificacion_email
+    ADD CONSTRAINT codigo_verificacion_email_id_usuario_fkey FOREIGN KEY (id_usuario) REFERENCES public.usuario(id_usuario) ON DELETE CASCADE;
+
+
+--
 -- Name: colegio_version_curricular colegio_version_curricular_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -4878,14 +5621,6 @@ ALTER TABLE ONLY public.configuracion_inscripcion
 
 ALTER TABLE ONLY public.contrato_docente
     ADD CONSTRAINT contrato_docente_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
-
-
---
--- Name: criterio_evaluacion criterio_evaluacion_id_actividadmateria_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.criterio_evaluacion
-    ADD CONSTRAINT criterio_evaluacion_id_actividadmateria_fkey FOREIGN KEY (id_actividadmateria) REFERENCES public.actividad_materia(id_actividadmateria) ON DELETE CASCADE;
 
 
 --
@@ -5065,14 +5800,6 @@ ALTER TABLE ONLY public.documento_matriculas
 
 
 --
--- Name: documento_matriculas documento_matriculas_id_matricula_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.documento_matriculas
-    ADD CONSTRAINT documento_matriculas_id_matricula_fkey FOREIGN KEY (id_matricula) REFERENCES public.matricula(id_matricula);
-
-
---
 -- Name: estudiante estudiante_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -5113,6 +5840,30 @@ ALTER TABLE ONLY public.evidencias_dba
 
 
 --
+-- Name: actividad_materia fk_actividad_materia_competencias; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.actividad_materia
+    ADD CONSTRAINT fk_actividad_materia_competencias FOREIGN KEY (id_competencia) REFERENCES public.competencias(id_competencia) ON DELETE RESTRICT;
+
+
+--
+-- Name: actividad_materia fk_actividad_materia_detalle_grados; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.actividad_materia
+    ADD CONSTRAINT fk_actividad_materia_detalle_grados FOREIGN KEY (id_detallegrado) REFERENCES public.detalle_grados(id_detallegrado) ON DELETE RESTRICT;
+
+
+--
+-- Name: registro_asistencia_detalle fk_asistencia_detalle_padre; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.registro_asistencia_detalle
+    ADD CONSTRAINT fk_asistencia_detalle_padre FOREIGN KEY (id_registroasistencia) REFERENCES public.registro_asistencia(id_registroasistencia) ON DELETE CASCADE;
+
+
+--
 -- Name: configuracion_sistema fk_config_base; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -5129,11 +5880,67 @@ ALTER TABLE ONLY public.configuracion_sistema
 
 
 --
+-- Name: criterio_evaluacion fk_criterio_evaluacion_tenant; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.criterio_evaluacion
+    ADD CONSTRAINT fk_criterio_evaluacion_tenant FOREIGN KEY (id_actividadmateria, id_colegio) REFERENCES public.actividad_materia(id_actividadmateria, id_colegio) ON DELETE CASCADE;
+
+
+--
+-- Name: decision_promocion_directivo fk_decision_promocion_tg_anterior; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.decision_promocion_directivo
+    ADD CONSTRAINT fk_decision_promocion_tg_anterior FOREIGN KEY (id_tipo_grado_anterior) REFERENCES public.tipo_grado(id_tipo_grado) ON DELETE RESTRICT;
+
+
+--
+-- Name: decision_promocion_directivo fk_decision_promocion_tg_asignado; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.decision_promocion_directivo
+    ADD CONSTRAINT fk_decision_promocion_tg_asignado FOREIGN KEY (id_tipo_grado_asignado) REFERENCES public.tipo_grado(id_tipo_grado) ON DELETE RESTRICT;
+
+
+--
 -- Name: detalle_grados fk_detalle_grupo; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.detalle_grados
     ADD CONSTRAINT fk_detalle_grupo FOREIGN KEY (id_grupo) REFERENCES public.grupos(id_grupo);
+
+
+--
+-- Name: directivo fk_directivo_persona; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.directivo
+    ADD CONSTRAINT fk_directivo_persona FOREIGN KEY (id_persona) REFERENCES public.persona(id_persona) ON DELETE RESTRICT;
+
+
+--
+-- Name: docente fk_docente_persona; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.docente
+    ADD CONSTRAINT fk_docente_persona FOREIGN KEY (id_persona) REFERENCES public.persona(id_persona) ON DELETE RESTRICT;
+
+
+--
+-- Name: documento_matriculas fk_documento_matriculas_tenant; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.documento_matriculas
+    ADD CONSTRAINT fk_documento_matriculas_tenant FOREIGN KEY (id_matricula, id_colegio) REFERENCES public.matricula(id_matricula, id_colegio) ON DELETE CASCADE;
+
+
+--
+-- Name: estudiante fk_estudiante_persona; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.estudiante
+    ADD CONSTRAINT fk_estudiante_persona FOREIGN KEY (id_persona) REFERENCES public.persona(id_persona) ON DELETE RESTRICT;
 
 
 --
@@ -5201,11 +6008,59 @@ ALTER TABLE ONLY public.matricula
 
 
 --
+-- Name: nota_criterio fk_nota_criterio_tenant; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.nota_criterio
+    ADD CONSTRAINT fk_nota_criterio_tenant FOREIGN KEY (id_criterio, id_colegio) REFERENCES public.criterio_evaluacion(id_criterio, id_colegio) ON DELETE CASCADE;
+
+
+--
+-- Name: notas_actividad fk_notas_actividad_tenant; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.notas_actividad
+    ADD CONSTRAINT fk_notas_actividad_tenant FOREIGN KEY (id_actividadmateria, id_colegio) REFERENCES public.actividad_materia(id_actividadmateria, id_colegio) ON DELETE CASCADE;
+
+
+--
+-- Name: padre_familia fk_padre_familia_persona; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.padre_familia
+    ADD CONSTRAINT fk_padre_familia_persona FOREIGN KEY (id_persona) REFERENCES public.persona(id_persona) ON DELETE RESTRICT;
+
+
+--
+-- Name: ticket_observaciones fk_ticket_obs_ticket; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.ticket_observaciones
+    ADD CONSTRAINT fk_ticket_obs_ticket FOREIGN KEY (id_ticket) REFERENCES public.tickets_soporte(id_ticket) ON DELETE CASCADE;
+
+
+--
+-- Name: ticket_observaciones fk_ticket_obs_usuario; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.ticket_observaciones
+    ADD CONSTRAINT fk_ticket_obs_usuario FOREIGN KEY (id_usuario) REFERENCES public.usuario(id_usuario) ON DELETE SET NULL;
+
+
+--
 -- Name: tipo_grado fk_tipo_grado_nivel; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.tipo_grado
     ADD CONSTRAINT fk_tipo_grado_nivel FOREIGN KEY (id_nivel) REFERENCES public.nivel_escolar(id_nivel);
+
+
+--
+-- Name: usuario fk_usuario_persona; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.usuario
+    ADD CONSTRAINT fk_usuario_persona FOREIGN KEY (id_persona) REFERENCES public.persona(id_persona) ON DELETE SET NULL;
 
 
 --
@@ -5273,27 +6128,11 @@ ALTER TABLE ONLY public.nota_criterio
 
 
 --
--- Name: nota_criterio nota_criterio_id_criterio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.nota_criterio
-    ADD CONSTRAINT nota_criterio_id_criterio_fkey FOREIGN KEY (id_criterio) REFERENCES public.criterio_evaluacion(id_criterio) ON DELETE CASCADE;
-
-
---
 -- Name: nota_criterio nota_criterio_id_estudiante_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.nota_criterio
     ADD CONSTRAINT nota_criterio_id_estudiante_fkey FOREIGN KEY (id_estudiante) REFERENCES public.estudiante(id_estudiante) ON DELETE CASCADE;
-
-
---
--- Name: notas_actividad notas_actividad_id_actividadmateria_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.notas_actividad
-    ADD CONSTRAINT notas_actividad_id_actividadmateria_fkey FOREIGN KEY (id_actividadmateria) REFERENCES public.actividad_materia(id_actividadmateria) ON DELETE CASCADE;
 
 
 --
@@ -5342,6 +6181,22 @@ ALTER TABLE ONLY public.notificacion_supervision
 
 ALTER TABLE ONLY public.notificacion_supervision
     ADD CONSTRAINT notificacion_supervision_id_directivo_fkey FOREIGN KEY (id_directivo) REFERENCES public.directivo(id);
+
+
+--
+-- Name: notificaciones notificaciones_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.notificaciones
+    ADD CONSTRAINT notificaciones_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
+
+
+--
+-- Name: notificaciones notificaciones_id_usuario_destinatario_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.notificaciones
+    ADD CONSTRAINT notificaciones_id_usuario_destinatario_fkey FOREIGN KEY (id_usuario_destinatario) REFERENCES public.usuario(id_usuario) ON DELETE CASCADE;
 
 
 --
@@ -5398,6 +6253,14 @@ ALTER TABLE ONLY public.periodo_academico
 
 ALTER TABLE ONLY public.periodo_academico
     ADD CONSTRAINT periodo_academico_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio);
+
+
+--
+-- Name: persona persona_id_tipodocumento_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.persona
+    ADD CONSTRAINT persona_id_tipodocumento_fkey FOREIGN KEY (id_tipodocumento) REFERENCES public.tipo_documento(id_tipodocumento);
 
 
 --
@@ -5513,6 +6376,14 @@ ALTER TABLE ONLY public.solicitud_traslado
 
 
 --
+-- Name: solicitud_traslado solicitud_traslado_id_grupo_destino_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.solicitud_traslado
+    ADD CONSTRAINT solicitud_traslado_id_grupo_destino_fkey FOREIGN KEY (id_grupo_destino) REFERENCES public.grupos(id_grupo) ON DELETE SET NULL;
+
+
+--
 -- Name: solicitud_traslado solicitud_traslado_id_matricula_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -5537,6 +6408,22 @@ ALTER TABLE ONLY public.tickets_soporte
 
 
 --
+-- Name: tokens_verificacion tokens_verificacion_id_usuario_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.tokens_verificacion
+    ADD CONSTRAINT tokens_verificacion_id_usuario_fkey FOREIGN KEY (id_usuario) REFERENCES public.usuario(id_usuario) ON DELETE CASCADE;
+
+
+--
+-- Name: traslado_aprobacion traslado_aprobacion_id_grupo_destino_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.traslado_aprobacion
+    ADD CONSTRAINT traslado_aprobacion_id_grupo_destino_fkey FOREIGN KEY (id_grupo_destino) REFERENCES public.grupos(id_grupo) ON DELETE SET NULL;
+
+
+--
 -- Name: traslado_aprobacion traslado_aprobacion_id_solicitud_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -5553,19 +6440,27 @@ ALTER TABLE ONLY public.usuario
 
 
 --
+-- Name: usuario_colegio_email usuario_colegio_email_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.usuario_colegio_email
+    ADD CONSTRAINT usuario_colegio_email_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
+
+
+--
+-- Name: usuario_colegio_email usuario_colegio_email_id_usuario_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.usuario_colegio_email
+    ADD CONSTRAINT usuario_colegio_email_id_usuario_fkey FOREIGN KEY (id_usuario) REFERENCES public.usuario(id_usuario) ON DELETE CASCADE;
+
+
+--
 -- Name: usuario_colegio usuario_colegio_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.usuario_colegio
     ADD CONSTRAINT usuario_colegio_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
-
-
---
--- Name: usuario usuario_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.usuario
-    ADD CONSTRAINT usuario_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio);
 
 
 --
@@ -5603,5 +6498,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict lkQ9u4THAvAnP29AImDe3qreZ7DEdTTkDYdBbdJgexrxv9bW4IlNnw5rYThtDUr
+\unrestrict uJH4iUx6qc9MBX09gNQJXosxMn6bSfaloXFrRQmnbpauNEZF1ojacnFydIYneO4
 

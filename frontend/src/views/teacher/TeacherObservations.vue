@@ -89,6 +89,7 @@ const activeStudentId = ref<number | null>(null)
 const editingObservation = ref<Observation | null>(null)
 const isEditable = ref(true)
 const lockReason = ref('')
+const isReadOnly = computed(() => !isEditable.value)
 const loading = ref(false)
 const saving = ref(false)
 

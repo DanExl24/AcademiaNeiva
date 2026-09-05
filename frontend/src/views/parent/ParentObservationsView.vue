@@ -13,8 +13,7 @@ import {
   User,
   BookOpen,
   GraduationCap,
-  CreditCard,
-  HelpCircle
+  CreditCard
 } from 'lucide-vue-next'
 import BoletinExportModule from '../../components/boletines/BoletinExportModule.vue'
 import { useAcademicYearStore } from '../../stores/academicYear'

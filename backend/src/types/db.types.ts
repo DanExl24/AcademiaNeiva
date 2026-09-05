@@ -7,7 +7,7 @@ import type { ColumnType } from "kysely";
 
 export type AccionAprobacionTraslado = "APROBAR" | "CANCELAR" | "RECHAZAR";
 
-export type DecisionPromocionTipo = "PROMOVER_SIGUIENTE_GRADO" | "MANTENER_GRADO" | "MATRICULA_CONDICIONADA" | "OTRA_DECISION";
+export type DecisionPromocionTipo = "MANTENER_GRADO" | "MATRICULA_CONDICIONADA" | "OTRA_DECISION" | "PROMOVER_SIGUIENTE_GRADO";
 
 export type EstadoAsistencia = "AUSENTE" | "JUSTIFICADA" | "PRESENTE" | "TARDE";
 
@@ -26,8 +26,6 @@ export type EstadoMatricula = "ACTIVA" | "APROBADA" | "CANCELADA" | "CORRECCION"
 export type EstadoPeriodo = "ABIERTO" | "CERRADO" | "PENDIENTE";
 
 export type EstadoRenovacionDocumento = "DESACTUALIZADO_POR_FECHA" | "OBLIGATORIO_ACTUALIZAR" | "RECOMENDADO_ACTUALIZAR" | "VIGENTE";
-
-export type ResultadoConsolidadoAnual = "APROBADO" | "NO_PROMOVIDO" | "PENDIENTE_RECUPERACION" | "PENDIENTE_DECISION";
 
 export type EstadoResultado = "APROBADO" | "EN_PROCESO" | "REPROBADO";
 
@@ -60,6 +58,8 @@ export type JsonPrimitive = boolean | number | string | null;
 export type JsonValue = JsonArray | JsonObject | JsonPrimitive;
 
 export type Numeric = ColumnType<string, number | string, number | string>;
+
+export type ResultadoConsolidadoAnual = "APROBADO" | "NO_PROMOVIDO" | "PENDIENTE_DECISION" | "PENDIENTE_RECUPERACION";
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
@@ -155,9 +155,21 @@ export interface CierreMateria {
   justificacion_evidencias_pendientes: string | null;
 }
 
+export interface CodigoVerificacionEmail {
+  codigo: string;
+  created_at: Generated<Timestamp | null>;
+  email: string;
+  expires_at: Timestamp;
+  id_usuario: number | null;
+  id_verificacion: Generated<number>;
+  tipo: TipoVerificacionEmail;
+  verified: Generated<boolean>;
+}
+
 export interface Colegio {
   color_primario: Generated<string | null>;
   color_secundario: Generated<string | null>;
+  colores: string | null;
   contacto: Numeric;
   correo: string;
   dane: string;
@@ -180,20 +192,6 @@ export interface ColegioVersionCurricular {
   id: Generated<number>;
   id_colegio: number;
   version_curricular: string;
-}
-
-export interface DecisionPromocionDirectivo {
-  id_decision: Generated<number>;
-  id_estudiante: number;
-  id_colegio: number;
-  id_anio_anterior: number;
-  resultado_calculado: ResultadoConsolidadoAnual;
-  decision_tomada: DecisionPromocionTipo;
-  id_grado_anterior: number | null;
-  id_grado_asignado: number | null;
-  id_usuario_decision: number;
-  fecha_decision: Generated<Timestamp | null>;
-  observacion: string | null;
 }
 
 export interface Competencias {
@@ -283,6 +281,22 @@ export interface DbaDimensionesPreescolar {
   id_dimension: number;
 }
 
+export interface DecisionPromocionDirectivo {
+  decision_tomada: DecisionPromocionTipo;
+  fecha_decision: Generated<Timestamp | null>;
+  id_anio_anterior: number;
+  id_colegio: number;
+  id_decision: Generated<number>;
+  id_estudiante: number;
+  id_grado_anterior: number | null;
+  id_grado_asignado: number | null;
+  id_tipo_grado_anterior: number | null;
+  id_tipo_grado_asignado: number | null;
+  id_usuario_decision: number;
+  observacion: string | null;
+  resultado_calculado: ResultadoConsolidadoAnual;
+}
+
 export interface Desempeno {
   descripcion: string;
   id_actividadmateria: number;
@@ -295,15 +309,17 @@ export interface DetalleGrados {
   id_colegio: number;
   id_detallegrado: Generated<number>;
   id_docente: number;
-  id_grupo: number | null;
+  id_grupo: number;
   id_materia: number;
 }
 
 export interface DetallePadrefamilia {
+  es_acudiente_principal: Generated<boolean | null>;
   id_colegio: number;
   id_detallepadrefamilia: Generated<number>;
   id_estudiante: number;
   id_padrefamilia: number;
+  parentesco: Generated<string | null>;
 }
 
 export interface DimensionesPreescolar {
@@ -318,6 +334,7 @@ export interface Directivo {
   fecha_vinculacion: Generated<Timestamp>;
   id: Generated<number>;
   id_colegio: number;
+  id_persona: number | null;
   id_usuario: number | null;
 }
 
@@ -325,7 +342,9 @@ export interface Docente {
   apellido: string;
   estado: Generated<string>;
   id_colegio: number;
+  id_contratodocente: number | null;
   id_docente: Generated<number>;
+  id_persona: number | null;
   id_usuario: number | null;
   nombre: string;
 }
@@ -347,16 +366,6 @@ export interface DocumentoMatriculas {
   version: Generated<number>;
 }
 
-export interface EmailChangeTokens {
-  codigo: string;
-  created_at: Generated<Timestamp | null>;
-  expires_at: Timestamp;
-  id: Generated<number>;
-  id_usuario: number | null;
-  nuevo_email: string;
-  used: Generated<boolean | null>;
-}
-
 export interface EscalaValoracion {
   id_colegio: number;
   id_escalavaloracion: Generated<number>;
@@ -371,6 +380,8 @@ export interface Estudiante {
   estado: Generated<EstadoEstudiante | null>;
   id_colegio: number;
   id_estudiante: Generated<number>;
+  id_nivel: number | null;
+  id_persona: number | null;
   id_usuario: number | null;
   motivo_estado: string | null;
   nombre: string;
@@ -399,6 +410,7 @@ export interface Grados {
   id_colegio: number;
   id_grado: Generated<number>;
   id_jornada: number;
+  nivel: string;
   seccion: Generated<string | null>;
   tipo_grado: string;
 }
@@ -418,6 +430,16 @@ export interface Jornada {
   id_colegio: number;
   id_jornada: Generated<number>;
   nombre: TipoJornada;
+}
+
+export interface LegacyGradosArchive {
+  cupos_totales: number | null;
+  id_colegio: number | null;
+  id_grado: number | null;
+  id_jornada: number | null;
+  nivel: string | null;
+  seccion: string | null;
+  tipo_grado: string | null;
 }
 
 export interface Materias {
@@ -450,17 +472,6 @@ export interface Matricula {
   token_seguimiento: Generated<string>;
 }
 
-export interface CodigoVerificacionEmail {
-  id_verificacion: Generated<number>;
-  email: string;
-  codigo: string;
-  tipo: TipoVerificacionEmail;
-  id_usuario: number | null;
-  expires_at: Timestamp;
-  verified: Generated<boolean>;
-  created_at: Generated<Timestamp>;
-}
-
 export interface NivelEscolar {
   id_colegio: number;
   id_nivel: Generated<number>;
@@ -481,7 +492,7 @@ export interface NotasActividad {
   id_escalavaloracion: number;
   id_estudiante: number;
   id_notaactividad: Generated<number>;
-  nota: Numeric;
+  nota: Numeric | null;
 }
 
 export interface NotificacionColegio {
@@ -494,6 +505,18 @@ export interface NotificacionColegio {
   leida: Generated<boolean>;
   mensaje: string;
   tipo: string;
+}
+
+export interface Notificaciones {
+  fecha_creacion: Generated<Timestamp>;
+  id_colegio: number | null;
+  id_notificacion: Generated<number>;
+  id_usuario_destinatario: number | null;
+  leida: Generated<boolean>;
+  mensaje: string;
+  metadata: Json | null;
+  tipo_contexto: string;
+  titulo: string | null;
 }
 
 export interface NotificacionSupervision {
@@ -523,6 +546,7 @@ export interface PadreFamilia {
   apellido: string;
   id_colegio: number | null;
   id_padrefamilia: Generated<number>;
+  id_persona: number | null;
   id_usuario: number | null;
   nombre: string;
 }
@@ -559,6 +583,21 @@ export interface PeriodoAcademico {
   trimestre: number | null;
 }
 
+export interface Persona {
+  apellido: string;
+  direccion: string | null;
+  documento: string | null;
+  estado: Generated<string>;
+  fecha_actualizacion: Generated<Timestamp>;
+  fecha_creacion: Generated<Timestamp>;
+  fecha_nacimiento: Timestamp | null;
+  genero: string | null;
+  id_persona: Generated<number>;
+  id_tipodocumento: number | null;
+  nombre: string;
+  telefono: string | null;
+}
+
 export interface RegistroAsistencia {
   estado: Generated<EstadoAsistencia>;
   fecha: Timestamp;
@@ -568,6 +607,15 @@ export interface RegistroAsistencia {
   id_estudiante: number;
   id_registroasistencia: Generated<number>;
   justificacion: string | null;
+}
+
+export interface RegistroAsistenciaDetalle {
+  estado: string;
+  hora_registro: string | null;
+  id_asistencia_detalle: Generated<number>;
+  id_registroasistencia: number;
+  numero_bloque: number;
+  observacion: string | null;
 }
 
 export interface RegistroGraduados {
@@ -630,6 +678,14 @@ export interface SolicitudTraslado {
   tipo: Generated<TipoTraslado>;
 }
 
+export interface TicketObservaciones {
+  contenido: string;
+  fecha_creacion: Generated<Timestamp>;
+  id_observacion: Generated<number>;
+  id_ticket: number;
+  id_usuario: number | null;
+}
+
 export interface TicketsSoporte {
   asunto: string;
   codigo_ticket: string | null;
@@ -672,6 +728,18 @@ export interface TokenBlacklist {
   jti: string;
 }
 
+export interface TokensVerificacion {
+  codigo_verificacion: string | null;
+  fecha_creacion: Generated<Timestamp>;
+  fecha_expiracion: Timestamp;
+  id_token: Generated<number>;
+  id_usuario: number | null;
+  metadata: Json | null;
+  tipo_token: string;
+  token_hash: string;
+  usado: Generated<boolean>;
+}
+
 export interface TrasladoAprobacion {
   accion: AccionAprobacionTraslado;
   comentario: string | null;
@@ -692,6 +760,7 @@ export interface Usuario {
   estado: Generated<EstadoUsuarioSistema>;
   fecha_baneo: Timestamp | null;
   fecha_creacion: Generated<Timestamp | null>;
+  id_persona: number | null;
   id_tipodocumento: number | null;
   id_usuario: Generated<number>;
   logged_out_at: Timestamp | null;
@@ -712,11 +781,11 @@ export interface UsuarioColegio {
 }
 
 export interface UsuarioColegioEmail {
-  id: Generated<number>;
-  id_usuario: number;
-  id_colegio: number;
   email_institucional: string;
   fecha_asignacion: Generated<Timestamp>;
+  id: Generated<number>;
+  id_colegio: number;
+  id_usuario: number;
 }
 
 export interface UsuarioRol {
@@ -791,15 +860,19 @@ export interface DB {
   auditoria_acciones_realizadas: AuditoriaAccionesRealizadas;
   auditoria_supervision: AuditoriaSupervision;
   cierre_materia: CierreMateria;
+  codigo_verificacion_email: CodigoVerificacionEmail;
   colegio: Colegio;
   colegio_version_curricular: ColegioVersionCurricular;
-  codigo_verificacion_email: CodigoVerificacionEmail;
   competencias: Competencias;
+  configuracion_base: ConfiguracionBase;
   configuracion_colegio: ConfiguracionColegio;
   configuracion_inscripcion: ConfiguracionInscripcion;
   configuracion_plataforma: ConfiguracionPlataforma;
+  configuracion_sistema: ConfiguracionSistema;
+  contrato_docente: ContratoDocente;
   criterio_evaluacion: CriterioEvaluacion;
   dba: Dba;
+  dba_dimensiones_preescolar: DbaDimensionesPreescolar;
   decision_promocion_directivo: DecisionPromocionDirectivo;
   desempeno: Desempeno;
   detalle_grados: DetalleGrados;
@@ -815,6 +888,7 @@ export interface DB {
   grados: Grados;
   grupos: Grupos;
   jornada: Jornada;
+  legacy_grados_archive: LegacyGradosArchive;
   materias: Materias;
   matricula: Matricula;
   nivel_escolar: NivelEscolar;
@@ -822,26 +896,38 @@ export interface DB {
   notas_actividad: NotasActividad;
   notificacion_colegio: NotificacionColegio;
   notificacion_supervision: NotificacionSupervision;
+  notificaciones: Notificaciones;
   observacion_estudiante: ObservacionEstudiante;
   padre_familia: PadreFamilia;
   papelera_materias: PapeleraMaterias;
   password_reset_tokens: PasswordResetTokens;
   periodo_academico: PeriodoAcademico;
+  persona: Persona;
   registro_asistencia: RegistroAsistencia;
+  registro_asistencia_detalle: RegistroAsistenciaDetalle;
   registro_graduados: RegistroGraduados;
   resultado_academico: ResultadoAcademico;
   rol: Rol;
   sancion: Sancion;
   secciones: Secciones;
   solicitud_traslado: SolicitudTraslado;
+  ticket_observaciones: TicketObservaciones;
   tickets_soporte: TicketsSoporte;
   tipo_documento: TipoDocumento;
   tipo_grado: TipoGrado;
   tipo_sancion: TipoSancion;
   token_blacklist: TokenBlacklist;
+  tokens_verificacion: TokensVerificacion;
   traslado_aprobacion: TrasladoAprobacion;
   usuario: Usuario;
   usuario_colegio: UsuarioColegio;
   usuario_colegio_email: UsuarioColegioEmail;
   usuario_rol: UsuarioRol;
+  vw_asistencia_estudiante: VwAsistenciaEstudiante;
+  vw_desempeno_estudiante: VwDesempenoEstudiante;
+  vw_notas_enriquecidas: VwNotasEnriquecidas;
+  vw_observaciones_estudiante: VwObservacionesEstudiante;
+  vw_promedio_estudiante_periodo: VwPromedioEstudiantePeriodo;
+  vw_promedio_materia: VwPromedioMateria;
+  vw_promedio_normalizado: VwPromedioNormalizado;
 }

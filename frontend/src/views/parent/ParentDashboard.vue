@@ -976,8 +976,6 @@ const barChartOptions = computed(() => ({
     </div>
   </div>
 </template>
-  </div>
-</template>
 
 <style scoped>
 .custom-shadow {

@@ -70,3 +70,6 @@ playwright/test-results/
 # ---- Script Caches ----
 .mermaid_cache/
 scripts/.mermaid_cache/
+
+# ---- Arquitectura y Remediación de Base de Datos Local ----
+database-architecture/
