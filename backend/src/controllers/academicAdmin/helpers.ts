@@ -1,7 +1,6 @@
 import { Request, Response } from "express";
-import { PoolClient } from "pg";
-import { pool } from "../../config/db";
-import bcrypt from "bcrypt";
+import { db } from "../../config/kysely";
+import { sql } from "kysely";
 import { randomUUID } from "crypto";
 import path from "path";
 import { NotificationService } from "../../services/notificationService";
@@ -46,29 +45,44 @@ export const isSchoolAccessAllowed = async (user: any, targetSchoolId: number | 
 
   try {
     if (role === 'estudiante' || (user.roles && user.roles.includes('estudiante'))) {
-      const check = await pool.query(
-        `SELECT 1 FROM estudiante WHERE (id_usuario = $1 OR id_estudiante = $1) AND id_colegio = $2 LIMIT 1`,
-        [userId, target]
-      );
-      if (check.rows.length > 0) return true;
+      const check = await db
+        .selectFrom("estudiante")
+        .select("id_estudiante")
+        .where((eb) => eb.or([
+          eb("id_usuario", "=", userId),
+          eb("id_estudiante", "=", userId)
+        ]))
+        .where("id_colegio", "=", target)
+        .limit(1)
+        .executeTakeFirst();
+      if (check) return true;
     }
 
     if (role === 'padre' || (user.roles && user.roles.includes('padre'))) {
-      const check = await pool.query(
-        `SELECT 1 FROM padre_familia pf
-         JOIN detalle_padrefamilia dpf ON pf.id_padrefamilia = dpf.id_padrefamilia
-         JOIN estudiante e ON dpf.id_estudiante = e.id_estudiante
-         WHERE (pf.id_usuario = $1 OR pf.id_padrefamilia = $1) AND e.id_colegio = $2 LIMIT 1`,
-        [userId, target]
-      );
-      if (check.rows.length > 0) return true;
+      const check = await db
+        .selectFrom("padre_familia as pf")
+        .innerJoin("detalle_padrefamilia as dpf", "pf.id_padrefamilia", "dpf.id_padrefamilia")
+        .innerJoin("estudiante as e", "dpf.id_estudiante", "e.id_estudiante")
+        .select("pf.id_padrefamilia")
+        .where((eb) => eb.or([
+          eb("pf.id_usuario", "=", userId),
+          eb("pf.id_padrefamilia", "=", userId)
+        ]))
+        .where("e.id_colegio", "=", target)
+        .limit(1)
+        .executeTakeFirst();
+      if (check) return true;
     }
 
-    const checkBinding = await pool.query(
-      `SELECT 1 FROM usuario_colegio WHERE id_usuario = $1 AND id_colegio = $2 AND estado = 'ACTIVO' LIMIT 1`,
-      [userId, target]
-    );
-    if (checkBinding.rows.length > 0) return true;
+    const checkBinding = await db
+      .selectFrom("usuario_colegio")
+      .select("id_usuario")
+      .where("id_usuario", "=", userId)
+      .where("id_colegio", "=", target)
+      .where("estado", "=", "ACTIVO")
+      .limit(1)
+      .executeTakeFirst();
+    if (checkBinding) return true;
   } catch (err) {
     console.error('Error in isSchoolAccessAllowed query:', err);
   }
@@ -86,25 +100,52 @@ export const parseSchoolId = (value: unknown): number | null => {
 
 export const ensureTeacherStatusColumn = async () => {};
 
-export const autoSwitchPeriodsForYear = async (client: any, schoolId: number, yearId: number): Promise<void> => {
-  const yearRes = await client.query(
-    `SELECT id_anio, calendario, tipo_calendario, estado
-     FROM anio_lectivo
-     WHERE id_anio = $1 AND id_colegio = $2`,
-    [yearId, schoolId]
-  );
-  if (!yearRes.rows.length || yearRes.rows[0].estado === 'CERRADO') return;
-  const yearRow = yearRes.rows[0];
-  const calendarType = yearRow.tipo_calendario || 'A';
+export const autoSwitchPeriodsForYear = async (
+  clientOrSchoolId: any,
+  schoolIdOrYearId?: number,
+  maybeYearId?: number
+): Promise<void> => {
+  let client: any = db;
+  let schoolId: number;
+  let yearId: number;
 
-  const periodsRes = await client.query(
-    `SELECT id_periodo, nombre, estado, porcentaje, trimestre, mes_inicio, dia_inicio, mes_fin, dia_fin
-     FROM periodo_academico
-     WHERE id_colegio = $1 AND id_anio = $2
-     ORDER BY trimestre ASC, id_periodo ASC`,
-    [schoolId, yearId]
-  );
-  const periods = periodsRes.rows;
+  if (typeof clientOrSchoolId === "number") {
+    schoolId = clientOrSchoolId;
+    yearId = schoolIdOrYearId!;
+  } else {
+    client = clientOrSchoolId || db;
+    schoolId = schoolIdOrYearId!;
+    yearId = maybeYearId!;
+  }
+
+  const yearRow = await client
+    .selectFrom("anio_lectivo")
+    .select(["id_anio", "calendario", "tipo_calendario", "estado"])
+    .where("id_anio", "=", yearId)
+    .where("id_colegio", "=", schoolId)
+    .executeTakeFirst();
+
+  if (!yearRow || yearRow.estado === "CERRADO") return;
+  const calendarType = yearRow.tipo_calendario || "A";
+
+  const periods = await client
+    .selectFrom("periodo_academico")
+    .select([
+      "id_periodo",
+      "nombre",
+      "estado",
+      "porcentaje",
+      "trimestre",
+      "mes_inicio",
+      "dia_inicio",
+      "mes_fin",
+      "dia_fin",
+    ])
+    .where("id_colegio", "=", schoolId)
+    .where("id_anio", "=", yearId)
+    .orderBy("trimestre", "asc")
+    .orderBy("id_periodo", "asc")
+    .execute();
 
   const now = new Date();
   const currentMonth = now.getMonth() + 1; // 1-12
@@ -118,7 +159,7 @@ export const autoSwitchPeriodsForYear = async (client: any, schoolId: number, ye
       const mesFin = Number(p.mes_fin);
       const diaFin = Number(p.dia_fin);
 
-      if (calendarType === 'A') {
+      if (calendarType === "A") {
         const nowVal = currentMonth * 100 + currentDay;
         const startVal = mesInicio * 100 + diaInicio;
         const endVal = mesFin * 100 + diaFin;
@@ -127,7 +168,7 @@ export const autoSwitchPeriodsForYear = async (client: any, schoolId: number, ye
           break;
         }
       } else {
-        const normalizeMonth = (m: number) => m >= 8 ? m - 7 : m + 5;
+        const normalizeMonth = (m: number) => (m >= 8 ? m - 7 : m + 5);
         const nowNorm = normalizeMonth(currentMonth) * 100 + currentDay;
         const startNorm = normalizeMonth(mesInicio) * 100 + diaInicio;
         const endNorm = normalizeMonth(mesFin) * 100 + diaFin;
@@ -144,75 +185,77 @@ export const autoSwitchPeriodsForYear = async (client: any, schoolId: number, ye
     let nextState = p.estado;
 
     if (p.id_periodo === periodIdToOpen) {
-      if (p.estado === 'PENDIENTE') {
+      if (p.estado === "PENDIENTE") {
         const previousPeriod = i > 0 ? periods[i - 1] : null;
-        if (!previousPeriod || previousPeriod.estado === 'CERRADO') {
-          nextState = 'ABIERTO';
+        if (!previousPeriod || previousPeriod.estado === "CERRADO") {
+          nextState = "ABIERTO";
         }
-      } else if (p.estado === 'CERRADO') {
-        nextState = 'CERRADO';
+      } else if (p.estado === "CERRADO") {
+        nextState = "CERRADO";
       } else {
-        nextState = 'ABIERTO';
+        nextState = "ABIERTO";
       }
     } else {
-      if (p.estado === 'ABIERTO') {
-        nextState = 'CERRADO';
+      if (p.estado === "ABIERTO") {
+        nextState = "CERRADO";
       }
     }
 
     if (nextState !== p.estado) {
-      await client.query(
-        `UPDATE periodo_academico SET estado = $1::estado_periodo WHERE id_periodo = $2`,
-        [nextState, p.id_periodo]
-      );
+      await client
+        .updateTable("periodo_academico")
+        .set({ estado: nextState as any })
+        .where("id_periodo", "=", p.id_periodo)
+        .execute();
     }
   }
 };
 
 export const ensureAcademicYearForSchool = async (schoolId: number): Promise<number> => {
-  const existing = await pool.query(
-    `SELECT id_anio
-     FROM anio_lectivo
-     WHERE id_colegio = $1 AND estado = 'ABIERTO'
-     ORDER BY id_anio DESC
-     LIMIT 1`,
-    [schoolId]
-  );
+  const existing = await db
+    .selectFrom("anio_lectivo")
+    .select("id_anio")
+    .where("id_colegio", "=", schoolId)
+    .where("estado", "=", "ABIERTO")
+    .orderBy("id_anio", "desc")
+    .limit(1)
+    .executeTakeFirst();
 
-  if (existing.rows.length > 0) {
-    return Number(existing.rows[0].id_anio);
+  if (existing) {
+    return Number(existing.id_anio);
   }
 
-  const fallback = await pool.query(
-    `SELECT id_anio
-     FROM anio_lectivo
-     WHERE id_colegio = $1
-     ORDER BY id_anio DESC
-     LIMIT 1`,
-    [schoolId]
-  );
+  const fallback = await db
+    .selectFrom("anio_lectivo")
+    .select("id_anio")
+    .where("id_colegio", "=", schoolId)
+    .orderBy("id_anio", "desc")
+    .limit(1)
+    .executeTakeFirst();
 
-  if (fallback.rows.length > 0) {
-    return Number(fallback.rows[0].id_anio);
+  if (fallback) {
+    return Number(fallback.id_anio);
   }
 
   const currentYear = new Date().getFullYear();
-  const created = await pool.query(
-    `INSERT INTO anio_lectivo (calendario, id_colegio, tipo_calendario, estado)
-     VALUES ($1, $2, 'A', 'ABIERTO')
-     RETURNING id_anio`,
-    [String(currentYear), schoolId]
-  );
+  const created = await db
+    .insertInto("anio_lectivo")
+    .values({
+      calendario: String(currentYear),
+      id_colegio: schoolId,
+      tipo_calendario: "A",
+      estado: "ABIERTO",
+    })
+    .returning("id_anio")
+    .executeTakeFirstOrThrow();
 
-  return Number(created.rows[0].id_anio);
+  return Number(created.id_anio);
 };
 
 export const ensureSchoolSettingsTable = async () => {
   try {
-    await pool.query(
-      `ALTER TABLE public.configuracion_colegio 
-       ADD COLUMN IF NOT EXISTS materias_reprobatorias_promocion INTEGER NOT NULL DEFAULT 3`
-    );
+    await sql`ALTER TABLE public.configuracion_colegio 
+       ADD COLUMN IF NOT EXISTS materias_reprobatorias_promocion INTEGER NOT NULL DEFAULT 3`.execute(db);
   } catch (err) {
     console.error("Error al asegurar columna materias_reprobatorias_promocion:", err);
   }
@@ -225,38 +268,57 @@ export const ensureAcademicPeriodPendingStatus = async () => {};
 export const ensureSchoolDefaultSettings = async (schoolId: number) => {
   await ensureSchoolSettingsTable();
 
-  const existing = await pool.query(
-    `SELECT id_colegio, nota_minima, nota_maxima, nota_aprobacion, escala_modo, COALESCE(materias_reprobatorias_promocion, 3) AS materias_reprobatorias_promocion
-     FROM configuracion_colegio
-     WHERE id_colegio = $1`,
-    [schoolId]
-  );
+  const existing = await db
+    .selectFrom("configuracion_colegio")
+    .select([
+      "id_colegio",
+      "nota_minima",
+      "nota_maxima",
+      "nota_aprobacion",
+      "escala_modo",
+      sql<number>`COALESCE(materias_reprobatorias_promocion, 3)`.as("materias_reprobatorias_promocion"),
+    ])
+    .where("id_colegio", "=", schoolId)
+    .executeTakeFirst();
 
-  if (existing.rows.length > 0) {
-    return existing.rows[0];
+  if (existing) {
+    return existing;
   }
 
-  const scaleBoundsRes = await pool.query(
-    `SELECT
-       MIN(valor_minimo)::numeric AS nota_minima,
-       MAX(valor_maximo)::numeric AS nota_maxima
-     FROM escala_valoracion
-     WHERE id_colegio = $1`,
-    [schoolId]
-  );
+  const scaleBoundsRes = await db
+    .selectFrom("escala_valoracion")
+    .select([
+      sql<string | number>`MIN(valor_minimo)::numeric`.as("nota_minima"),
+      sql<string | number>`MAX(valor_maximo)::numeric`.as("nota_maxima"),
+    ])
+    .where("id_colegio", "=", schoolId)
+    .executeTakeFirst();
 
-  const inferredMin = scaleBoundsRes.rows[0]?.nota_minima !== null ? Number(scaleBoundsRes.rows[0].nota_minima) : 0;
-  const inferredMax = scaleBoundsRes.rows[0]?.nota_maxima !== null ? Number(scaleBoundsRes.rows[0].nota_maxima) : 5;
+  const inferredMin = scaleBoundsRes?.nota_minima !== null && scaleBoundsRes?.nota_minima !== undefined ? Number(scaleBoundsRes.nota_minima) : 0;
+  const inferredMax = scaleBoundsRes?.nota_maxima !== null && scaleBoundsRes?.nota_maxima !== undefined ? Number(scaleBoundsRes.nota_maxima) : 5;
   const inferredApproval = inferredMin <= 3 && 3 <= inferredMax ? 3 : Number(((inferredMin + inferredMax) / 2).toFixed(1));
 
-  const created = await pool.query(
-    `INSERT INTO configuracion_colegio (id_colegio, nota_minima, nota_maxima, nota_aprobacion, escala_modo, materias_reprobatorias_promocion)
-     VALUES ($1, $2, $3, $4, 'AUTOMATICO', 3)
-     RETURNING id_colegio, nota_minima, nota_maxima, nota_aprobacion, escala_modo, materias_reprobatorias_promocion`,
-    [schoolId, inferredMin, inferredMax, inferredApproval]
-  );
+  const created = await db
+    .insertInto("configuracion_colegio")
+    .values({
+      id_colegio: schoolId,
+      nota_minima: inferredMin,
+      nota_maxima: inferredMax,
+      nota_aprobacion: inferredApproval,
+      escala_modo: "AUTOMATICO",
+      materias_reprobatorias_promocion: 3,
+    })
+    .returning([
+      "id_colegio",
+      "nota_minima",
+      "nota_maxima",
+      "nota_aprobacion",
+      "escala_modo",
+      "materias_reprobatorias_promocion",
+    ])
+    .executeTakeFirstOrThrow();
 
-  return created.rows[0];
+  return created;
 };
 
 export const roundToOne = (value: number): number => Number(value.toFixed(1));
@@ -329,7 +391,7 @@ export const assignScaleForScore = <T extends { id_escalavaloracion: number; val
 };
 
 export const syncSchoolScalesAndGrades = async (
-  client: PoolClient,
+  client: any,
   schoolId: number,
   previousMin: number,
   previousMax: number,
@@ -340,15 +402,14 @@ export const syncSchoolScalesAndGrades = async (
   manualBreaks?: { basicMax?: number | null; altoMax?: number | null }
 ) => {
   // Permitir bypass administrativo de triggers para sincronización global de escalas
-  await client.query("SET LOCAL my.app.bypass_triggers = 'true'");
+  await sql`SET LOCAL my.app.bypass_triggers = 'true'`.execute(client);
 
-  const previousScalesRes = await client.query(
-    `SELECT id_escalavaloracion, nivel
-     FROM escala_valoracion
-     WHERE id_colegio = $1
-     ORDER BY valor_minimo`,
-    [schoolId]
-  );
+  const previousScales = await client
+    .selectFrom("escala_valoracion")
+    .select(["id_escalavaloracion", "nivel"])
+    .where("id_colegio", "=", schoolId)
+    .orderBy("valor_minimo", "asc")
+    .execute();
 
   const nextScalesDraft =
     scaleMode === "MANUAL"
@@ -357,120 +418,123 @@ export const syncSchoolScalesAndGrades = async (
 
   let nextScales: { id_escalavaloracion: number; nivel: string; valor_minimo: number; valor_maximo: number }[] = [];
 
-  if (previousScalesRes.rows.length === nextScalesDraft.length) {
-    for (let i = 0; i < previousScalesRes.rows.length; i++) {
-      const existingId = previousScalesRes.rows[i].id_escalavaloracion;
+  if (previousScales.length === nextScalesDraft.length) {
+    for (let i = 0; i < previousScales.length; i++) {
+      const existingId = previousScales[i].id_escalavaloracion;
       const draft = nextScalesDraft[i];
-      await client.query(
-        `UPDATE escala_valoracion
-         SET nivel = $1, valor_minimo = $2, valor_maximo = $3
-         WHERE id_escalavaloracion = $4`,
-        [draft.nivel, draft.valor_minimo, draft.valor_maximo, existingId]
-      );
+      await client
+        .updateTable("escala_valoracion")
+        .set({
+          nivel: draft.nivel as any,
+          valor_minimo: draft.valor_minimo,
+          valor_maximo: draft.valor_maximo,
+        })
+        .where("id_escalavaloracion", "=", existingId)
+        .execute();
       nextScales.push({ id_escalavaloracion: existingId, ...draft });
     }
   } else {
-    await client.query(
-      `UPDATE notas_actividad SET id_escalavaloracion = NULL WHERE id_colegio = $1`,
-      [schoolId]
-    );
-    if (previousScalesRes.rows.length > 0) {
-      const oldIds = previousScalesRes.rows.map((r) => Number(r.id_escalavaloracion));
-      await client.query(
-        `DELETE FROM escala_valoracion WHERE id_escalavaloracion = ANY($1::int[])`,
-        [oldIds]
-      );
+    await client
+      .updateTable("notas_actividad")
+      .set({ id_escalavaloracion: null })
+      .where("id_colegio", "=", schoolId)
+      .execute();
+
+    if (previousScales.length > 0) {
+      const oldIds = previousScales.map((r: any) => Number(r.id_escalavaloracion));
+      await client
+        .deleteFrom("escala_valoracion")
+        .where("id_escalavaloracion", "in", oldIds)
+        .execute();
     }
-    const createdRes = await client.query(
-      `INSERT INTO escala_valoracion (nivel, valor_minimo, valor_maximo, id_colegio)
-       VALUES ($1, $2, $3, $4), ($5, $6, $7, $4), ($8, $9, $10, $4), ($11, $12, $13, $4)
-       RETURNING id_escalavaloracion, nivel, valor_minimo, valor_maximo`,
-      [
-        nextScalesDraft[0].nivel, nextScalesDraft[0].valor_minimo, nextScalesDraft[0].valor_maximo,
-        schoolId,
-        nextScalesDraft[1].nivel, nextScalesDraft[1].valor_minimo, nextScalesDraft[1].valor_maximo,
-        nextScalesDraft[2].nivel, nextScalesDraft[2].valor_minimo, nextScalesDraft[2].valor_maximo,
-        nextScalesDraft[3].nivel, nextScalesDraft[3].valor_minimo, nextScalesDraft[3].valor_maximo,
-      ]
-    );
-    nextScales = createdRes.rows;
+
+    const createdRes = await client
+      .insertInto("escala_valoracion")
+      .values(
+        nextScalesDraft.map((d: any) => ({
+          nivel: d.nivel as any,
+          valor_minimo: d.valor_minimo,
+          valor_maximo: d.valor_maximo,
+          id_colegio: schoolId,
+        }))
+      )
+      .returning(["id_escalavaloracion", "nivel", "valor_minimo", "valor_maximo"])
+      .execute();
+
+    nextScales = createdRes;
   }
 
-  const notesRes = await client.query(
-    `SELECT id_notaactividad, nota
-     FROM notas_actividad
-     WHERE id_colegio = $1
-     FOR UPDATE`,
-    [schoolId]
-  );
+  const notesRes = await client
+    .selectFrom("notas_actividad")
+    .select(["id_notaactividad", "nota"])
+    .where("id_colegio", "=", schoolId)
+    .execute();
 
   const previousRange = previousMax - previousMin;
   const nextRange = nextMax - nextMin;
 
-  for (const row of notesRes.rows) {
+  for (const row of notesRes) {
     const currentScore = Number(row.nota);
     const ratio = previousRange > 0 ? (currentScore - previousMin) / previousRange : 0;
     const normalizedRatio = clamp(ratio, 0, 1);
     const rescaledScore = roundToOne(nextMin + normalizedRatio * nextRange);
     const scale = assignScaleForScore(rescaledScore, nextScales);
 
-    await client.query(
-      `UPDATE notas_actividad
-       SET nota = $1,
-           id_escalavaloracion = $2
-       WHERE id_notaactividad = $3`,
-      [rescaledScore, scale.id_escalavaloracion, row.id_notaactividad]
-    );
+    await client
+      .updateTable("notas_actividad")
+      .set({
+        nota: rescaledScore,
+        id_escalavaloracion: scale.id_escalavaloracion,
+      })
+      .where("id_notaactividad", "=", row.id_notaactividad)
+      .execute();
   }
 
-  const criteriaNotesRes = await client.query(
-    `SELECT id_nota_criterio, nota
-     FROM nota_criterio
-     WHERE id_colegio = $1
-     FOR UPDATE`,
-    [schoolId]
-  );
+  const criteriaNotesRes = await client
+    .selectFrom("nota_criterio")
+    .select(["id_nota_criterio", "nota"])
+    .where("id_colegio", "=", schoolId)
+    .execute();
 
-  for (const row of criteriaNotesRes.rows) {
+  for (const row of criteriaNotesRes) {
     const currentScore = Number(row.nota);
     const ratio = previousRange > 0 ? (currentScore - previousMin) / previousRange : 0;
     const normalizedRatio = clamp(ratio, 0, 1);
     const rescaledScore = roundToOne(nextMin + normalizedRatio * nextRange);
 
-    await client.query(
-      `UPDATE nota_criterio
-       SET nota = $1
-       WHERE id_nota_criterio = $2`,
-      [rescaledScore, row.id_nota_criterio]
-    );
+    await client
+      .updateTable("nota_criterio")
+      .set({
+        nota: rescaledScore,
+      })
+      .where("id_nota_criterio", "=", row.id_nota_criterio)
+      .execute();
   }
 
-  const resultsRes = await client.query(
-    `SELECT ra.id_resultado, ra.promedio
-     FROM resultado_academico ra
-     JOIN detalle_grados dg ON dg.id_detallegrado = ra.id_detallegrado
-     WHERE dg.id_colegio = $1
-     FOR UPDATE OF ra`,
-    [schoolId]
-  );
+  const resultsRes = await client
+    .selectFrom("resultado_academico as ra")
+    .innerJoin("detalle_grados as dg", "dg.id_detallegrado", "ra.id_detallegrado")
+    .select(["ra.id_resultado", "ra.promedio"])
+    .where("dg.id_colegio", "=", schoolId)
+    .execute();
 
-  for (const row of resultsRes.rows) {
+  for (const row of resultsRes) {
     const currentScore = Number(row.promedio);
     const ratio = previousRange > 0 ? (currentScore - previousMin) / previousRange : 0;
     const normalizedRatio = clamp(ratio, 0, 1);
     const rescaledScore = Number((nextMin + normalizedRatio * nextRange).toFixed(2));
 
-    await client.query(
-      `UPDATE resultado_academico
-       SET promedio = $1
-       WHERE id_resultado = $2`,
-      [rescaledScore, row.id_resultado]
-    );
+    await client
+      .updateTable("resultado_academico")
+      .set({
+        promedio: rescaledScore,
+      })
+      .where("id_resultado", "=", row.id_resultado)
+      .execute();
   }
 
   return nextScales;
 };
-
 export const getUserEligibleAcademicYears = async (
   userId: number,
   userEmail: string,
@@ -482,137 +546,144 @@ export const getUserEligibleAcademicYears = async (
   );
   
   if (isDirectivoOrAdmin) {
-    const allYears = await pool.query<{ id_anio: number }>(
-      `SELECT id_anio FROM anio_lectivo WHERE id_colegio = $1 ORDER BY id_anio DESC`,
-      [schoolId]
-    );
-    return allYears.rows.map(r => Number(r.id_anio));
+    const allYears = await db
+      .selectFrom("anio_lectivo")
+      .select("id_anio")
+      .where("id_colegio", "=", schoolId)
+      .orderBy("id_anio", "desc")
+      .execute();
+    return allYears.map(r => Number(r.id_anio));
   }
 
   const eligibleYearIds = new Set<number>();
 
   // 1. Student enrollments
   if (userRoles.includes('estudiante')) {
-    const studentYears = await pool.query<{ id_anio: number }>(
-      `SELECT DISTINCT m.id_anio 
-       FROM matricula m
-       JOIN estudiante e ON e.id_estudiante = m.id_estudiante
-       LEFT JOIN usuario u ON u.id_usuario = e.id_usuario
-       WHERE (e.id_usuario = $1 OR UPPER(u.email) = UPPER($2)) AND m.id_colegio = $3`,
-      [userId, userEmail, schoolId]
-    );
-    studentYears.rows.forEach(r => eligibleYearIds.add(Number(r.id_anio)));
+    const studentYears = await db
+      .selectFrom("matricula as m")
+      .innerJoin("estudiante as e", "e.id_estudiante", "m.id_estudiante")
+      .leftJoin("usuario as u", "u.id_usuario", "e.id_usuario")
+      .select("m.id_anio")
+      .distinct()
+      .where((eb) => eb.or([
+        eb("e.id_usuario", "=", userId),
+        eb(sql`UPPER(u.email)`, "=", userEmail.toUpperCase())
+      ]))
+      .where("m.id_colegio", "=", schoolId)
+      .execute();
+    studentYears.forEach(r => eligibleYearIds.add(Number(r.id_anio)));
   }
 
   // 2. Parent / Acudiente children enrollments
   if (userRoles.includes('padre')) {
-    const parentYears = await pool.query<{ id_anio: number }>(
-      `SELECT DISTINCT m.id_anio
-       FROM matricula m
-       LEFT JOIN estudiante e ON e.id_estudiante = m.id_estudiante
-       LEFT JOIN detalle_padrefamilia dpf ON dpf.id_estudiante = e.id_estudiante
-       LEFT JOIN padre_familia pf ON pf.id_padrefamilia = dpf.id_padrefamilia
-       LEFT JOIN usuario u ON u.id_usuario = pf.id_usuario
-       WHERE (pf.id_usuario = $1 OR UPPER(u.email) = UPPER($2) OR UPPER(m.correo_padre) = UPPER($2))
-         AND m.id_colegio = $3`,
-      [userId, userEmail, schoolId]
-    );
-    parentYears.rows.forEach(r => eligibleYearIds.add(Number(r.id_anio)));
+    const parentYears = await db
+      .selectFrom("matricula as m")
+      .leftJoin("estudiante as e", "e.id_estudiante", "m.id_estudiante")
+      .leftJoin("detalle_padrefamilia as dpf", "dpf.id_estudiante", "e.id_estudiante")
+      .leftJoin("padre_familia as pf", "pf.id_padrefamilia", "dpf.id_padrefamilia")
+      .leftJoin("usuario as u", "u.id_usuario", "pf.id_usuario")
+      .select("m.id_anio")
+      .distinct()
+      .where((eb) => eb.or([
+        eb("pf.id_usuario", "=", userId),
+        eb(sql`UPPER(u.email)`, "=", userEmail.toUpperCase()),
+        eb(sql`UPPER(m.correo_padre)`, "=", userEmail.toUpperCase())
+      ]))
+      .where("m.id_colegio", "=", schoolId)
+      .execute();
+    parentYears.forEach(r => eligibleYearIds.add(Number(r.id_anio)));
   }
 
   // 3. Teacher participation in academic activities/evaluations/competencies/assignments
   if (userRoles.includes('docente')) {
-    const teacherYears = await pool.query<{ id_anio: number }>(
-      `SELECT DISTINCT dg.id_anio
-       FROM detalle_grados dg
-       JOIN docente d ON d.id_docente = dg.id_docente
-       LEFT JOIN usuario u ON u.id_usuario = d.id_usuario
-       WHERE (d.id_usuario = $1 OR UPPER(u.email) = UPPER($2))
-         AND dg.id_colegio = $3
-         AND dg.id_anio IS NOT NULL
+    const teacherYears = await sql<{ id_anio: number }>`
+      SELECT DISTINCT dg.id_anio
+      FROM detalle_grados dg
+      JOIN docente d ON d.id_docente = dg.id_docente
+      LEFT JOIN usuario u ON u.id_usuario = d.id_usuario
+      WHERE (d.id_usuario = ${userId} OR UPPER(u.email) = UPPER(${userEmail}))
+        AND dg.id_colegio = ${schoolId}
+        AND dg.id_anio IS NOT NULL
 
-       UNION
+      UNION
 
-       SELECT DISTINCT p.id_anio
-       FROM periodo_academico p
-       JOIN actividad_materia am ON am.id_periodo = p.id_periodo
-       JOIN detalle_grados dg ON dg.id_detallegrado = am.id_detallegrado
-       JOIN docente d ON d.id_docente = dg.id_docente
-       LEFT JOIN usuario u ON u.id_usuario = d.id_usuario
-       WHERE (d.id_usuario = $1 OR UPPER(u.email) = UPPER($2)) AND p.id_colegio = $3
-       
-       UNION
-       
-       SELECT DISTINCT p.id_anio
-       FROM registro_asistencia ra
-       JOIN detalle_grados dg ON dg.id_detallegrado = ra.id_detallegrado
-       JOIN periodo_academico p ON p.id_colegio = dg.id_colegio
-       JOIN docente d ON d.id_docente = dg.id_docente
-       LEFT JOIN usuario u ON u.id_usuario = d.id_usuario
-       WHERE (d.id_usuario = $1 OR UPPER(u.email) = UPPER($2)) AND p.id_colegio = $3
-       
-       UNION
-       
-       SELECT DISTINCT p.id_anio
-       FROM cierre_materia cm
-       JOIN periodo_academico p ON p.id_periodo = cm.id_periodo
-       JOIN detalle_grados dg ON dg.id_detallegrado = cm.id_detallegrado
-       JOIN docente d ON d.id_docente = dg.id_docente
-       LEFT JOIN usuario u ON u.id_usuario = d.id_usuario
-       WHERE (d.id_usuario = $1 OR UPPER(u.email) = UPPER($2)) AND p.id_colegio = $3
+      SELECT DISTINCT p.id_anio
+      FROM periodo_academico p
+      JOIN actividad_materia am ON am.id_periodo = p.id_periodo
+      JOIN detalle_grados dg ON dg.id_detallegrado = am.id_detallegrado
+      JOIN docente d ON d.id_docente = dg.id_docente
+      LEFT JOIN usuario u ON u.id_usuario = d.id_usuario
+      WHERE (d.id_usuario = ${userId} OR UPPER(u.email) = UPPER(${userEmail})) AND p.id_colegio = ${schoolId}
+      
+      UNION
+      
+      SELECT DISTINCT p.id_anio
+      FROM registro_asistencia ra
+      JOIN detalle_grados dg ON dg.id_detallegrado = ra.id_detallegrado
+      JOIN periodo_academico p ON p.id_colegio = dg.id_colegio
+      JOIN docente d ON d.id_docente = dg.id_docente
+      LEFT JOIN usuario u ON u.id_usuario = d.id_usuario
+      WHERE (d.id_usuario = ${userId} OR UPPER(u.email) = UPPER(${userEmail})) AND p.id_colegio = ${schoolId}
+      
+      UNION
+      
+      SELECT DISTINCT p.id_anio
+      FROM cierre_materia cm
+      JOIN periodo_academico p ON p.id_periodo = cm.id_periodo
+      JOIN detalle_grados dg ON dg.id_detallegrado = cm.id_detallegrado
+      JOIN docente d ON d.id_docente = dg.id_docente
+      LEFT JOIN usuario u ON u.id_usuario = d.id_usuario
+      WHERE (d.id_usuario = ${userId} OR UPPER(u.email) = UPPER(${userEmail})) AND p.id_colegio = ${schoolId}
 
-       UNION
+      UNION
 
-       SELECT DISTINCT p.id_anio
-       FROM observacion_estudiante oe
-       JOIN detalle_grados dg ON dg.id_detallegrado = oe.id_detallegrado
-       JOIN periodo_academico p ON p.id_periodo = oe.id_periodo
-       JOIN docente d ON d.id_docente = dg.id_docente
-       LEFT JOIN usuario u ON u.id_usuario = d.id_usuario
-       WHERE (d.id_usuario = $1 OR UPPER(u.email) = UPPER($2)) AND p.id_colegio = $3`,
-      [userId, userEmail, schoolId]
-    );
+      SELECT DISTINCT p.id_anio
+      FROM observacion_estudiante oe
+      JOIN detalle_grados dg ON dg.id_detallegrado = oe.id_detallegrado
+      JOIN periodo_academico p ON p.id_periodo = oe.id_periodo
+      JOIN docente d ON d.id_docente = dg.id_docente
+      LEFT JOIN usuario u ON u.id_usuario = d.id_usuario
+      WHERE (d.id_usuario = ${userId} OR UPPER(u.email) = UPPER(${userEmail})) AND p.id_colegio = ${schoolId}
+    `.execute(db);
     teacherYears.rows.forEach(r => eligibleYearIds.add(Number(r.id_anio)));
   }
 
   // Filter out any academic years that ended before the user was registered
   if (eligibleYearIds.size > 0) {
-    const validYearsRes = await pool.query<{ id_anio: number }>(
-      `SELECT al.id_anio
-       FROM anio_lectivo al
-       LEFT JOIN usuario u ON u.id_usuario = $1
-       WHERE al.id_anio = ANY($2::int[])
-         AND (
-           u.fecha_creacion IS NULL OR
-           NOT (
-             EXTRACT(YEAR FROM u.fecha_creacion) > NULLIF(regexp_replace(al.calendario, '\\D', '', 'g'), '')::int
-             OR (al.fecha_fin IS NOT NULL AND DATE(u.fecha_creacion) > al.fecha_fin)
-           )
-         )`,
-      [userId, Array.from(eligibleYearIds)]
-    );
+    const validYearsRes = await sql<{ id_anio: number }>`
+      SELECT al.id_anio
+      FROM anio_lectivo al
+      LEFT JOIN usuario u ON u.id_usuario = ${userId}
+      WHERE al.id_anio = ANY(${Array.from(eligibleYearIds)}::int[])
+        AND (
+          u.fecha_creacion IS NULL OR
+          NOT (
+            EXTRACT(YEAR FROM u.fecha_creacion) > NULLIF(regexp_replace(al.calendario, '\\D', '', 'g'), '')::int
+            OR (al.fecha_fin IS NOT NULL AND DATE(u.fecha_creacion) > al.fecha_fin)
+          )
+        )
+    `.execute(db);
     eligibleYearIds.clear();
     validYearsRes.rows.forEach(r => eligibleYearIds.add(Number(r.id_anio)));
   }
 
   // Fallback: If no history found or filtered out, return active open year valid for creation date
   if (eligibleYearIds.size === 0) {
-    const openYear = await pool.query<{ id_anio: number }>(
-      `SELECT al.id_anio
-       FROM anio_lectivo al
-       LEFT JOIN usuario u ON u.id_usuario = $1
-       WHERE al.id_colegio = $2
-         AND (
-           u.fecha_creacion IS NULL OR
-           NOT (
-             EXTRACT(YEAR FROM u.fecha_creacion) > NULLIF(regexp_replace(al.calendario, '\\D', '', 'g'), '')::int
-             OR (al.fecha_fin IS NOT NULL AND DATE(u.fecha_creacion) > al.fecha_fin)
-           )
-         )
-       ORDER BY CASE WHEN al.estado = 'ABIERTO' THEN 0 ELSE 1 END, al.id_anio DESC
-       LIMIT 1`,
-      [userId, schoolId]
-    );
+    const openYear = await sql<{ id_anio: number }>`
+      SELECT al.id_anio
+      FROM anio_lectivo al
+      LEFT JOIN usuario u ON u.id_usuario = ${userId}
+      WHERE al.id_colegio = ${schoolId}
+        AND (
+          u.fecha_creacion IS NULL OR
+          NOT (
+            EXTRACT(YEAR FROM u.fecha_creacion) > NULLIF(regexp_replace(al.calendario, '\\D', '', 'g'), '')::int
+            OR (al.fecha_fin IS NOT NULL AND DATE(u.fecha_creacion) > al.fecha_fin)
+          )
+        )
+      ORDER BY CASE WHEN al.estado = 'ABIERTO' THEN 0 ELSE 1 END, al.id_anio DESC
+      LIMIT 1
+    `.execute(db);
     if (openYear.rows.length > 0) {
       eligibleYearIds.add(Number(openYear.rows[0].id_anio));
     }

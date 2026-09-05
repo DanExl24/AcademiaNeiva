@@ -1,37 +1,42 @@
 import { Request, Response } from "express";
-import { pool } from "../config/db";
+import { db } from "../config/kysely";
+import { sql } from "kysely";
 
 // Helper to check if period/class is editable
-const checkEditability = async (detailGradeId: number, schoolId: number): Promise<{ editable: boolean; error?: string; periodId?: number }> => {
+const checkEditability = async (
+  detailGradeId: number,
+  schoolId: number
+): Promise<{ editable: boolean; error?: string; periodId?: number }> => {
   // 1. Get open period in open academic year
-  const periodRes = await pool.query(
-    `SELECT pa.id_periodo, pa.nombre 
-     FROM periodo_academico pa
-     JOIN anio_lectivo al ON al.id_anio = pa.id_anio
-     WHERE pa.id_colegio = $1 AND pa.estado = 'ABIERTO' AND al.estado = 'ABIERTO'
-     LIMIT 1`,
-    [schoolId]
-  );
+  const periodRow = await db
+    .selectFrom("periodo_academico as pa")
+    .innerJoin("anio_lectivo as al", "al.id_anio", "pa.id_anio")
+    .select(["pa.id_periodo", "pa.nombre"])
+    .where("pa.id_colegio", "=", schoolId)
+    .where("pa.estado", "=", "ABIERTO")
+    .where("al.estado", "=", "ABIERTO")
+    .limit(1)
+    .executeTakeFirst();
 
-  if (periodRes.rows.length === 0) {
+  if (!periodRow) {
     return { editable: false, error: "No hay un periodo académico y año lectivo abierto para esta institución." };
   }
 
-  const periodId = periodRes.rows[0].id_periodo;
+  const periodId = periodRow.id_periodo;
 
   // 2. Check if teaching assignment is closed
-  const closureRes = await pool.query(
-    `SELECT estado 
-     FROM cierre_materia 
-     WHERE id_detallegrado = $1 AND id_periodo = $2`,
-    [detailGradeId, periodId]
-  );
+  const closureRow = await db
+    .selectFrom("cierre_materia")
+    .select("estado")
+    .where("id_detallegrado", "=", detailGradeId)
+    .where("id_periodo", "=", periodId)
+    .executeTakeFirst();
 
-  if (closureRes.rows.length > 0 && closureRes.rows[0].estado === "CERRADO") {
-    return { 
-      editable: false, 
+  if (closureRow && closureRow.estado === "CERRADO") {
+    return {
+      editable: false,
       error: "El docente ya marcó como completado el registro académico para esta materia en este periodo.",
-      periodId 
+      periodId,
     };
   }
 
@@ -45,19 +50,19 @@ export const getAttendanceByDate = async (req: Request, res: Response): Promise<
   console.log(`[DEV] getAttendanceByDate called - detailGradeId=${detailGradeId}, date=${dateStr}`);
 
   try {
-
     // Get school id from teaching assignment
-    const dgRes = await pool.query(
-      `SELECT id_colegio, id_grupo FROM detalle_grados WHERE id_detallegrado = $1`,
-      [detailGradeId]
-    );
+    const dgRow = await db
+      .selectFrom("detalle_grados")
+      .select(["id_colegio", "id_grupo"])
+      .where("id_detallegrado", "=", detailGradeId)
+      .executeTakeFirst();
 
-    if (dgRes.rows.length === 0) {
+    if (!dgRow) {
       res.status(404).json({ error: "Asignación académica no encontrada" });
       return;
     }
 
-    const { id_colegio, id_grupo } = dgRes.rows[0];
+    const { id_colegio, id_grupo } = dgRow;
 
     const authReq = req as any;
     const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
@@ -68,44 +73,53 @@ export const getAttendanceByDate = async (req: Request, res: Response): Promise<
 
     // Check if editable
     const editCheck = await checkEditability(detailGradeId, id_colegio);
-    
+
     // Past days restriction
-    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+    const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
     const isToday = dateStr === todayStr;
     const editable = editCheck.editable && isToday;
-    const errorReason = !isToday 
+    const errorReason = !isToday
       ? "No está permitido registrar o editar asistencias de fechas anteriores. Solo lectura habilitada."
       : editCheck.error;
 
     // Get all students enrolled in this group/grade
-    const studentsRes = await pool.query(
-      `SELECT e.id_estudiante, e.nombre, e.apellido, u.documento, e.codigo 
-       FROM estudiante e
-       LEFT JOIN usuario u ON e.id_usuario = u.id_usuario
-       JOIN matricula m ON e.id_estudiante = m.id_estudiante
-       WHERE m.id_grupo = $1 AND m.estado IN ('ACTIVA', 'APROBADA')
-       ORDER BY e.apellido, e.nombre`,
-      [id_grupo]
-    );
+    const studentsRows = await db
+      .selectFrom("estudiante as e")
+      .leftJoin("usuario as u", "e.id_usuario", "u.id_usuario")
+      .innerJoin("matricula as m", "e.id_estudiante", "m.id_estudiante")
+      .select(["e.id_estudiante", "e.nombre", "e.apellido", "u.documento", "e.codigo"])
+      .where("m.id_grupo", "=", id_grupo)
+      .where("m.estado", "in", ["ACTIVA", "APROBADA"])
+      .orderBy("e.apellido", "asc")
+      .orderBy("e.nombre", "asc")
+      .execute();
 
     // Get attendance records for this date (including justificacion and hora_llegada)
-    const attendanceRes = await pool.query(
-      `SELECT id_estudiante, estado, justificacion, TO_CHAR(hora_llegada, 'HH24:MI') as hora_llegada 
-       FROM registro_asistencia 
-       WHERE id_detallegrado = $1 AND fecha::date = $2::date`,
-      [detailGradeId, dateStr]
-    );
+    const attendanceRows = await db
+      .selectFrom("registro_asistencia")
+      .select([
+        "id_estudiante",
+        "estado",
+        "justificacion",
+        sql<string>`TO_CHAR(hora_llegada, 'HH24:MI')`.as("hora_llegada"),
+      ])
+      .where("id_detallegrado", "=", detailGradeId)
+      .where(sql<boolean>`fecha::date = ${dateStr}::date`)
+      .execute();
 
-    const attendanceMap = new Map<number, { estado: string; justificacion: string | null; hora_llegada: string | null }>();
-    attendanceRes.rows.forEach(r => {
-      attendanceMap.set(Number(r.id_estudiante), { 
-        estado: r.estado, 
+    const attendanceMap = new Map<
+      number,
+      { estado: string; justificacion: string | null; hora_llegada: string | null }
+    >();
+    attendanceRows.forEach((r) => {
+      attendanceMap.set(Number(r.id_estudiante), {
+        estado: r.estado,
         justificacion: r.justificacion || null,
-        hora_llegada: r.hora_llegada || null
+        hora_llegada: r.hora_llegada || null,
       });
     });
 
-    const studentsWithAttendance = studentsRes.rows.map(s => {
+    const studentsWithAttendance = studentsRows.map((s) => {
       const att = attendanceMap.get(Number(s.id_estudiante));
       return {
         id_estudiante: s.id_estudiante,
@@ -114,52 +128,60 @@ export const getAttendanceByDate = async (req: Request, res: Response): Promise<
         codigo: s.codigo,
         estado: att ? att.estado : null,
         justificacion: att ? att.justificacion : null,
-        hora_llegada: att ? att.hora_llegada : null
+        hora_llegada: att ? att.hora_llegada : null,
       };
     });
 
-    console.log(`[DEV] getAttendanceByDate - id_grupo=${id_grupo}, editable=${editable}, students=${studentsRes.rows.length}`);
+    console.log(
+      `[DEV] getAttendanceByDate - id_grupo=${id_grupo}, editable=${editable}, students=${studentsRows.length}`
+    );
     res.json({
       editable,
       error: errorReason,
       periodId: editCheck.periodId,
-      students: studentsWithAttendance
+      students: studentsWithAttendance,
     });
   } catch (error: any) {
-    console.error(`[DEV] getAttendanceByDate ERROR - detailGradeId=${detailGradeId}, date=${dateStr}:`, error.message, error.detail || '');
+    console.error(
+      `[DEV] getAttendanceByDate ERROR - detailGradeId=${detailGradeId}, date=${dateStr}:`,
+      error.message,
+      error.detail || ""
+    );
     res.status(500).json({ error: "Error en el servidor" });
   }
 };
 
 // POST /api/teacher/attendance
 export const saveAttendance = async (req: Request, res: Response): Promise<void> => {
-  const { detailGradeId, date, records } = req.body; 
-  console.log(`[DEV] saveAttendance called - detailGradeId=${detailGradeId}, date=${date}, records=${Array.isArray(records) ? records.length : 'invalid'}`);
+  const { detailGradeId, date, records } = req.body;
+  console.log(
+    `[DEV] saveAttendance called - detailGradeId=${detailGradeId}, date=${date}, records=${Array.isArray(records) ? records.length : "invalid"}`
+  );
 
   if (!detailGradeId || !date || !Array.isArray(records)) {
     res.status(400).json({ error: "Parámetros inválidos" });
     return;
   }
 
-  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+  const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
   if (date !== todayStr) {
     res.status(409).json({ error: "No está permitido registrar o modificar la asistencia de días pasados." });
     return;
   }
 
-  const client = await pool.connect();
   try {
-    const dgRes = await client.query(
-      `SELECT id_colegio FROM detalle_grados WHERE id_detallegrado = $1`,
-      [detailGradeId]
-    );
+    const dgRow = await db
+      .selectFrom("detalle_grados")
+      .select("id_colegio")
+      .where("id_detallegrado", "=", detailGradeId)
+      .executeTakeFirst();
 
-    if (dgRes.rows.length === 0) {
+    if (!dgRow) {
       res.status(404).json({ error: "Asignación académica no encontrada" });
       return;
     }
 
-    const schoolId = dgRes.rows[0].id_colegio;
+    const schoolId = dgRow.id_colegio;
 
     const authReq = req as any;
     const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
@@ -175,143 +197,156 @@ export const saveAttendance = async (req: Request, res: Response): Promise<void>
       return;
     }
 
-    await client.query("BEGIN");
+    await db.transaction().execute(async (trx) => {
+      // 2.5. Validar que todos los estudiantes a registrar tengan matrícula ACTIVA en el colegio
+      const studentIds = records
+        .map((r: any) => Number(r.id_estudiante))
+        .filter((id: number) => !isNaN(id) && id > 0);
 
-    // 2.5. Validar que todos los estudiantes a registrar tengan matrícula ACTIVA en el colegio
-    const studentIds = records.map((r: any) => Number(r.id_estudiante)).filter((id: number) => !isNaN(id) && id > 0);
-    if (studentIds.length > 0) {
-      const activeEnrollments = await client.query(
-        `SELECT id_estudiante 
-         FROM matricula 
-         WHERE id_estudiante = ANY($1) 
-           AND id_colegio = $2 
-           AND estado IN ('ACTIVA', 'APROBADA')`,
-        [studentIds, schoolId]
-      );
-      const activeSet = new Set(activeEnrollments.rows.map((r: any) => Number(r.id_estudiante)));
-      const invalidStudents = studentIds.filter((id: number) => !activeSet.has(id));
+      if (studentIds.length > 0) {
+        const activeEnrollments = await trx
+          .selectFrom("matricula")
+          .select("id_estudiante")
+          .where("id_estudiante", "in", studentIds)
+          .where("id_colegio", "=", schoolId)
+          .where("estado", "in", ["ACTIVA", "APROBADA"])
+          .execute();
 
-      if (invalidStudents.length > 0) {
-        const namesRes = await client.query(
-          `SELECT nombre, apellido FROM estudiante WHERE id_estudiante = ANY($1)`,
-          [invalidStudents]
-        );
-        const namesStr = namesRes.rows.map((r: any) => `${r.nombre} ${r.apellido}`).join(', ');
-        await client.query("ROLLBACK");
-        client.release();
-        res.status(409).json({
-          error: `No es posible registrar asistencias. Los siguientes estudiantes no cuentan con matrícula activa en esta institución (trasladados o inactivos): ${namesStr}`
-        });
-        return;
-      }
-    }
+        const activeSet = new Set(activeEnrollments.map((r) => Number(r.id_estudiante)));
+        const invalidStudents = studentIds.filter((id: number) => !activeSet.has(id));
 
-    // 3. Enforce 7-block daily limit per student
-    const studentsWithStatus = records.filter(r => r.estado).map(r => Number(r.id_estudiante));
-    if (studentsWithStatus.length > 0) {
-      const limitCheckRes = await client.query(
-        `SELECT ra.id_estudiante, e.nombre, e.apellido, COUNT(*) as count 
-         FROM registro_asistencia ra
-         JOIN estudiante e ON e.id_estudiante = ra.id_estudiante
-         WHERE ra.id_estudiante = ANY($1) 
-           AND ra.fecha::date = $2::date 
-           AND ra.id_detallegrado != $3
-         GROUP BY ra.id_estudiante, e.nombre, e.apellido
-         HAVING COUNT(*) >= 7`,
-        [studentsWithStatus, date, detailGradeId]
-      );
-
-      if (limitCheckRes.rows.length > 0) {
-        const firstExceeded = limitCheckRes.rows[0];
-        const name = `${firstExceeded.nombre} ${firstExceeded.apellido}`;
-        await client.query("ROLLBACK");
-        res.status(409).json({ 
-          error: `El estudiante ${name} ya alcanzó el límite máximo de 7 bloques académicos para el día ${date}. No es posible registrar más asistencias.` 
-        });
-        client.release();
-        return;
-      }
-    }
-
-    // Encontrar la hora de llegada normal de referencia (PRESENTE)
-    let refPresentTime: string | null = null;
-    for (const r of records) {
-      if (r.estado === "PRESENTE" && r.hora_llegada) {
-        if (!refPresentTime || r.hora_llegada < refPresentTime) {
-          refPresentTime = r.hora_llegada;
+        if (invalidStudents.length > 0) {
+          const namesRes = await trx
+            .selectFrom("estudiante")
+            .select(["nombre", "apellido"])
+            .where("id_estudiante", "in", invalidStudents)
+            .execute();
+          const namesStr = namesRes.map((r) => `${r.nombre} ${r.apellido}`).join(", ");
+          throw {
+            statusCode: 409,
+            message: `No es posible registrar asistencias. Los siguientes estudiantes no cuentan con matrícula activa en esta institución (trasladados o inactivos): ${namesStr}`,
+          };
         }
       }
-    }
 
-    if (!refPresentTime) {
-      const dbPresentRes = await client.query(
-        `SELECT MIN(TO_CHAR(hora_llegada, 'HH24:MI')) as min_hora 
-         FROM registro_asistencia 
-         WHERE id_detallegrado = $1 AND fecha::date = $2::date AND estado = 'PRESENTE'`,
-        [detailGradeId, date]
-      );
-      if (dbPresentRes.rows.length && dbPresentRes.rows[0].min_hora) {
-        refPresentTime = dbPresentRes.rows[0].min_hora;
+      // 3. Enforce 7-block daily limit per student
+      const studentsWithStatus = records.filter((r: any) => r.estado).map((r: any) => Number(r.id_estudiante));
+      if (studentsWithStatus.length > 0) {
+        const limitCheckRes = await trx
+          .selectFrom("registro_asistencia as ra")
+          .innerJoin("estudiante as e", "e.id_estudiante", "ra.id_estudiante")
+          .select([
+            "ra.id_estudiante",
+            "e.nombre",
+            "e.apellido",
+            sql<number>`COUNT(*)::int`.as("count"),
+          ])
+          .where("ra.id_estudiante", "in", studentsWithStatus)
+          .where(sql<boolean>`ra.fecha::date = ${date}::date`)
+          .where("ra.id_detallegrado", "!=", detailGradeId)
+          .groupBy(["ra.id_estudiante", "e.nombre", "e.apellido"])
+          .having(sql<number>`COUNT(*)`, ">=", 7)
+          .execute();
+
+        if (limitCheckRes.length > 0) {
+          const firstExceeded = limitCheckRes[0];
+          const name = `${firstExceeded.nombre} ${firstExceeded.apellido}`;
+          throw {
+            statusCode: 409,
+            message: `El estudiante ${name} ya alcanzó el límite máximo de 7 bloques académicos para el día ${date}. No es posible registrar más asistencias.`,
+          };
+        }
       }
-    }
 
-    for (const record of records) {
-      const studentId = Number(record.id_estudiante);
-      const estado = record.estado;
-      const justificacion = record.justificacion || null;
-      const hora_llegada = record.hora_llegada || null;
-
-      if (!estado) {
-        // If estado is null/empty, delete any existing record
-        await client.query(
-          `DELETE FROM registro_asistencia 
-           WHERE id_detallegrado = $1 AND id_estudiante = $2 AND fecha::date = $3::date`,
-          [detailGradeId, studentId, date]
-        );
-      } else {
-        // Validar tardanza
-        if (estado === "TARDE") {
-          if (!hora_llegada) {
-            await client.query("ROLLBACK");
-            res.status(400).json({ error: "La hora de llegada es obligatoria para estudiantes con retraso (Tarde)." });
-            client.release();
-            return;
-          }
-          if (refPresentTime && hora_llegada <= refPresentTime) {
-            await client.query("ROLLBACK");
-            res.status(400).json({ 
-              error: `La hora de llegada del estudiante con retraso (${hora_llegada}) debe ser posterior a la hora de ingreso normal (${refPresentTime}).` 
-            });
-            client.release();
-            return;
+      // Encontrar la hora de llegada normal de referencia (PRESENTE)
+      let refPresentTime: string | null = null;
+      for (const r of records) {
+        if (r.estado === "PRESENTE" && r.hora_llegada) {
+          if (!refPresentTime || r.hora_llegada < refPresentTime) {
+            refPresentTime = r.hora_llegada;
           }
         }
-
-        // Delete first to avoid duplicates
-        await client.query(
-          `DELETE FROM registro_asistencia 
-           WHERE id_detallegrado = $1 AND id_estudiante = $2 AND fecha::date = $3::date`,
-          [detailGradeId, studentId, date]
-        );
-
-        const dbHoraLlegada = (estado === 'PRESENTE' || estado === 'TARDE') ? (hora_llegada || null) : null;
-
-        await client.query(
-          `INSERT INTO registro_asistencia (id_estudiante, id_detallegrado, fecha, estado, id_colegio, justificacion, hora_llegada)
-           VALUES ($1, $2, $3::timestamp with time zone, $4, $5, $6, $7)`,
-          [studentId, detailGradeId, `${date}T12:00:00Z`, estado, schoolId, justificacion, dbHoraLlegada]
-        );
       }
-    }
 
-    await client.query("COMMIT");
+      if (!refPresentTime) {
+        const dbPresentRes = await trx
+          .selectFrom("registro_asistencia")
+          .select(sql<string>`MIN(TO_CHAR(hora_llegada, 'HH24:MI'))`.as("min_hora"))
+          .where("id_detallegrado", "=", detailGradeId)
+          .where(sql<boolean>`fecha::date = ${date}::date`)
+          .where("estado", "=", "PRESENTE")
+          .executeTakeFirst();
+        if (dbPresentRes?.min_hora) {
+          refPresentTime = dbPresentRes.min_hora;
+        }
+      }
+
+      for (const record of records) {
+        const studentId = Number(record.id_estudiante);
+        const estado = record.estado;
+        const justificacion = record.justificacion || null;
+        const hora_llegada = record.hora_llegada || null;
+
+        if (!estado) {
+          // If estado is null/empty, delete any existing record
+          await trx
+            .deleteFrom("registro_asistencia")
+            .where("id_detallegrado", "=", detailGradeId)
+            .where("id_estudiante", "=", studentId)
+            .where(sql<boolean>`fecha::date = ${date}::date`)
+            .execute();
+        } else {
+          // Validar tardanza
+          if (estado === "TARDE") {
+            if (!hora_llegada) {
+              throw {
+                statusCode: 400,
+                message: "La hora de llegada es obligatoria para estudiantes con retraso (Tarde).",
+              };
+            }
+            if (refPresentTime && hora_llegada <= refPresentTime) {
+              throw {
+                statusCode: 400,
+                message: `La hora de llegada del estudiante con retraso (${hora_llegada}) debe ser posterior a la hora de ingreso normal (${refPresentTime}).`,
+              };
+            }
+          }
+
+          // Delete first to avoid duplicates
+          await trx
+            .deleteFrom("registro_asistencia")
+            .where("id_detallegrado", "=", detailGradeId)
+            .where("id_estudiante", "=", studentId)
+            .where(sql<boolean>`fecha::date = ${date}::date`)
+            .execute();
+
+          const dbHoraLlegada =
+            estado === "PRESENTE" || estado === "TARDE" ? hora_llegada || null : null;
+
+          await trx
+            .insertInto("registro_asistencia")
+            .values({
+              id_estudiante: studentId,
+              id_detallegrado: detailGradeId,
+              fecha: sql`${`${date}T12:00:00Z`}::timestamp with time zone` as any,
+              estado: estado as any,
+              id_colegio: schoolId,
+              justificacion: justificacion || null,
+              hora_llegada: dbHoraLlegada ? (sql`${dbHoraLlegada}::time` as any) : null,
+            })
+            .execute();
+        }
+      }
+    });
+
     res.json({ message: "Asistencia guardada exitosamente" });
   } catch (error: any) {
-    await client.query("ROLLBACK");
+    if (error.statusCode) {
+      res.status(error.statusCode).json({ error: error.message });
+      return;
+    }
     console.error("Error saving attendance:", error);
     res.status(500).json({ error: "Error al guardar la asistencia" });
-  } finally {
-    client.release();
   }
 };
 
@@ -321,78 +356,84 @@ export const getAttendanceHistory = async (req: Request, res: Response): Promise
   console.log(`[DEV] getAttendanceHistory called - detailGradeId=${detailGradeId}`);
 
   try {
-    const dgRes = await pool.query(
-      `SELECT id_grupo FROM detalle_grados WHERE id_detallegrado = $1`,
-      [detailGradeId]
-    );
+    const dgRow = await db
+      .selectFrom("detalle_grados")
+      .select("id_grupo")
+      .where("id_detallegrado", "=", detailGradeId)
+      .executeTakeFirst();
 
-    if (dgRes.rows.length === 0) {
+    if (!dgRow) {
       res.status(404).json({ error: "Asignación académica no encontrada" });
       return;
     }
 
-    const { id_grupo } = dgRes.rows[0];
+    const { id_grupo } = dgRow;
 
     // Get all students
-    const studentsRes = await pool.query(
-      `SELECT e.id_estudiante, e.nombre, e.apellido, u.documento, e.codigo 
-       FROM estudiante e
-       LEFT JOIN usuario u ON e.id_usuario = u.id_usuario
-       JOIN matricula m ON e.id_estudiante = m.id_estudiante
-       WHERE m.id_grupo = $1 AND m.estado IN ('ACTIVA', 'APROBADA')
-       ORDER BY e.apellido, e.nombre`,
-      [id_grupo]
-    );
+    const studentsRows = await db
+      .selectFrom("estudiante as e")
+      .leftJoin("usuario as u", "e.id_usuario", "u.id_usuario")
+      .innerJoin("matricula as m", "e.id_estudiante", "m.id_estudiante")
+      .select(["e.id_estudiante", "e.nombre", "e.apellido", "u.documento", "e.codigo"])
+      .where("m.id_grupo", "=", id_grupo)
+      .where("m.estado", "in", ["ACTIVA", "APROBADA"])
+      .orderBy("e.apellido", "asc")
+      .orderBy("e.nombre", "asc")
+      .execute();
 
     // Get history counts
-    const historyRes = await pool.query(
-      `SELECT 
-         id_estudiante,
-         COUNT(*) FILTER (WHERE estado = 'PRESENTE') as presentes,
-         COUNT(*) FILTER (WHERE estado = 'AUSENTE') as ausentes,
-         COUNT(*) FILTER (WHERE estado = 'TARDE') as tardes,
-         COUNT(*) FILTER (WHERE estado = 'JUSTIFICADA') as justificadas
-       FROM registro_asistencia
-       WHERE id_detallegrado = $1
-       GROUP BY id_estudiante`,
-      [detailGradeId]
-    );
+    const historyRows = await db
+      .selectFrom("registro_asistencia")
+      .select([
+        "id_estudiante",
+        sql<number>`COUNT(*) FILTER (WHERE estado = 'PRESENTE')`.as("presentes"),
+        sql<number>`COUNT(*) FILTER (WHERE estado = 'AUSENTE')`.as("ausentes"),
+        sql<number>`COUNT(*) FILTER (WHERE estado = 'TARDE')`.as("tardes"),
+        sql<number>`COUNT(*) FILTER (WHERE estado = 'JUSTIFICADA')`.as("justificadas"),
+      ])
+      .where("id_detallegrado", "=", detailGradeId)
+      .groupBy("id_estudiante")
+      .execute();
 
     // Get distinct dates with attendance recorded
-    const datesRes = await pool.query(
-      `SELECT DISTINCT TO_CHAR(fecha, 'YYYY-MM-DD') as date_recorded
-       FROM registro_asistencia
-       WHERE id_detallegrado = $1
-       ORDER BY date_recorded DESC`,
-      [detailGradeId]
-    );
+    const datesRows = await db
+      .selectFrom("registro_asistencia")
+      .select(sql<string>`DISTINCT TO_CHAR(fecha, 'YYYY-MM-DD')`.as("date_recorded"))
+      .where("id_detallegrado", "=", detailGradeId)
+      .orderBy("date_recorded", "desc")
+      .execute();
 
     const countsMap = new Map<number, any>();
-    historyRes.rows.forEach(r => {
+    historyRows.forEach((r) => {
       countsMap.set(Number(r.id_estudiante), {
         presentes: Number(r.presentes),
         ausentes: Number(r.ausentes),
         tardes: Number(r.tardes),
-        justificadas: Number(r.justificadas)
+        justificadas: Number(r.justificadas),
       });
     });
 
-    const studentsHistory = studentsRes.rows.map(s => {
-      const counts = countsMap.get(Number(s.id_estudiante)) || { presentes: 0, ausentes: 0, tardes: 0, justificadas: 0 };
+    const studentsHistory = studentsRows.map((s) => {
+      const counts = countsMap.get(Number(s.id_estudiante)) || {
+        presentes: 0,
+        ausentes: 0,
+        tardes: 0,
+        justificadas: 0,
+      };
       return {
         id_estudiante: s.id_estudiante,
         nombre: `${s.nombre} ${s.apellido}`,
         documento: s.documento,
         codigo: s.codigo,
-        ...counts
+        ...counts,
       };
     });
 
-    const datesList = datesRes.rows.map(r => r.date_recorded);
+    const datesList = datesRows.map((r) => r.date_recorded);
 
     res.json({
       studentsHistory,
-      recordedDates: datesList
+      recordedDates: datesList,
     });
   } catch (error: any) {
     console.error("Error fetching attendance history:", error);

@@ -1,7 +1,6 @@
 import { Request, Response } from "express";
 import { sql } from "kysely";
 import { db } from "../config/kysely";
-import { pool } from "../config/db";
 import {
   ensureCompetencyForContext,
   syncCompetencyAcrossGrade,
@@ -129,9 +128,7 @@ export const getActivities = async (req: Request, res: Response): Promise<void> 
     }
 
     const context = contextPreview;
-    const client = await pool.connect();
-    try {
-      const competenciaBase = await ensureCompetencyForContext(client, context, periodId);
+    const competenciaBase = await ensureCompetencyForContext(db, context, periodId);
 
       // Obtener todas las competencias del periodo/materia con sus evidencias anidadas y el número de DBA
       const allComps = await db
@@ -239,10 +236,7 @@ export const getActivities = async (req: Request, res: Response): Promise<void> 
         evidencias,
         competenciasList: validComps,
       });
-    } finally {
-      client.release();
-    }
-  } catch (error: any) {
+    } catch (error: any) {
     console.error("Error fetching activities:", error);
     res.status(500).json({ error: "Error en el servidor" });
   }
@@ -302,24 +296,16 @@ export const updateCompetency = async (req: Request, res: Response): Promise<voi
       idAnio: Number(periodRes.id_anio),
     };
 
-    const client = await pool.connect();
-    try {
-      await client.query("BEGIN");
-      const updated = await syncCompetencyAcrossGrade(
-        client,
+    const updated = await db.transaction().execute(async (trx) => {
+      return await syncCompetencyAcrossGrade(
+        trx,
         context,
         Number(periodRes.id_periodo),
         descripcion.trim(),
         Number(id)
       );
-      await client.query("COMMIT");
-      res.json(updated);
-    } catch (error: any) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
+    });
+    res.json(updated);
   } catch (error: any) {
     console.error("Error updating competency:", error);
     res.status(500).json({ error: "Error en el servidor" });

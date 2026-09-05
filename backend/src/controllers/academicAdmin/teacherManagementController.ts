@@ -1,7 +1,5 @@
 import { Request, Response } from "express";
-import { PoolClient } from "pg";
 import { z } from "zod";
-import { pool } from "../../config/db";
 import { db } from "../../config/kysely";
 import { sql } from "kysely";
 import bcrypt from "bcrypt";
@@ -97,272 +95,302 @@ export const createTeacher = async (req: Request, res: Response): Promise<void> 
     return;
   }
 
-  const client = await pool.connect();
   try {
-    await client.query("BEGIN");
-
-    const documentTypeRes = await db
-      .selectFrom("tipo_documento")
-      .select(["id_tipodocumento", "tipo"])
-      .where("id_tipodocumento", "=", documentTypeId)
-      .executeTakeFirst();
-    if (!documentTypeRes) {
-      await client.query("ROLLBACK");
-      res.status(404).json({ error: "Tipo de documento no encontrado" });
-      return;
-    }
-
-    const roleRes = await db
-      .selectFrom("rol")
-      .select("id_rol")
-      .where(sql<string>`LOWER(nombre)`, "=", "docente")
-      .executeTakeFirst();
-    if (!roleRes) {
-      await client.query("ROLLBACK");
-      res.status(500).json({ error: "No existe el rol docente configurado en el sistema" });
-      return;
-    }
-
-    const schoolRes = await db
-      .selectFrom("colegio")
-      .select("nombre")
-      .where("id_colegio", "=", schoolId)
-      .executeTakeFirst();
-    schoolName = schoolRes?.nombre || schoolName;
-
-    // Buscar si ya existe un registro de docente en la misma institución con ese documento
-    const existingTeacherRes = await db
-      .selectFrom("docente as d")
-      .innerJoin("usuario as u", "u.id_usuario", "d.id_usuario")
-      .select("d.id_docente")
-      .where("d.id_colegio", "=", schoolId)
-      .where(sql<string>`UPPER(TRIM(u.documento))`, "=", documento.toUpperCase().trim())
-      .executeTakeFirst();
-
-    if (existingTeacherRes) {
-      await client.query("ROLLBACK");
-      res.status(409).json({ error: `Ya existe un docente registrado con el documento de identidad ${documento} en esta institución.` });
-      return;
-    }
-
-    // Buscar usuario en el sistema por documento y por email
-    const userByDoc = await db
-      .selectFrom("usuario as u")
-      .select([
-        "u.id_usuario",
-        "u.email",
-        sql<boolean>`COALESCE(u.activo, true)`.as("activo"),
-        "u.nombre",
-        "u.apellido",
-        "u.documento",
-        "u.id_tipodocumento",
-        "u.telefono"
-      ])
-      .where(sql<string>`UPPER(TRIM(u.documento))`, "=", documento.toUpperCase().trim())
-      .executeTakeFirst();
-
-    const userByEmail = await db
-      .selectFrom("usuario as u")
-      .select([
-        "u.id_usuario",
-        "u.email",
-        sql<boolean>`COALESCE(u.activo, true)`.as("activo"),
-        "u.nombre",
-        "u.apellido",
-        "u.documento",
-        "u.id_tipodocumento",
-        "u.telefono"
-      ])
-      .where(sql<string>`LOWER(TRIM(u.email))`, "=", email)
-      .executeTakeFirst();
-
-    // Si coinciden con dos usuarios distintos en el sistema: error de cruce de datos
-    if (userByDoc && userByEmail && userByDoc.id_usuario !== userByEmail.id_usuario) {
-      await client.query("ROLLBACK");
-      res.status(400).json({
-        error: `El documento de identidad ${documento} pertenece a '${userByDoc.nombre} ${userByDoc.apellido}', mientras que el correo '${email}' pertenece a un usuario diferente ('${userByEmail.nombre} ${userByEmail.apellido}'). No se pueden asociar datos de dos personas distintas.`
-      });
-      return;
-    }
-
-    const existingUser = userByDoc || userByEmail;
-
-    if (existingUser) {
-      // PRINCIPIO DE MÍNIMA DIVULGACIÓN DE INFORMACIÓN E INMUTABILIDAD DE DATOS PERSONALES:
-      // Si el usuario ya existe en la plataforma por documento o email:
-      // 1. No se modifica su nombre, apellido ni documento original (se preservan intactos).
-      // 2. No se revelan los colegios a los que pertenece ni otros roles de manera indiscreta.
-      // 3. Se asigna únicamente la vinculación con este colegio (schoolId) como Docente.
-
-      // Si el correo ingresado difiere del del usuario existente pero está en uso por otro usuario distinto
-      if (email !== (existingUser.email || "").toLowerCase().trim() && userByEmail && userByEmail.id_usuario !== existingUser.id_usuario) {
-        await client.query("ROLLBACK");
-        res.status(409).json({ error: `El correo '${email}' ya está registrado por otro usuario en la plataforma.` });
-        return;
+    const created = await db.transaction().execute(async (trx) => {
+      const documentTypeRes = await trx
+        .selectFrom("tipo_documento")
+        .select(["id_tipodocumento", "tipo"])
+        .where("id_tipodocumento", "=", documentTypeId)
+        .executeTakeFirst();
+      if (!documentTypeRes) {
+        throw { statusCode: 404, message: "Tipo de documento no encontrado" };
       }
 
-      const userRolesRes = await client.query(
-        `SELECT r.nombre 
-         FROM usuario_rol ur
-         JOIN rol r ON r.id_rol = ur.id_rol
-         WHERE ur.id_usuario = $1`,
-        [existingUser.id_usuario]
-      );
-      const roles = userRolesRes.rows.map((row: any) => row.nombre.toLowerCase().trim());
-
-      // Verificar si el usuario ya es docente en ESTA institución
-      const teacherInSchool = await client.query(
-        `SELECT id_docente FROM docente WHERE id_usuario = $1 AND id_colegio = $2`,
-        [existingUser.id_usuario, schoolId]
-      );
-      if (teacherInSchool.rows.length > 0) {
-        await client.query("ROLLBACK");
-        res.status(409).json({ error: `El usuario con documento ${existingUser.documento || documento} ya está registrado como docente en esta institución.` });
-        return;
+      const roleRes = await trx
+        .selectFrom("rol")
+        .select("id_rol")
+        .where(sql<string>`LOWER(nombre)`, "=", "docente")
+        .executeTakeFirst();
+      if (!roleRes) {
+        throw { statusCode: 500, message: "No existe el rol docente configurado en el sistema" };
       }
 
-      const parentInThisSchoolRes = await client.query(
-        `SELECT 1 
-         FROM padre_familia pf
-         JOIN detalle_padrefamilia dp ON dp.id_padrefamilia = pf.id_padrefamilia
-         JOIN estudiante e ON e.id_estudiante = dp.id_estudiante
-         WHERE pf.id_usuario = $1 AND e.id_colegio = $2
-         LIMIT 1`,
-        [existingUser.id_usuario, schoolId]
-      );
-      const isParentInThisSchool = parentInThisSchoolRes.rows.length > 0;
+      const schoolRes = await trx
+        .selectFrom("colegio")
+        .select("nombre")
+        .where("id_colegio", "=", schoolId)
+        .executeTakeFirst();
+      schoolName = schoolRes?.nombre || schoolName;
 
-      const addRoleIfParent = Boolean(req.body.addRoleIfParent);
-      const userFullName = `${existingUser.nombre} ${existingUser.apellido}`.trim();
+      // Buscar si ya existe un registro de docente en la misma institución con ese documento
+      const existingTeacherRes = await trx
+        .selectFrom("docente as d")
+        .innerJoin("usuario as u", "u.id_usuario", "d.id_usuario")
+        .select("d.id_docente")
+        .where("d.id_colegio", "=", schoolId)
+        .where(sql<string>`UPPER(TRIM(u.documento))`, "=", documento.toUpperCase().trim())
+        .executeTakeFirst();
 
-      if (isParentInThisSchool && !addRoleIfParent && email === (existingUser.email || "").toLowerCase().trim()) {
-        await client.query("ROLLBACK");
-        res.status(409).json({
-          isParent: true,
-          message: `El usuario ya se encuentra registrado en esta institución como Padre de Familia. ¿Desea vincular esta cuenta existente también como Docente?`
-        });
-        return;
+      if (existingTeacherRes) {
+        throw {
+          statusCode: 409,
+          message: `Ya existe un docente registrado con el documento de identidad ${documento} en esta institución.`
+        };
       }
 
-      // Agregar rol 'docente' al usuario existente
-      await client.query(
-        `INSERT INTO usuario_rol (id_usuario, id_rol)
-         VALUES ($1, $2)
-         ON CONFLICT DO NOTHING`,
-        [existingUser.id_usuario, roleRes.id_rol]
-      );
+      // Buscar usuario en el sistema por documento y por email
+      const userByDoc = await trx
+        .selectFrom("usuario as u")
+        .select([
+          "u.id_usuario",
+          "u.email",
+          sql<boolean>`COALESCE(u.activo, true)`.as("activo"),
+          "u.nombre",
+          "u.apellido",
+          "u.documento",
+          "u.id_tipodocumento",
+          "u.telefono"
+        ])
+        .where(sql<string>`UPPER(TRIM(u.documento))`, "=", documento.toUpperCase().trim())
+        .executeTakeFirst();
 
-      await client.query(
-        `INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio)
-         VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`,
-        [existingUser.id_usuario, schoolId, roleRes.id_rol]
-      );
+      const userByEmail = await trx
+        .selectFrom("usuario as u")
+        .select([
+          "u.id_usuario",
+          "u.email",
+          sql<boolean>`COALESCE(u.activo, true)`.as("activo"),
+          "u.nombre",
+          "u.apellido",
+          "u.documento",
+          "u.id_tipodocumento",
+          "u.telefono"
+        ])
+        .where(sql<string>`LOWER(TRIM(u.email))`, "=", email)
+        .executeTakeFirst();
 
-      // Guardar docente asociando los datos personales preservados del usuario
-      const teacherRes = await client.query(
-        `INSERT INTO docente (nombre, apellido, id_colegio, id_usuario, estado)
-         VALUES ($1, $2, $3, $4, 'ACTIVO')
-         RETURNING id_docente, nombre, apellido, estado`,
-        [existingUser.nombre, existingUser.apellido, schoolId, existingUser.id_usuario]
-      );
-      if (telefono) {
-        await client.query(
-          `UPDATE usuario SET telefono = COALESCE(telefono, $1) WHERE id_usuario = $2`,
-          [telefono.trim(), existingUser.id_usuario]
-        );
+      // Si coinciden con dos usuarios distintos en el sistema: error de cruce de datos
+      if (userByDoc && userByEmail && userByDoc.id_usuario !== userByEmail.id_usuario) {
+        throw {
+          statusCode: 400,
+          message: `El documento de identidad ${documento} pertenece a '${userByDoc.nombre} ${userByDoc.apellido}', mientras que el correo '${email}' pertenece a un usuario diferente ('${userByEmail.nombre} ${userByEmail.apellido}'). No se pueden asociar datos de dos personas distintas.`
+        };
       }
 
-      // Persistir correo institucional en usuario_colegio_email si difiere del personal
-      await upsertInstitutionalEmail(existingUser.id_usuario, schoolId, email, existingUser.email, client);
+      const existingUser = userByDoc || userByEmail;
 
-      await client.query("COMMIT");
+      if (existingUser) {
+        // Si el correo ingresado difiere del del usuario existente pero está en uso por otro usuario distinto
+        if (email !== (existingUser.email || "").toLowerCase().trim() && userByEmail && userByEmail.id_usuario !== existingUser.id_usuario) {
+          throw {
+            statusCode: 409,
+            message: `El correo '${email}' ya está registrado por otro usuario en la plataforma.`
+          };
+        }
 
-      await NotificationService.sendTeacherWelcomeEmail(
-        email,
-        userFullName,
-        schoolName,
-        documentTypeRes.tipo,
-        existingUser.documento || documento,
-        password
-      );
+        const teacherInSchool = await trx
+          .selectFrom("docente")
+          .select("id_docente")
+          .where("id_usuario", "=", existingUser.id_usuario)
+          .where("id_colegio", "=", schoolId)
+          .executeTakeFirst();
 
-      res.status(201).json({
-        ...teacherRes.rows[0],
-        documento: existingUser.documento || documento,
-        id_tipodocumento: existingUser.id_tipodocumento || documentTypeId,
-        tipo_documento: documentTypeRes.tipo,
-        email,
-        telefono: existingUser.telefono || telefono || null,
-        activo: existingUser.activo,
-        estado: teacherRes.rows[0].estado,
-        asignaciones_count: 0,
-        userReused: true,
-        infoMessage: "El usuario ya se encuentra registrado en el sistema. Sus datos personales existentes fueron preservados y no fueron sobrescritos. Se agregó únicamente su asignación a esta institución."
-      });
-      return;
-    }
+        if (teacherInSchool) {
+          throw {
+            statusCode: 409,
+            message: `El usuario con documento ${existingUser.documento || documento} ya está registrado como docente en esta institución.`
+          };
+        }
 
-    // CASO 2: Persona y usuario completamente nuevos
-    const passwordHash = await bcrypt.hash(password, 10);
-    const userRes = await client.query(
-      `INSERT INTO usuario (email, password, nombre, apellido, id_tipodocumento, documento, telefono)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id_usuario, email, activo, telefono`,
-      [email, passwordHash, nombre, apellido, documentTypeId, documento, telefono?.trim() || null]
-    );
+        const parentInThisSchoolRes = await trx
+          .selectFrom("padre_familia as pf")
+          .innerJoin("detalle_padrefamilia as dp", "dp.id_padrefamilia", "pf.id_padrefamilia")
+          .innerJoin("estudiante as e", "e.id_estudiante", "dp.id_estudiante")
+          .select(sql<number>`1`.as("one"))
+          .where("pf.id_usuario", "=", existingUser.id_usuario)
+          .where("e.id_colegio", "=", schoolId)
+          .limit(1)
+          .executeTakeFirst();
 
-    await client.query(
-      `INSERT INTO usuario_rol (id_usuario, id_rol)
-       VALUES ($1, $2)`,
-      [userRes.rows[0].id_usuario, roleRes.id_rol]
-    );
+        const isParentInThisSchool = Boolean(parentInThisSchoolRes);
+        const addRoleIfParent = Boolean(req.body.addRoleIfParent);
+        const userFullName = `${existingUser.nombre} ${existingUser.apellido}`.trim();
 
-    await client.query(
-      `INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio)
-       VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`,
-      [userRes.rows[0].id_usuario, schoolId, roleRes.id_rol]
-    );
+        if (isParentInThisSchool && !addRoleIfParent && email === (existingUser.email || "").toLowerCase().trim()) {
+          throw {
+            statusCode: 409,
+            body: {
+              isParent: true,
+              message: `El usuario ya se encuentra registrado en esta institución como Padre de Familia. ¿Desea vincular esta cuenta existente también como Docente?`
+            }
+          };
+        }
 
-    // Crear docente sin email_institucional (la columna ya no existe)
-    const teacherRes = await client.query(
-      `INSERT INTO docente (nombre, apellido, id_colegio, id_usuario, estado)
-       VALUES ($1, $2, $3, $4, 'ACTIVO')
-       RETURNING id_docente, nombre, apellido, estado`,
-      [nombre, apellido, schoolId, userRes.rows[0].id_usuario]
-    );
+        // Agregar rol 'docente' al usuario existente
+        await trx
+          .insertInto("usuario_rol")
+          .values({
+            id_usuario: existingUser.id_usuario,
+            id_rol: roleRes.id_rol
+          })
+          .onConflict((oc) => oc.doNothing())
+          .execute();
 
-    // Persistir correo institucional — para usuario nuevo el email ya ES el institucional
-    // Se guarda siempre para que quede registrado el correo de este colegio
-    await upsertInstitutionalEmail(userRes.rows[0].id_usuario, schoolId, email, null, client);
+        await trx
+          .insertInto("usuario_colegio")
+          .values({
+            id_usuario: existingUser.id_usuario,
+            id_colegio: schoolId,
+            id_rol: roleRes.id_rol,
+            estado: "ACTIVO",
+            fecha_inicio: sql`NOW()` as any
+          })
+          .onConflict((oc) => oc.doNothing())
+          .execute();
 
-    await client.query("COMMIT");
+        // Guardar docente asociando los datos personales preservados del usuario
+        const teacherRow = await trx
+          .insertInto("docente")
+          .values({
+            nombre: (existingUser.nombre || nombre)!,
+            apellido: (existingUser.apellido || apellido)!,
+            id_colegio: schoolId,
+            id_usuario: existingUser.id_usuario,
+            estado: "ACTIVO"
+          })
+          .returning(["id_docente", "nombre", "apellido", "estado"])
+          .executeTakeFirstOrThrow();
+
+        if (telefono) {
+          await trx
+            .updateTable("usuario")
+            .set({
+              telefono: sql`COALESCE(telefono, ${telefono.trim()})` as any
+            })
+            .where("id_usuario", "=", existingUser.id_usuario)
+            .execute();
+        }
+
+        // Persistir correo institucional en usuario_colegio_email si difiere del personal
+        await upsertInstitutionalEmail(existingUser.id_usuario, schoolId, email, existingUser.email, trx);
+
+        return {
+          result: {
+            ...teacherRow,
+            documento: existingUser.documento || documento,
+            id_tipodocumento: existingUser.id_tipodocumento || documentTypeId,
+            tipo_documento: documentTypeRes.tipo,
+            email,
+            telefono: existingUser.telefono || telefono || null,
+            activo: existingUser.activo,
+            estado: teacherRow.estado,
+            asignaciones_count: 0,
+            userReused: true,
+            infoMessage: "El usuario ya se encuentra registrado en el sistema. Sus datos personales existentes fueron preservados y no fueron sobrescritos. Se agregó únicamente su asignación a esta institución."
+          },
+          emailData: {
+            to: email,
+            name: userFullName,
+            docType: documentTypeRes.tipo,
+            docNumber: existingUser.documento || documento
+          }
+        };
+      }
+
+      // CASO 2: Persona y usuario completamente nuevos
+      const passwordHash = await bcrypt.hash(password, 10);
+      const userRow = await trx
+        .insertInto("usuario")
+        .values({
+          email,
+          password: passwordHash,
+          nombre,
+          apellido,
+          id_tipodocumento: documentTypeId,
+          documento,
+          telefono: telefono?.trim() || null
+        })
+        .returning(["id_usuario", "email", sql<boolean>`COALESCE(activo, true)`.as("activo"), "telefono"])
+        .executeTakeFirstOrThrow();
+
+      await trx
+        .insertInto("usuario_rol")
+        .values({
+          id_usuario: userRow.id_usuario,
+          id_rol: roleRes.id_rol
+        })
+        .execute();
+
+      await trx
+        .insertInto("usuario_colegio")
+        .values({
+          id_usuario: userRow.id_usuario,
+          id_colegio: schoolId,
+          id_rol: roleRes.id_rol,
+          estado: "ACTIVO",
+          fecha_inicio: sql`NOW()` as any
+        })
+        .onConflict((oc) => oc.doNothing())
+        .execute();
+
+      // Crear docente sin email_institucional
+      const teacherRow = await trx
+        .insertInto("docente")
+        .values({
+          nombre,
+          apellido,
+          id_colegio: schoolId,
+          id_usuario: userRow.id_usuario,
+          estado: "ACTIVO"
+        })
+        .returning(["id_docente", "nombre", "apellido", "estado"])
+        .executeTakeFirstOrThrow();
+
+      // Persistir correo institucional
+      await upsertInstitutionalEmail(userRow.id_usuario, schoolId, email, null, trx);
+
+      return {
+        result: {
+          ...teacherRow,
+          documento,
+          id_tipodocumento: documentTypeId,
+          tipo_documento: documentTypeRes.tipo,
+          email: userRow.email,
+          telefono: userRow.telefono || null,
+          activo: userRow.activo,
+          estado: teacherRow.estado,
+          asignaciones_count: 0
+        },
+        emailData: {
+          to: userRow.email || email,
+          name: `${nombre} ${apellido}`,
+          docType: documentTypeRes.tipo,
+          docNumber: documento
+        }
+      };
+    });
 
     await NotificationService.sendTeacherWelcomeEmail(
-      userRes.rows[0].email,
-      `${nombre} ${apellido}`,
+      created.emailData.to,
+      created.emailData.name,
       schoolName,
-      documentTypeRes.tipo,
-      documento,
+      created.emailData.docType,
+      created.emailData.docNumber,
       password
     );
 
-    res.status(201).json({
-      ...teacherRes.rows[0],
-      documento,
-      id_tipodocumento: documentTypeId,
-      tipo_documento: documentTypeRes.tipo,
-      email: userRes.rows[0].email,
-      telefono: userRes.rows[0].telefono || null,
-      activo: userRes.rows[0].activo,
-      estado: teacherRes.rows[0].estado,
-      asignaciones_count: 0,
-    });
+    res.status(201).json(created.result);
   } catch (error: any) {
-    await client.query("ROLLBACK");
+    if (error.statusCode) {
+      if (error.body) {
+        res.status(error.statusCode).json(error.body);
+      } else {
+        res.status(error.statusCode).json({ error: error.message });
+      }
+      return;
+    }
     console.error("Error en createTeacher:", error);
     res.status(500).json({ error: formatFriendlyErrorMessage(error, "Error al crear docente") });
-  } finally {
-    client.release();
   }
 };
 
@@ -397,125 +425,136 @@ export const updateTeacher = async (req: Request, res: Response): Promise<void> 
     return;
   }
 
-  const client = await pool.connect();
   try {
-    await client.query("BEGIN");
+    await db.transaction().execute(async (trx) => {
+      // Obtenemos los datos del docente y su usuario asociado
+      const currentTeacher = await trx
+        .selectFrom("docente as d")
+        .innerJoin("usuario as u", "u.id_usuario", "d.id_usuario")
+        .select([
+          "d.id_docente",
+          "d.id_usuario",
+          "u.nombre",
+          "u.apellido",
+          "u.documento",
+          "u.id_tipodocumento",
+          "u.email"
+        ])
+        .where("d.id_docente", "=", teacherId)
+        .where("d.id_colegio", "=", schoolId)
+        .executeTakeFirst();
 
-    // Obtenemos los datos del docente y su usuario asociado
-    const teacherRes = await client.query(
-      `SELECT d.id_docente, d.id_usuario, u.nombre, u.apellido, u.documento, u.id_tipodocumento, u.email
-       FROM docente d
-       JOIN usuario u ON u.id_usuario = d.id_usuario
-       WHERE d.id_docente = $1 AND d.id_colegio = $2`,
-      [teacherId, schoolId]
-    );
-
-    if (teacherRes.rows.length === 0) {
-      await client.query("ROLLBACK");
-      res.status(404).json({ error: "Docente no encontrado" });
-      return;
-    }
-
-    const currentTeacher = teacherRes.rows[0];
-    const { id_usuario } = currentTeacher;
-
-    // Verificar si el usuario es también Padre de Familia en ESTA institución
-    const isParentRes = await client.query(
-      `SELECT 1 
-       FROM padre_familia pf
-       JOIN detalle_padrefamilia dp ON dp.id_padrefamilia = pf.id_padrefamilia
-       JOIN estudiante e ON e.id_estudiante = dp.id_estudiante
-       WHERE pf.id_usuario = $1 AND e.id_colegio = $2
-       LIMIT 1`,
-      [id_usuario, schoolId]
-    );
-    const isParent = isParentRes.rows.length > 0;
-
-    if (isParent) {
-      const normNombreReq = nombre.toLowerCase();
-      const normApellidoReq = apellido.toLowerCase();
-      const normNombreCur = (currentTeacher.nombre || "").toLowerCase().trim();
-      const normApellidoCur = (currentTeacher.apellido || "").toLowerCase().trim();
-      const normDocCur = normalizeDocument(currentTeacher.documento);
-      const tipoDocCur = Number(currentTeacher.id_tipodocumento);
-
-      if (
-        (normNombreCur && normNombreReq !== normNombreCur) ||
-        (normApellidoCur && normApellidoReq !== normApellidoCur) ||
-        (normDocCur && documento !== normDocCur) ||
-        (tipoDocCur && documentTypeId !== tipoDocCur)
-      ) {
-        await client.query("ROLLBACK");
-        res.status(400).json({
-          error: "Este docente también está registrado como Padre de Familia. Sus datos personales no pueden modificarse desde este módulo; debe realizar el cambio desde la Gestión de Padres de Familia."
-        });
-        return;
+      if (!currentTeacher) {
+        throw { statusCode: 404, message: "Docente no encontrado" };
       }
-    }
 
-    // Verificar si otro docente en este colegio usa el mismo documento
-    const duplicateDoc = await client.query(
-      `SELECT d.id_docente 
-       FROM docente d 
-       JOIN usuario u ON d.id_usuario = u.id_usuario 
-       WHERE d.id_colegio = $1 AND UPPER(TRIM(u.documento)) = $2 AND d.id_docente != $3`,
-      [schoolId, documento, teacherId]
-    );
-    if (duplicateDoc.rows.length > 0) {
-      await client.query("ROLLBACK");
-      res.status(409).json({ error: "Ya existe otro docente con ese número de documento en este colegio." });
-      return;
-    }
+      const { id_usuario } = currentTeacher;
 
-    // Actualizar datos del usuario
-    if (id_usuario) {
-      if (!isParent) {
-        await client.query(
-          `UPDATE usuario 
-           SET nombre = $1, apellido = $2, id_tipodocumento = $3, documento = $4, telefono = $5
-           WHERE id_usuario = $6`,
-          [nombre, apellido, documentTypeId, documento, telefono?.trim() || null, id_usuario]
-        );
-      } else {
-        await client.query(
-          `UPDATE usuario 
-           SET telefono = $1
-           WHERE id_usuario = $2`,
-          [telefono?.trim() || null, id_usuario]
-        );
+      // Verificar si el usuario es también Padre de Familia en ESTA institución
+      let isParent = false;
+      if (id_usuario) {
+        const isParentRes = await trx
+          .selectFrom("padre_familia as pf")
+          .innerJoin("detalle_padrefamilia as dp", "dp.id_padrefamilia", "pf.id_padrefamilia")
+          .innerJoin("estudiante as e", "e.id_estudiante", "dp.id_estudiante")
+          .select(sql<number>`1`.as("one"))
+          .where("pf.id_usuario", "=", id_usuario)
+          .where("e.id_colegio", "=", schoolId)
+          .limit(1)
+          .executeTakeFirst();
+        isParent = Boolean(isParentRes);
       }
-    }
 
-    // Actualizar datos del docente (solo nombre/apellido — email ya no va en docente)
-    await client.query(
-      `UPDATE docente 
-       SET nombre = $1, apellido = $2
-       WHERE id_docente = $3`,
-      [
-        isParent ? currentTeacher.nombre : nombre,
-        isParent ? currentTeacher.apellido : apellido,
-        teacherId
-      ]
-    );
+      if (isParent) {
+        const normNombreReq = nombre.toLowerCase();
+        const normApellidoReq = apellido.toLowerCase();
+        const normNombreCur = (currentTeacher.nombre || "").toLowerCase().trim();
+        const normApellidoCur = (currentTeacher.apellido || "").toLowerCase().trim();
+        const normDocCur = normalizeDocument(currentTeacher.documento);
+        const tipoDocCur = Number(currentTeacher.id_tipodocumento);
 
-    // Upsert correo institucional en usuario_colegio_email
-    if (id_usuario) {
-      const userEmailRes = await client.query(
-        `SELECT email FROM usuario WHERE id_usuario = $1`,
-        [id_usuario]
-      );
-      const personalEmail = userEmailRes.rows[0]?.email || null;
-      await upsertInstitutionalEmail(id_usuario, schoolId, email, personalEmail, client);
-    }
+        if (
+          (normNombreCur && normNombreReq !== normNombreCur) ||
+          (normApellidoCur && normApellidoReq !== normApellidoCur) ||
+          (normDocCur && documento !== normDocCur) ||
+          (tipoDocCur && documentTypeId !== tipoDocCur)
+        ) {
+          throw {
+            statusCode: 400,
+            message: "Este docente también está registrado como Padre de Familia. Sus datos personales no pueden modificarse desde este módulo; debe realizar el cambio desde la Gestión de Padres de Familia."
+          };
+        }
+      }
 
-    await client.query("COMMIT");
+      // Verificar si otro docente en este colegio usa el mismo documento
+      const duplicateDoc = await trx
+        .selectFrom("docente as d")
+        .innerJoin("usuario as u", "d.id_usuario", "u.id_usuario")
+        .select("d.id_docente")
+        .where("d.id_colegio", "=", schoolId)
+        .where(sql<string>`UPPER(TRIM(u.documento))`, "=", documento.toUpperCase().trim())
+        .where("d.id_docente", "!=", teacherId)
+        .executeTakeFirst();
+
+      if (duplicateDoc) {
+        throw { statusCode: 409, message: "Ya existe otro docente con ese número de documento en este colegio." };
+      }
+
+      // Actualizar datos del usuario
+      if (id_usuario) {
+        if (!isParent) {
+          await trx
+            .updateTable("usuario")
+            .set({
+              nombre,
+              apellido,
+              id_tipodocumento: documentTypeId,
+              documento,
+              telefono: telefono?.trim() || null
+            })
+            .where("id_usuario", "=", id_usuario)
+            .execute();
+        } else {
+          await trx
+            .updateTable("usuario")
+            .set({
+              telefono: telefono?.trim() || null
+            })
+            .where("id_usuario", "=", id_usuario)
+            .execute();
+        }
+      }
+
+      // Actualizar datos del docente
+      await trx
+        .updateTable("docente")
+        .set({
+          nombre: (isParent ? currentTeacher.nombre : nombre) || "",
+          apellido: (isParent ? currentTeacher.apellido : apellido) || ""
+        })
+        .where("id_docente", "=", teacherId)
+        .execute();
+
+      // Upsert correo institucional en usuario_colegio_email
+      if (id_usuario) {
+        const userEmailRes = await trx
+          .selectFrom("usuario")
+          .select("email")
+          .where("id_usuario", "=", id_usuario)
+          .executeTakeFirst();
+        const personalEmail = userEmailRes?.email || null;
+        await upsertInstitutionalEmail(id_usuario, schoolId, email, personalEmail, trx);
+      }
+    });
+
     res.json({ message: "Docente actualizado con éxito." });
   } catch (error: any) {
-    await client.query("ROLLBACK");
+    if (error.statusCode) {
+      res.status(error.statusCode).json({ error: error.message });
+      return;
+    }
     console.error("Error en updateTeacher:", error);
     res.status(500).json({ error: formatFriendlyErrorMessage(error, "Error al actualizar docente") });
-  } finally {
-    client.release();
   }
 };
 
@@ -528,151 +567,114 @@ export const deleteTeacher = async (req: Request, res: Response): Promise<void> 
     return;
   }
 
-  const client = await pool.connect();
   try {
-    await client.query("BEGIN");
+    const deletedTeacher = await db.transaction().execute(async (trx) => {
+      // Get teacher and their user id
+      const teacherRes = await trx
+        .selectFrom("docente")
+        .select(["id_usuario", "nombre", "apellido"])
+        .where("id_docente", "=", teacherId)
+        .where("id_colegio", "=", schoolId)
+        .executeTakeFirst();
 
-    // Get teacher and their user id
-    const teacherRes = await client.query(
-      `SELECT id_usuario, nombre, apellido FROM docente WHERE id_docente = $1 AND id_colegio = $2`,
-      [teacherId, schoolId]
-    );
+      if (!teacherRes) {
+        throw { statusCode: 404, message: "Docente no encontrado" };
+      }
 
-    if (teacherRes.rows.length === 0) {
-      await client.query("ROLLBACK");
-      res.status(404).json({ error: "Docente no encontrado" });
+      const { id_usuario, nombre, apellido } = teacherRes;
+
+      // Check if the user has other roles (like 'padre')
+      let hasOtherRoles = false;
+      if (id_usuario) {
+        const rolesRes = await trx
+          .selectFrom("usuario_rol as ur")
+          .innerJoin("rol as r", "r.id_rol", "ur.id_rol")
+          .select(sql<number>`COUNT(*)::int`.as("count"))
+          .where("ur.id_usuario", "=", id_usuario)
+          .where(sql<string>`LOWER(r.nombre)`, "!=", "docente")
+          .executeTakeFirst();
+
+        if (rolesRes && Number(rolesRes.count) > 0) {
+          hasOtherRoles = true;
+        }
+      }
+
+      // Bypass period-closed triggers for this admin delete operation
+      await sql`SET LOCAL session_replication_role = 'replica'`.execute(trx);
+
+      // 1. Set id_docente to NULL in grupos (director de grupo)
+      await trx
+        .updateTable("grupos")
+        .set({ id_docente: null })
+        .where("id_docente", "=", teacherId)
+        .execute();
+
+      // 2. Fetch all assignments for this teacher
+      const assignmentsRes = await trx
+        .selectFrom("detalle_grados")
+        .select("id_detallegrado")
+        .where("id_docente", "=", teacherId)
+        .execute();
+      const detailIds = assignmentsRes.map((row) => row.id_detallegrado);
+
+      if (detailIds.length > 0) {
+        // Fetch all actividad_materia IDs for these assignments
+        const actividadRes = await trx
+          .selectFrom("actividad_materia")
+          .select("id_actividadmateria")
+          .where("id_detallegrado", "in", detailIds)
+          .execute();
+        const actividadIds = actividadRes.map((r) => r.id_actividadmateria);
+
+        if (actividadIds.length > 0) {
+          await trx.deleteFrom("notas_actividad").where("id_actividadmateria", "in", actividadIds).execute();
+          await trx.deleteFrom("desempeno").where("id_actividadmateria", "in", actividadIds).execute();
+          await trx.deleteFrom("criterio_evaluacion").where("id_actividadmateria", "in", actividadIds).execute();
+          await trx.deleteFrom("actividad_evidencia_dba").where("id_actividadmateria", "in", actividadIds).execute();
+        }
+
+        await trx.deleteFrom("actividad_materia").where("id_detallegrado", "in", detailIds).execute();
+        await trx.deleteFrom("cierre_materia").where("id_detallegrado", "in", detailIds).execute();
+        await trx.deleteFrom("observacion_estudiante").where("id_detallegrado", "in", detailIds).execute();
+        await trx.deleteFrom("registro_asistencia").where("id_detallegrado", "in", detailIds).execute();
+        await trx.deleteFrom("resultado_academico").where("id_detallegrado", "in", detailIds).execute();
+        await trx.deleteFrom("detalle_grados").where("id_docente", "=", teacherId).execute();
+      }
+
+      // Delete teacher record
+      await trx.deleteFrom("docente").where("id_docente", "=", teacherId).execute();
+
+      // Delete user record (which cascades to user roles)
+      if (id_usuario) {
+        if (hasOtherRoles) {
+          const roleRes = await trx
+            .selectFrom("rol")
+            .select("id_rol")
+            .where(sql<string>`LOWER(nombre)`, "=", "docente")
+            .executeTakeFirst();
+          if (roleRes) {
+            await trx
+              .deleteFrom("usuario_rol")
+              .where("id_usuario", "=", id_usuario)
+              .where("id_rol", "=", roleRes.id_rol)
+              .execute();
+          }
+        } else {
+          await trx.deleteFrom("usuario").where("id_usuario", "=", id_usuario).execute();
+        }
+      }
+
+      return { nombre, apellido };
+    });
+
+    res.json({ message: `Docente ${deletedTeacher.nombre} ${deletedTeacher.apellido} eliminado con éxito.` });
+  } catch (error: any) {
+    if (error.statusCode) {
+      res.status(error.statusCode).json({ error: error.message });
       return;
     }
-
-    const { id_usuario, nombre, apellido } = teacherRes.rows[0];
-
-    // Check if the user has other roles (like 'padre')
-    let hasOtherRoles = false;
-    if (id_usuario) {
-      const rolesRes = await client.query(
-        `SELECT COUNT(*)::int AS count 
-         FROM usuario_rol ur
-         JOIN rol r ON r.id_rol = ur.id_rol
-         WHERE ur.id_usuario = $1 AND LOWER(r.nombre) != 'docente'`,
-        [id_usuario]
-      );
-      if (rolesRes.rows[0].count > 0) {
-        hasOtherRoles = true;
-      }
-    }
-
-    // Bypass period-closed triggers for this admin delete operation
-    // This is safe because we are inside a transaction that will rollback on any error
-    await client.query(`SET LOCAL session_replication_role = 'replica'`);
-
-    // 1. Set id_docente to NULL in grupos (director de grupo)
-    await client.query(`UPDATE grupos SET id_docente = NULL WHERE id_docente = $1`, [teacherId]);
-
-    // 2. Fetch all assignments for this teacher
-    const assignmentsRes = await client.query(
-      `SELECT id_detallegrado FROM detalle_grados WHERE id_docente = $1`,
-      [teacherId]
-    );
-    const detailIds = assignmentsRes.rows.map((row: any) => row.id_detallegrado);
-
-    if (detailIds.length > 0) {
-      // Fetch all actividad_materia IDs for these assignments
-      const actividadRes = await client.query(
-        `SELECT id_actividadmateria FROM actividad_materia WHERE id_detallegrado = ANY($1)`,
-        [detailIds]
-      );
-      const actividadIds = actividadRes.rows.map((r: any) => r.id_actividadmateria);
-
-      if (actividadIds.length > 0) {
-        // 3a. Delete from notas_actividad (correct table name)
-        await client.query(
-          `DELETE FROM notas_actividad WHERE id_actividadmateria = ANY($1)`,
-          [actividadIds]
-        );
-
-        // 3b. Delete from desempeno
-        await client.query(
-          `DELETE FROM desempeno WHERE id_actividadmateria = ANY($1)`,
-          [actividadIds]
-        );
-
-        // 3c. Delete from criterio_evaluacion
-        await client.query(
-          `DELETE FROM criterio_evaluacion WHERE id_actividadmateria = ANY($1)`,
-          [actividadIds]
-        );
-
-        // 3d. Delete from actividad_evidencia_dba
-        await client.query(
-          `DELETE FROM actividad_evidencia_dba WHERE id_actividadmateria = ANY($1)`,
-          [actividadIds]
-        );
-      }
-
-      // 4. Delete from actividad_materia
-      await client.query(
-        `DELETE FROM actividad_materia WHERE id_detallegrado = ANY($1)`,
-        [detailIds]
-      );
-
-      // 5. Delete from cierre_materia
-      await client.query(
-        `DELETE FROM cierre_materia WHERE id_detallegrado = ANY($1)`,
-        [detailIds]
-      );
-
-      // 6. Delete from observacion_estudiante
-      await client.query(
-        `DELETE FROM observacion_estudiante WHERE id_detallegrado = ANY($1)`,
-        [detailIds]
-      );
-
-      // 7. Delete from registro_asistencia (no child tables)
-      await client.query(
-        `DELETE FROM registro_asistencia WHERE id_detallegrado = ANY($1)`,
-        [detailIds]
-      );
-
-      // 8. Delete from resultado_academico
-      await client.query(
-        `DELETE FROM resultado_academico WHERE id_detallegrado = ANY($1)`,
-        [detailIds]
-      );
-
-      // 9. Delete from detalle_grados
-      await client.query(
-        `DELETE FROM detalle_grados WHERE id_docente = $1`,
-        [teacherId]
-      );
-    }
-
-    // Delete teacher record
-    await client.query(`DELETE FROM docente WHERE id_docente = $1`, [teacherId]);
-
-    // Delete user record (which cascades to user roles)
-    if (id_usuario) {
-      if (hasOtherRoles) {
-        // Just remove the 'docente' role from usuario_rol
-        const roleRes = await client.query(`SELECT id_rol FROM rol WHERE LOWER(nombre) = 'docente' LIMIT 1`);
-        if (roleRes.rows.length > 0) {
-          await client.query(
-            `DELETE FROM usuario_rol WHERE id_usuario = $1 AND id_rol = $2`,
-            [id_usuario, roleRes.rows[0].id_rol]
-          );
-        }
-      } else {
-        await client.query(`DELETE FROM usuario WHERE id_usuario = $1`, [id_usuario]);
-      }
-    }
-
-    await client.query("COMMIT");
-    res.json({ message: `Docente ${nombre} ${apellido} eliminado con éxito.` });
-  } catch (error: any) {
-    await client.query("ROLLBACK");
     console.error("Error deleting teacher:", error);
     res.status(500).json({ error: "Error en el servidor" });
-  } finally {
-    client.release();
   }
 };
 
@@ -689,71 +691,69 @@ export const updateTeacherStatus = async (req: Request, res: Response): Promise<
 
   try {
     await ensureTeacherStatusColumn();
-    const teacherRes = await pool.query(
-      `SELECT
-         d.id_docente,
-         d.nombre,
-         d.apellido,
-         d.estado,
-         u.id_usuario,
-         COALESCE(uce.email_institucional, u.email) AS email,
-         c.nombre AS colegio_nombre
-       FROM docente d
-       JOIN usuario u ON u.id_usuario = d.id_usuario
-       JOIN colegio c ON c.id_colegio = d.id_colegio
-       LEFT JOIN usuario_colegio_email uce ON uce.id_usuario = d.id_usuario AND uce.id_colegio = d.id_colegio
-       WHERE d.id_docente = $1
-         AND d.id_colegio = $2`,
-      [teacherId, schoolId]
-    );
+    const teacherRes = await db
+      .selectFrom("docente as d")
+      .innerJoin("usuario as u", "u.id_usuario", "d.id_usuario")
+      .innerJoin("colegio as c", "c.id_colegio", "d.id_colegio")
+      .leftJoin("usuario_colegio_email as uce", (join) =>
+        join.onRef("uce.id_usuario", "=", "d.id_usuario").on("uce.id_colegio", "=", schoolId)
+      )
+      .select([
+        "d.id_docente",
+        "d.nombre",
+        "d.apellido",
+        "d.estado",
+        "u.id_usuario",
+        sql<string>`COALESCE(uce.email_institucional, u.email)`.as("email"),
+        "c.nombre as colegio_nombre"
+      ])
+      .where("d.id_docente", "=", teacherId)
+      .where("d.id_colegio", "=", schoolId)
+      .executeTakeFirst();
 
-    if (teacherRes.rows.length === 0) {
+    if (!teacherRes) {
       res.status(404).json({ error: "Docente no encontrado" });
       return;
     }
 
     const active = estado === "ACTIVO";
 
-    await pool.query(
-      `UPDATE usuario SET activo = $1 WHERE id_usuario = $2`,
-      [active, teacherRes.rows[0].id_usuario]
-    );
+    await db
+      .updateTable("usuario")
+      .set({ activo: active })
+      .where("id_usuario", "=", teacherRes.id_usuario)
+      .execute();
 
-    await pool.query(
-      `UPDATE docente
-       SET estado = $1
-       WHERE id_docente = $2`,
-      [estado, teacherId]
-    );
+    await db
+      .updateTable("docente")
+      .set({ estado })
+      .where("id_docente", "=", teacherId)
+      .execute();
 
     if (estado === "DESVINCULADO") {
-      await pool.query(
-        `DELETE FROM detalle_grados
-         WHERE id_docente = $1
-           AND id_colegio = $2`,
-        [teacherId, schoolId]
-      );
+      await db
+        .deleteFrom("detalle_grados")
+        .where("id_docente", "=", teacherId)
+        .where("id_colegio", "=", schoolId)
+        .execute();
     }
 
     await NotificationService.sendTeacherStatusEmail(
-      teacherRes.rows[0].email,
-      `${teacherRes.rows[0].nombre} ${teacherRes.rows[0].apellido}`,
-      teacherRes.rows[0].colegio_nombre,
+      teacherRes.email,
+      `${teacherRes.nombre} ${teacherRes.apellido}`,
+      teacherRes.colegio_nombre,
       estado,
-      reason || undefined
+      reason
     );
 
     res.json({
-      message:
-        estado === "ACTIVO"
-          ? "Docente activado correctamente"
-          : estado === "INACTIVO"
-            ? "Docente inactivado correctamente"
-            : "Docente desvinculado correctamente",
+      message: `Docente ${teacherRes.nombre} ${teacherRes.apellido} actualizado a estado ${estado}`,
+      estado,
+      activo: active
     });
   } catch (error: any) {
     console.error("Error updating teacher status:", error);
-    res.status(500).json({ error: "Error en el servidor" });
+    res.status(500).json({ error: "Error en el servidor al actualizar estado del docente" });
   }
 };
 

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
-import { pool } from '../config/db';
+import { db } from '../config/kysely';
+import { sql } from 'kysely';
 import { NotificationService } from '../services/notificationService';
 
 // Helper: Decodificar Base36 de precisión arbitraria
@@ -37,13 +38,16 @@ function encodeTicketCode(idTicket: number, idColegio: number | null, documento:
 }
 
 // Helper: Resolver ID de colegio activo del usuario
-async function resolveSchoolIdForUser(userId: number, explicitSchoolId?: number | null): Promise<number | null> {
+async function resolveSchoolIdForUser(userId: number, explicitSchoolId?: number | null, executor: any = db): Promise<number | null> {
   if (explicitSchoolId) return Number(explicitSchoolId);
-  const schoolLinkRes = await pool.query(
-    `SELECT id_colegio FROM usuario_colegio WHERE id_usuario = $1 AND estado = 'ACTIVO' LIMIT 1`,
-    [userId]
-  );
-  return schoolLinkRes.rows.length > 0 ? Number(schoolLinkRes.rows[0].id_colegio) : null;
+  const schoolLink = await executor
+    .selectFrom('usuario_colegio')
+    .select('id_colegio')
+    .where('id_usuario', '=', userId)
+    .where('estado', '=', 'ACTIVO')
+    .limit(1)
+    .executeTakeFirst();
+  return schoolLink ? Number(schoolLink.id_colegio) : null;
 }
 
 export const createTicket = async (req: Request, res: Response) => {
@@ -72,13 +76,13 @@ export const createTicket = async (req: Request, res: Response) => {
         });
       }
       
-      const userRes = await pool.query(
-        'SELECT nombre, apellido, email, documento FROM usuario WHERE id_usuario = $1',
-        [finalUserId]
-      );
+      const u = await db
+        .selectFrom('usuario')
+        .select(['nombre', 'apellido', 'email', 'documento'])
+        .where('id_usuario', '=', finalUserId)
+        .executeTakeFirst();
 
-      if (userRes.rows.length > 0) {
-        const u = userRes.rows[0];
+      if (u) {
         if (!finalSchoolId) {
           finalSchoolId = await resolveSchoolIdForUser(finalUserId, user.schoolId);
         }
@@ -103,15 +107,25 @@ export const createTicket = async (req: Request, res: Response) => {
     const fechaEscalado = isEscalated ? new Date() : null;
 
     // Insertamos el ticket
-    const insertRes = await pool.query(
-      `INSERT INTO tickets_soporte 
-       (id_usuario, nombre_remitente, correo_remitente, telefono, tipo_incidencia, asunto, descripcion, id_colegio, estado, id_estudiante, fecha_escalado)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-       RETURNING id_ticket`,
-      [finalUserId, finalSenderName, finalSenderEmail, telefono || null, tipo_incidencia, asunto, descripcion, finalSchoolId, ticketStatus, id_estudiante ? Number(id_estudiante) : null, fechaEscalado]
-    );
+    const inserted = await db
+      .insertInto('tickets_soporte')
+      .values({
+        id_usuario: finalUserId,
+        nombre_remitente: finalSenderName,
+        correo_remitente: finalSenderEmail,
+        telefono: telefono || null,
+        tipo_incidencia,
+        asunto,
+        descripcion,
+        id_colegio: finalSchoolId,
+        estado: ticketStatus as any,
+        id_estudiante: id_estudiante ? Number(id_estudiante) : null,
+        fecha_escalado: fechaEscalado as any
+      })
+      .returning('id_ticket')
+      .executeTakeFirstOrThrow();
 
-    const idTicket = insertRes.rows[0].id_ticket;
+    const idTicket = inserted.id_ticket;
     
     // Generar el código Base36 ofuscado
     const ticketCode = encodeTicketCode(idTicket, finalSchoolId, userDocument || telefono || null);
@@ -126,10 +140,14 @@ export const createTicket = async (req: Request, res: Response) => {
     const initialObs = JSON.stringify(initialObsList);
     
     // Persistir el código ofuscado y observaciones iniciales
-    await pool.query(
-      'UPDATE tickets_soporte SET codigo_ticket = $1, observaciones = $2 WHERE id_ticket = $3',
-      [ticketCode, initialObs, idTicket]
-    );
+    await db
+      .updateTable('tickets_soporte')
+      .set({
+        codigo_ticket: ticketCode,
+        observaciones: initialObs
+      })
+      .where('id_ticket', '=', idTicket)
+      .execute();
 
     return res.status(201).json({
       message: 'Ticket de soporte creado exitosamente.',
@@ -152,20 +170,20 @@ export const getTickets = async (req: Request, res: Response) => {
 
   try {
     const userRole = (user.role || (user.roles && user.roles[0]) || '').toUpperCase();
-    let query = `
-      SELECT t.*, 
-             c.nombre AS colegio_nombre,
-             e.nombre AS estudiante_nombre,
-             e.apellido AS estudiante_apellido,
-             u_e.documento AS estudiante_documento,
-             e.codigo AS estudiante_codigo,
-             e.estado AS estudiante_estado
-      FROM tickets_soporte t 
-      LEFT JOIN colegio c ON t.id_colegio = c.id_colegio
-      LEFT JOIN estudiante e ON t.id_estudiante = e.id_estudiante
-      LEFT JOIN usuario u_e ON e.id_usuario = u_e.id_usuario
-    `;
-    const params: any[] = [];
+    let q = db
+      .selectFrom('tickets_soporte as t')
+      .leftJoin('colegio as c', 't.id_colegio', 'c.id_colegio')
+      .leftJoin('estudiante as e', 't.id_estudiante', 'e.id_estudiante')
+      .leftJoin('usuario as u_e', 'e.id_usuario', 'u_e.id_usuario')
+      .selectAll('t')
+      .select([
+        'c.nombre as colegio_nombre',
+        'e.nombre as estudiante_nombre',
+        'e.apellido as estudiante_apellido',
+        'u_e.documento as estudiante_documento',
+        'e.codigo as estudiante_codigo',
+        'e.estado as estudiante_estado'
+      ]);
 
     if (userRole === 'DIRECTIVO') {
       const schoolId = await resolveSchoolIdForUser(user.id, user.schoolId);
@@ -173,31 +191,35 @@ export const getTickets = async (req: Request, res: Response) => {
         return res.status(403).json({ error: 'El directivo no está asociado a ningún colegio.' });
       }
       
+      q = q.where('t.id_colegio', '=', schoolId);
       if (escalados === 'true') {
-        // Directivo ve los escalados de su colegio
-        query += " WHERE t.id_colegio = $1 AND t.fecha_escalado IS NOT NULL";
+        q = q.where('t.fecha_escalado', 'is not', null);
       } else {
-        // Directivo ve los de su colegio (excluyendo tickets escalados)
-        query += " WHERE t.id_colegio = $1 AND t.fecha_escalado IS NULL";
+        q = q.where('t.fecha_escalado', 'is', null);
       }
-      params.push(schoolId);
     } else if (userRole === 'ADMIN_GENERAL') {
       // Admin General SOLO ve los tickets que están escalados
-      query += " WHERE t.fecha_escalado IS NOT NULL";
+      q = q.where('t.fecha_escalado', 'is not', null);
     } else if (userRole === 'DOCENTE' || userRole === 'PROFESOR' || userRole === 'PADRE') {
       // Docente o Padre ve únicamente los tickets creados por él (por ID o por correo)
-      query += " WHERE (t.id_usuario = $1 OR (t.correo_remitente IS NOT NULL AND LOWER(t.correo_remitente) = LOWER($2)))";
-      params.push(user.id, user.email || '');
+      q = q.where((eb) =>
+        eb.or([
+          eb('t.id_usuario', '=', user.id),
+          eb.and([
+            eb('t.correo_remitente', 'is not', null),
+            eb(sql<string>`LOWER(t.correo_remitente)`, '=', (user.email || '').toLowerCase())
+          ])
+        ])
+      );
     } else if (userRole === 'ESTUDIANTE') {
       return res.status(403).json({ error: 'Los estudiantes no tienen acceso a la bandeja de tickets de soporte.' });
     } else {
       return res.status(403).json({ error: 'Acceso denegado.' });
     }
 
-    query += ' ORDER BY t.fecha_creacion DESC';
-    const result = await pool.query(query, params);
+    const tickets = await q.orderBy('t.fecha_creacion', 'desc').execute();
 
-    return res.json({ tickets: result.rows });
+    return res.json({ tickets });
   } catch (error: any) {
     console.error('Error fetching support tickets:', error);
     return res.status(500).json({ error: 'Error al consultar tickets de soporte.' });
@@ -219,13 +241,15 @@ export const updateTicketStatus = async (req: Request, res: Response) => {
 
   try {
     const userRole = (user.role || '').toUpperCase();
-    const ticketRes = await pool.query('SELECT id_colegio, fecha_escalado, estado, observaciones FROM tickets_soporte WHERE id_ticket = $1', [id]);
+    const ticket = await db
+      .selectFrom('tickets_soporte')
+      .select(['id_colegio', 'fecha_escalado', 'estado', 'observaciones', 'tipo_incidencia', 'codigo_ticket', 'id_ticket', 'correo_remitente', 'nombre_remitente'])
+      .where('id_ticket', '=', Number(id))
+      .executeTakeFirst();
     
-    if (ticketRes.rows.length === 0) {
+    if (!ticket) {
       return res.status(404).json({ error: 'Ticket no encontrado.' });
     }
-
-    const ticket = ticketRes.rows[0];
 
     // Regla: Si el ticket actual está en estado RESUELTO, no permitir cambios de estado.
     if (ticket.estado === 'RESUELTO') {
@@ -270,12 +294,16 @@ export const updateTicketStatus = async (req: Request, res: Response) => {
 
     // RN-009: Generar observación de auditoría de cambio de estado
     if (oldEstado !== estado) {
-      const authorRes = await pool.query('SELECT nombre, apellido FROM usuario WHERE id_usuario = $1', [user.id]);
-      const authorName = authorRes.rows.length > 0 
-        ? `${authorRes.rows[0].nombre} ${authorRes.rows[0].apellido || ''}`.trim()
+      const authorRes = await db
+        .selectFrom('usuario')
+        .select(['nombre', 'apellido'])
+        .where('id_usuario', '=', Number(user.id))
+        .executeTakeFirst();
+      const authorName = authorRes 
+        ? `${authorRes.nombre} ${authorRes.apellido || ''}`.trim()
         : 'Personal de soporte';
 
-      let currentObs = [];
+      let currentObs: any[] = [];
       try {
         currentObs = typeof ticket.observaciones === 'string'
           ? JSON.parse(ticket.observaciones || '[]')
@@ -292,23 +320,27 @@ export const updateTicketStatus = async (req: Request, res: Response) => {
         fecha_creacion: new Date().toISOString()
       });
 
-      await pool.query(
-        'UPDATE tickets_soporte SET estado = $1, observaciones = $2 WHERE id_ticket = $3',
-        [estado, JSON.stringify(currentObs), id]
-      );
+      await db
+        .updateTable('tickets_soporte')
+        .set({
+          estado: estado as any,
+          observaciones: JSON.stringify(currentObs)
+        })
+        .where('id_ticket', '=', Number(id))
+        .execute();
     } else {
-      await pool.query(
-        'UPDATE tickets_soporte SET estado = $1 WHERE id_ticket = $2',
-        [estado, id]
-      );
+      await db
+        .updateTable('tickets_soporte')
+        .set({ estado: estado as any })
+        .where('id_ticket', '=', Number(id))
+        .execute();
     }
 
     if (oldEstado !== 'EN_PROCESO' && estado === 'EN_PROCESO') {
       NotificationService.sendReingresoInProcessEmail(
         ticket.correo_remitente,
         ticket.nombre_remitente,
-        ticket.codigo_ticket || `TKT-${ticket.id_ticket}`,
-        ticket.estudiante_nombre ? `${ticket.estudiante_nombre} ${ticket.estudiante_apellido || ''}`.trim() : undefined
+        ticket.codigo_ticket || `TKT-${ticket.id_ticket}`
       ).catch((err: any) => console.error('Error enviando correo de ticket en proceso:', err));
     }
 
@@ -333,36 +365,27 @@ export const escalateTicket = async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'Acceso denegado.' });
     }
 
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-
-      const ticketRes = await client.query(
-        'SELECT estado, observaciones, id_colegio FROM tickets_soporte WHERE id_ticket = $1 FOR UPDATE', 
-        [id]
-      );
+    await db.transaction().execute(async (trx) => {
+      const ticket = await trx
+        .selectFrom('tickets_soporte')
+        .select(['estado', 'observaciones', 'id_colegio'])
+        .where('id_ticket', '=', Number(id))
+        .forUpdate()
+        .executeTakeFirst();
       
-      if (ticketRes.rows.length === 0) {
-        await client.query('ROLLBACK');
-        client.release();
-        return res.status(404).json({ error: 'Ticket no encontrado.' });
+      if (!ticket) {
+        throw { statusCode: 404, message: 'Ticket no encontrado.' };
       }
-
-      const ticket = ticketRes.rows[0];
 
       // Regla: Si el ticket actual está en estado RESUELTO, no permitir escalamiento.
       if (ticket.estado === 'RESUELTO') {
-        await client.query('ROLLBACK');
-        client.release();
-        return res.status(400).json({ error: 'Un ticket RESUELTO no puede ser escalado.' });
+        throw { statusCode: 400, message: 'Un ticket RESUELTO no puede ser escalado.' };
       }
 
       if (userRole === 'DIRECTIVO') {
-        const schoolId = await resolveSchoolIdForUser(user.id, user.schoolId);
+        const schoolId = await resolveSchoolIdForUser(user.id, user.schoolId, trx);
         if (Number(schoolId) !== Number(ticket.id_colegio)) {
-          await client.query('ROLLBACK');
-          client.release();
-          return res.status(403).json({ error: 'Acceso denegado.' });
+          throw { statusCode: 403, message: 'Acceso denegado.' };
         }
       }
 
@@ -373,13 +396,17 @@ export const escalateTicket = async (req: Request, res: Response) => {
       }
 
       // Obtener nombre del Directivo
-      const authorRes = await client.query('SELECT nombre, apellido FROM usuario WHERE id_usuario = $1', [user.id]);
-      const authorName = authorRes.rows.length > 0 
-        ? `${authorRes.rows[0].nombre} ${authorRes.rows[0].apellido || ''}`.trim()
+      const authorRes = await trx
+        .selectFrom('usuario')
+        .select(['nombre', 'apellido'])
+        .where('id_usuario', '=', Number(user.id))
+        .executeTakeFirst();
+      const authorName = authorRes 
+        ? `${authorRes.nombre} ${authorRes.apellido || ''}`.trim()
         : 'Directivo responsable';
 
       // Parsear observaciones anteriores
-      let currentObs = [];
+      let currentObs: any[] = [];
       try {
         currentObs = typeof ticket.observaciones === 'string'
           ? JSON.parse(ticket.observaciones || '[]')
@@ -399,23 +426,22 @@ export const escalateTicket = async (req: Request, res: Response) => {
       });
 
       // Actualizar el ticket con fecha_escalado
-      await client.query(
-        `UPDATE tickets_soporte 
-         SET estado = $1, fecha_escalado = CURRENT_TIMESTAMP, observaciones = $2 
-         WHERE id_ticket = $3`,
-        [nuevoEstado, JSON.stringify(currentObs), id]
-      );
+      await trx
+        .updateTable('tickets_soporte')
+        .set({
+          estado: nuevoEstado as any,
+          fecha_escalado: sql`CURRENT_TIMESTAMP` as any,
+          observaciones: JSON.stringify(currentObs)
+        })
+        .where('id_ticket', '=', Number(id))
+        .execute();
+    });
 
-      await client.query('COMMIT');
-      client.release();
-
-      return res.json({ message: 'Ticket de soporte escalado exitosamente al Administrador General.' });
-    } catch (error) {
-      await client.query('ROLLBACK');
-      client.release();
-      throw error;
-    }
+    return res.json({ message: 'Ticket de soporte escalado exitosamente al Administrador General.' });
   } catch (error: any) {
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
     console.error('Error escalating support ticket:', error);
     return res.status(500).json({ error: 'Error al escalar el ticket de soporte.' });
   }
@@ -426,28 +452,27 @@ export const getTicketByCode = async (req: Request, res: Response) => {
   const code = String(req.params.code || '');
 
   try {
-    const ticketRes = await pool.query(
-      `SELECT t.*, 
-              c.nombre AS colegio_nombre,
-              e.nombre AS estudiante_nombre,
-              e.apellido AS estudiante_apellido,
-              u_e.documento AS estudiante_documento,
-              e.codigo AS estudiante_codigo,
-              e.estado AS estudiante_estado
-       FROM tickets_soporte t 
-       LEFT JOIN colegio c ON t.id_colegio = c.id_colegio 
-       LEFT JOIN estudiante e ON t.id_estudiante = e.id_estudiante
-       LEFT JOIN usuario u_e ON e.id_usuario = u_e.id_usuario
-       WHERE t.codigo_ticket = $1`,
-      [code.trim().toUpperCase()]
-    );
+    const ticket = await db
+      .selectFrom('tickets_soporte as t')
+      .leftJoin('colegio as c', 't.id_colegio', 'c.id_colegio')
+      .leftJoin('estudiante as e', 't.id_estudiante', 'e.id_estudiante')
+      .leftJoin('usuario as u_e', 'e.id_usuario', 'u_e.id_usuario')
+      .selectAll('t')
+      .select([
+        'c.nombre as colegio_nombre',
+        'e.nombre as estudiante_nombre',
+        'e.apellido as estudiante_apellido',
+        'u_e.documento as estudiante_documento',
+        'e.codigo as estudiante_codigo',
+        'e.estado as estudiante_estado'
+      ])
+      .where('t.codigo_ticket', '=', code.trim().toUpperCase())
+      .executeTakeFirst();
 
-    if (ticketRes.rows.length === 0) {
+    if (!ticket) {
       return res.status(404).json({ error: 'Ticket de soporte no encontrado. Valida el código.' });
     }
 
-    const ticket = ticketRes.rows[0];
-    
     // Obtener observaciones ya parseadas
     let obsList = [];
     try {
@@ -497,11 +522,15 @@ export const addTicketObservation = async (req: Request, res: Response) => {
 
     const isStaff = userRole === 'DIRECTIVO' || userRole === 'ADMIN_GENERAL';
 
-    const ticketRes = await pool.query('SELECT * FROM tickets_soporte WHERE id_ticket = $1', [id]);
-    if (ticketRes.rows.length === 0) {
+    const ticket = await db
+      .selectFrom('tickets_soporte')
+      .selectAll()
+      .where('id_ticket', '=', Number(id))
+      .executeTakeFirst();
+
+    if (!ticket) {
       return res.status(404).json({ error: 'Ticket no encontrado.' });
     }
-    const ticket = ticketRes.rows[0];
 
     // Regla: Si el ticket actual está en estado RESUELTO, no permitir más observaciones.
     if (ticket.estado === 'RESUELTO') {
@@ -509,7 +538,7 @@ export const addTicketObservation = async (req: Request, res: Response) => {
     }
 
     // Parsear observaciones anteriores
-    let currentObs = [];
+    let currentObs: any[] = [];
     try {
       currentObs = typeof ticket.observaciones === 'string'
         ? JSON.parse(ticket.observaciones || '[]')
@@ -527,8 +556,12 @@ export const addTicketObservation = async (req: Request, res: Response) => {
       }
     } else {
       // Regla para usuarios (Docente / Padre / Estudiante)
-      const userRes = await pool.query('SELECT email FROM usuario WHERE id_usuario = $1', [user.id]);
-      const userEmail = userRes.rows[0]?.email;
+      const userRes = await db
+        .selectFrom('usuario')
+        .select('email')
+        .where('id_usuario', '=', Number(user.id))
+        .executeTakeFirst();
+      const userEmail = userRes?.email;
       const userSchoolId = await resolveSchoolIdForUser(user.id, user.schoolId);
 
       const isOwner = (ticket.id_usuario && Number(ticket.id_usuario) === Number(user.id)) ||
@@ -551,9 +584,13 @@ export const addTicketObservation = async (req: Request, res: Response) => {
     }
 
     // Obtener nombre completo del autor
-    const authorRes = await pool.query('SELECT nombre, apellido FROM usuario WHERE id_usuario = $1', [user.id]);
-    const authorName = authorRes.rows.length > 0 
-      ? `${authorRes.rows[0].nombre} ${authorRes.rows[0].apellido || ''}`.trim()
+    const authorRes = await db
+      .selectFrom('usuario')
+      .select(['nombre', 'apellido'])
+      .where('id_usuario', '=', Number(user.id))
+      .executeTakeFirst();
+    const authorName = authorRes 
+      ? `${authorRes.nombre} ${authorRes.apellido || ''}`.trim()
       : 'Usuario';
 
     // Concatenar nueva observación estructurada
@@ -573,10 +610,14 @@ export const addTicketObservation = async (req: Request, res: Response) => {
     }
 
     // Guardar en la BD tanto observaciones como el nuevo estado
-    await pool.query(
-      'UPDATE tickets_soporte SET observaciones = $1, estado = $2 WHERE id_ticket = $3',
-      [JSON.stringify(currentObs), nuevoEstado, id]
-    );
+    await db
+      .updateTable('tickets_soporte')
+      .set({
+        observaciones: JSON.stringify(currentObs),
+        estado: nuevoEstado as any
+      })
+      .where('id_ticket', '=', Number(id))
+      .execute();
 
     return res.json({ 
       message: 'Observación agregada exitosamente.',
@@ -598,16 +639,15 @@ export const addVisitorObservation = async (req: Request, res: Response) => {
   }
 
   try {
-    const ticketRes = await pool.query(
-      'SELECT id_ticket, estado, observaciones, nombre_remitente FROM tickets_soporte WHERE codigo_ticket = $1', 
-      [codeStr.trim().toUpperCase()]
-    );
+    const ticket = await db
+      .selectFrom('tickets_soporte')
+      .select(['id_ticket', 'estado', 'observaciones', 'nombre_remitente'])
+      .where('codigo_ticket', '=', codeStr.trim().toUpperCase())
+      .executeTakeFirst();
 
-    if (ticketRes.rows.length === 0) {
+    if (!ticket) {
       return res.status(404).json({ error: 'Ticket no encontrado.' });
     }
-
-    const ticket = ticketRes.rows[0];
 
     // Regla: Si el ticket actual está en estado RESUELTO, no permitir observaciones.
     if (ticket.estado === 'RESUELTO') {
@@ -615,7 +655,7 @@ export const addVisitorObservation = async (req: Request, res: Response) => {
     }
 
     // Parsear observaciones anteriores
-    let currentObs = [];
+    let currentObs: any[] = [];
     try {
       currentObs = typeof ticket.observaciones === 'string'
         ? JSON.parse(ticket.observaciones || '[]')
@@ -651,10 +691,14 @@ export const addVisitorObservation = async (req: Request, res: Response) => {
     }
 
     // Guardar en la BD tanto observaciones como el nuevo estado
-    await pool.query(
-      'UPDATE tickets_soporte SET observaciones = $1, estado = $2 WHERE id_ticket = $3',
-      [JSON.stringify(currentObs), nuevoEstado, ticket.id_ticket]
-    );
+    await db
+      .updateTable('tickets_soporte')
+      .set({
+        observaciones: JSON.stringify(currentObs),
+        estado: nuevoEstado as any
+      })
+      .where('id_ticket', '=', ticket.id_ticket)
+      .execute();
 
     return res.json({
       message: 'Respuesta registrada exitosamente.',

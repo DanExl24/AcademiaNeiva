@@ -1,5 +1,4 @@
 import { Request, Response } from "express";
-import { pool } from "../config/db";
 import { db } from "../config/kysely";
 import { sql } from "kysely";
 import bcrypt from "bcrypt";
@@ -327,19 +326,16 @@ export const getSchoolIdentity = async (req: Request, res: Response): Promise<vo
   }
 
   try {
-    const schoolRes = await pool.query(
-      `SELECT id_colegio, nombre, escudo_url, color_primario, color_secundario 
-       FROM colegio 
-       WHERE id_colegio = $1`,
-      [schoolId]
-    );
+    const school = await db
+      .selectFrom("colegio")
+      .select(["id_colegio", "nombre", "escudo_url", "color_primario", "color_secundario"])
+      .where("id_colegio", "=", schoolId)
+      .executeTakeFirst();
 
-    if (schoolRes.rows.length === 0) {
+    if (!school) {
       res.status(404).json({ error: "Colegio no encontrado" });
       return;
     }
-
-    const school = schoolRes.rows[0];
     
     const DEFAULT_PRIMARY = "#4f46e5";
     const DEFAULT_SECONDARY = "#0f172a";
@@ -375,28 +371,28 @@ export const verifySession = async (req: Request, res: Response): Promise<void> 
 
     // Verificar blacklist
     if (decoded.jti) {
-      const blacklistRes = await pool.query(
-        'SELECT 1 FROM token_blacklist WHERE jti = $1',
-        [decoded.jti]
-      );
-      if (blacklistRes.rows.length > 0) {
+      const blacklistRes = await db
+        .selectFrom("token_blacklist")
+        .select(sql<number>`1`.as("one"))
+        .where("jti", "=", decoded.jti)
+        .executeTakeFirst();
+      if (blacklistRes) {
         res.status(401).json({ valid: false, error: 'Sesión invalidada' });
         return;
       }
     }
 
     // Verificar estado del usuario e invalidación global
-    const userDbRes = await pool.query(
-      'SELECT estado, logged_out_at FROM usuario WHERE id_usuario = $1',
-      [decoded.id]
-    );
+    const dbUser = await db
+      .selectFrom("usuario")
+      .select(["estado", "logged_out_at"])
+      .where("id_usuario", "=", decoded.id)
+      .executeTakeFirst();
 
-    if (userDbRes.rows.length === 0) {
+    if (!dbUser) {
       res.status(401).json({ valid: false, error: 'Usuario no encontrado' });
       return;
     }
-
-    const dbUser = userDbRes.rows[0];
 
     if (dbUser.estado !== 'ACTIVO') {
       res.status(401).json({ valid: false, error: 'Cuenta inactiva o suspendida' });
@@ -557,17 +553,18 @@ export const updateProfilePassword = async (req: Request, res: Response): Promis
     const userId = Number(user.id);
     
     // Obtener contraseña actual hasheada
-    const userRes = await pool.query(
-      'SELECT password FROM usuario WHERE id_usuario = $1',
-      [userId]
-    );
+    const userRecord = await db
+      .selectFrom("usuario")
+      .select("password")
+      .where("id_usuario", "=", userId)
+      .executeTakeFirst();
 
-    if (userRes.rows.length === 0) {
+    if (!userRecord) {
       res.status(404).json({ error: "Usuario no encontrado." });
       return;
     }
 
-    const dbPassword = userRes.rows[0].password;
+    const dbPassword = userRecord.password;
 
     // Verificar contraseña actual
     const validPassword = await bcrypt.compare(password_actual, dbPassword);
@@ -578,10 +575,11 @@ export const updateProfilePassword = async (req: Request, res: Response): Promis
 
     // Hashear y actualizar la nueva contraseña
     const hashedNew = await bcrypt.hash(nueva_password, 10);
-    await pool.query(
-      'UPDATE usuario SET password = $1 WHERE id_usuario = $2',
-      [hashedNew, userId]
-    );
+    await db
+      .updateTable("usuario")
+      .set({ password: hashedNew })
+      .where("id_usuario", "=", userId)
+      .execute();
 
     res.json({ message: "Contraseña actualizada exitosamente." });
   } catch (error) {
@@ -604,10 +602,11 @@ export const updateProfilePhone = async (req: Request, res: Response): Promise<v
     const newPhone = telefono ? String(telefono).trim() : null;
 
     // Actualizar teléfono en la tabla usuario
-    await pool.query(
-      'UPDATE usuario SET telefono = $1 WHERE id_usuario = $2',
-      [newPhone, userId]
-    );
+    await db
+      .updateTable("usuario")
+      .set({ telefono: newPhone })
+      .where("id_usuario", "=", userId)
+      .execute();
 
     res.json({ message: "Teléfono de contacto actualizado exitosamente." });
   } catch (error) {
@@ -628,29 +627,28 @@ export const getUserProfile = async (req: Request, res: Response): Promise<void>
     const userId = req.query.userId ? Number(req.query.userId) : Number(user.id);
     
     // Obtener datos unificados del usuario
-    const userRes = await pool.query(
-      `SELECT 
-         u.id_usuario, 
-         u.nombre, 
-         u.apellido, 
-         u.email, 
-         u.estado, 
-         u.fecha_creacion,
-         u.documento,
-         td_u.tipo AS tipo_documento,
-         u.telefono AS telefono
-       FROM usuario u
-       LEFT JOIN tipo_documento td_u ON u.id_tipodocumento = td_u.id_tipodocumento
-       WHERE u.id_usuario = $1`,
-      [userId]
-    );
+    const userData = await db
+      .selectFrom("usuario as u")
+      .leftJoin("tipo_documento as td_u", "u.id_tipodocumento", "td_u.id_tipodocumento")
+      .select([
+        "u.id_usuario",
+        "u.nombre",
+        "u.apellido",
+        "u.email",
+        "u.estado",
+        "u.fecha_creacion",
+        "u.documento",
+        "td_u.tipo as tipo_documento",
+        "u.telefono as telefono"
+      ])
+      .where("u.id_usuario", "=", userId)
+      .executeTakeFirst();
 
-    if (userRes.rows.length === 0) {
+    if (!userData) {
       res.status(404).json({ error: "Usuario no encontrado." });
       return;
     }
 
-    const userData = userRes.rows[0];
     const userRole = (user.role || '').toUpperCase();
 
     const profileObj = {

@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { MatriculaService } from "../services/matriculaService";
-import { pool } from "../config/db";
+import { db } from "../config/kysely";
 import path from "path";
 import fs from "fs";
 
@@ -143,19 +143,16 @@ export const toggleTransfer = async (req: Request, res: Response) => {
 export const downloadDocumentFile = async (req: Request, res: Response) => {
   try {
     const { idDocumento } = req.params;
-    const queryRes = await pool.query(
-      `SELECT id_documento, contenido, mime_type, nombre_original, url 
-       FROM documento_matriculas 
-       WHERE id_documento = $1`,
-      [idDocumento]
-    );
+    const doc = await db
+      .selectFrom("documento_matriculas")
+      .select(["id_documento", "contenido", "mime_type", "nombre_original", "url"])
+      .where("id_documento", "=", Number(idDocumento))
+      .executeTakeFirst();
 
-    if (queryRes.rows.length === 0) {
+    if (!doc) {
       res.status(404).json({ error: "Documento no encontrado" });
       return;
     }
-
-    const doc = queryRes.rows[0];
 
     // If file binary bytea exists in DB
     if (doc.contenido && Buffer.isBuffer(doc.contenido)) {

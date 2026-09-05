@@ -1,5 +1,7 @@
 import { PoolClient } from "pg";
 import { pool } from "./db";
+import { db } from "./kysely";
+import { sql } from "kysely";
 import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
@@ -653,16 +655,40 @@ export interface CompetencyRow {
 
 export const DEFAULT_COMPETENCY_TEXT = DEFAULT_COMPETENCY_DESCRIPTION;
 
-const getGradePeerGroups = async (
-  client: PoolClient,
+export const getGradePeerGroups = async (
+  client: any,
   schoolId: number,
   groupId: number
 ): Promise<number[]> => {
-  const groupRes = await client.query<{ id_nivel: number; id_tipo_grado: number }>(
+  if (client && typeof client.selectFrom === "function") {
+    const group = await client
+      .selectFrom("grupos")
+      .select(["id_nivel", "id_tipo_grado"])
+      .where("id_grupo", "=", groupId)
+      .where("id_colegio", "=", schoolId)
+      .executeTakeFirst();
+
+    if (!group) return [];
+
+    const peers = await client
+      .selectFrom("grupos")
+      .select("id_grupo")
+      .where("id_colegio", "=", schoolId)
+      .where("id_nivel", "=", group.id_nivel)
+      .where("id_tipo_grado", "=", group.id_tipo_grado)
+      .orderBy("id_grupo", "asc")
+      .execute();
+
+    return peers.map((row: any) => Number(row.id_grupo));
+  }
+
+  const groupRes = await (client as PoolClient).query<{
+    id_nivel: number;
+    id_tipo_grado: number;
+  }>(
     `SELECT id_nivel, id_tipo_grado
      FROM grupos
-     WHERE id_grupo = $1
-       AND id_colegio = $2`,
+     WHERE id_grupo = $1 AND id_colegio = $2`,
     [groupId, schoolId]
   );
 
@@ -671,7 +697,7 @@ const getGradePeerGroups = async (
   }
 
   const { id_nivel, id_tipo_grado } = groupRes.rows[0];
-  const peersRes = await client.query<{ id_grupo: number }>(
+  const peersRes = await (client as PoolClient).query<{ id_grupo: number }>(
     `SELECT id_grupo
      FROM grupos
      WHERE id_colegio = $1
@@ -681,17 +707,38 @@ const getGradePeerGroups = async (
     [schoolId, id_nivel, id_tipo_grado]
   );
 
-  return peersRes.rows.map((row) => Number(row.id_grupo));
+  return peersRes.rows.map((row: any) => Number(row.id_grupo));
 };
 
 const normalizeCompetencyDescription = (value: string): string =>
   value.trim().replace(/\s+/g, " ");
 
 export const ensureDefaultEvidencias = async (
-  client: PoolClient,
+  client: any,
   competencyId: number,
   schoolId: number
 ): Promise<void> => {
+  if (client && typeof client.selectFrom === "function") {
+    const check = await client
+      .selectFrom("evidencia_aprendizaje")
+      .select("id_evidencia")
+      .where("id_competencia", "=", competencyId)
+      .limit(1)
+      .executeTakeFirst();
+
+    if (!check) {
+      await client
+        .insertInto("evidencia_aprendizaje")
+        .values([
+          { id_competencia: competencyId, descripcion: "Reconoce y aplica los conceptos fundamentales de la unidad temática.", orden: 1, id_colegio: schoolId },
+          { id_competencia: competencyId, descripcion: "Demuestra capacidad analítica y pensamiento crítico en la resolución de problemas.", orden: 2, id_colegio: schoolId },
+          { id_competencia: competencyId, descripcion: "Participa activamente y colabora con sus compañeros en el entorno de aprendizaje.", orden: 3, id_colegio: schoolId }
+        ])
+        .execute();
+    }
+    return;
+  }
+
   const checkRes = await client.query(
     "SELECT 1 FROM evidencia_aprendizaje WHERE id_competencia = $1 LIMIT 1",
     [competencyId]
@@ -709,7 +756,7 @@ export const ensureDefaultEvidencias = async (
 };
 
 export const syncCompetencyAcrossGrade = async (
-  client: PoolClient,
+  client: any,
   context: TeachingContext,
   periodId: number,
   descripcion?: string,
@@ -728,9 +775,115 @@ export const syncCompetencyAcrossGrade = async (
 
   let syncUuid: string;
 
+  if (client && typeof client.selectFrom === "function") {
+    if (competencyId) {
+      const compRes = await client
+        .selectFrom("competencias")
+        .select("sync_uuid")
+        .where("id_competencia", "=", competencyId)
+        .executeTakeFirst();
+      if (!compRes) {
+        throw new Error("Competencia no encontrada para editar");
+      }
+
+      if (compRes.sync_uuid) {
+        syncUuid = compRes.sync_uuid;
+      } else {
+        syncUuid = randomUUID();
+        await client
+          .updateTable("competencias")
+          .set({ sync_uuid: syncUuid })
+          .where("id_competencia", "=", competencyId)
+          .execute();
+      }
+    } else {
+      syncUuid = randomUUID();
+    }
+
+    let sharedDescription = chosenDescription;
+    if (!sharedDescription && competencyId) {
+      const d = await client
+        .selectFrom("competencias")
+        .select("descripcion")
+        .where("id_competencia", "=", competencyId)
+        .executeTakeFirst();
+      sharedDescription = d?.descripcion ?? null;
+    }
+    if (!sharedDescription) {
+      sharedDescription = DEFAULT_COMPETENCY_DESCRIPTION;
+    }
+
+    const syncedRows: CompetencyRow[] = [];
+    for (const peerGroupId of peerGroups) {
+      let compRow: CompetencyRow;
+      if (competencyId) {
+        const checkPeer = await client
+          .selectFrom("competencias")
+          .selectAll()
+          .where("sync_uuid", "=", syncUuid)
+          .where("id_grupo", "=", peerGroupId)
+          .executeTakeFirst();
+
+        if (checkPeer) {
+          compRow = await client
+            .updateTable("competencias")
+            .set({
+              descripcion: sharedDescription,
+              id_dimension: idDimension !== undefined ? idDimension : null,
+            })
+            .where("sync_uuid", "=", syncUuid)
+            .where("id_grupo", "=", peerGroupId)
+            .returningAll()
+            .executeTakeFirstOrThrow();
+        } else {
+          compRow = await client
+            .insertInto("competencias")
+            .values({
+              id_anio: context.idAnio,
+              id_grupo: peerGroupId,
+              id_materia: context.idMateria,
+              id_periodo: periodId,
+              descripcion: sharedDescription,
+              id_colegio: context.idColegio,
+              sync_uuid: syncUuid,
+              id_dimension: idDimension !== undefined ? idDimension : null,
+            })
+            .returningAll()
+            .executeTakeFirstOrThrow();
+          await ensureDefaultEvidencias(client, compRow.id_competencia, context.idColegio);
+        }
+      } else {
+        compRow = await client
+          .insertInto("competencias")
+          .values({
+            id_anio: context.idAnio,
+            id_grupo: peerGroupId,
+            id_materia: context.idMateria,
+            id_periodo: periodId,
+            descripcion: sharedDescription,
+            id_colegio: context.idColegio,
+            sync_uuid: syncUuid,
+            id_dimension: idDimension !== undefined ? idDimension : null,
+          })
+          .returningAll()
+          .executeTakeFirstOrThrow();
+        await ensureDefaultEvidencias(client, compRow.id_competencia, context.idColegio);
+      }
+
+      syncedRows.push(compRow);
+    }
+
+    const currentGroupRow = syncedRows.find((row) => Number(row.id_grupo) === context.idGrupo);
+    if (!currentGroupRow) {
+      throw new Error("No se pudo resolver la competencia sincronizada para el curso actual");
+    }
+
+    return currentGroupRow;
+  }
+
   if (competencyId) {
     // Modo Edición: Obtener el sync_uuid existente
-    const compRes = await client.query<{ sync_uuid: string | null }>(
+    const compRes = await (client as PoolClient).query<{ sync_uuid: string | null }>(
       `SELECT sync_uuid FROM public.competencias WHERE id_competencia = $1`,
       [competencyId]
     );
@@ -743,7 +896,7 @@ export const syncCompetencyAcrossGrade = async (
     } else {
       syncUuid = randomUUID();
       // Asignar el nuevo UUID a la competencia
-      await client.query(
+      await (client as PoolClient).query(
         `UPDATE public.competencias SET sync_uuid = $1 WHERE id_competencia = $2`,
         [syncUuid, competencyId]
       );
@@ -756,7 +909,7 @@ export const syncCompetencyAcrossGrade = async (
   const sharedDescription =
     chosenDescription ??
     (competencyId
-      ? (await client.query<{ descripcion: string }>(
+      ? (await (client as PoolClient).query<{ descripcion: string }>(
           `SELECT descripcion FROM public.competencias WHERE id_competencia = $1`,
           [competencyId]
         )).rows[0]?.descripcion
@@ -768,12 +921,12 @@ export const syncCompetencyAcrossGrade = async (
     let syncedRes;
     if (competencyId) {
       // Verificar si ya existe registro hermano con este sync_uuid para este grupo
-      const checkPeer = await client.query<CompetencyRow>(
+      const checkPeer = await (client as PoolClient).query<CompetencyRow>(
         `SELECT * FROM public.competencias WHERE sync_uuid = $1 AND id_grupo = $2`,
         [syncUuid, peerGroupId]
       );
       if (checkPeer.rows.length > 0) {
-        syncedRes = await client.query<CompetencyRow>(
+        syncedRes = await (client as PoolClient).query<CompetencyRow>(
           `UPDATE public.competencias 
            SET descripcion = $1, id_dimension = $2 
            WHERE sync_uuid = $3 AND id_grupo = $4
@@ -781,7 +934,7 @@ export const syncCompetencyAcrossGrade = async (
           [sharedDescription, idDimension !== undefined ? idDimension : null, syncUuid, peerGroupId]
         );
       } else {
-        syncedRes = await client.query<CompetencyRow>(
+        syncedRes = await (client as PoolClient).query<CompetencyRow>(
           `INSERT INTO public.competencias (id_anio, id_grupo, id_materia, id_periodo, descripcion, id_colegio, sync_uuid, id_dimension)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
            RETURNING *`,
@@ -791,7 +944,7 @@ export const syncCompetencyAcrossGrade = async (
       }
     } else {
       // Creación: Insertar en todos los grupos paralelos
-      syncedRes = await client.query<CompetencyRow>(
+      syncedRes = await (client as PoolClient).query<CompetencyRow>(
         `INSERT INTO public.competencias (id_anio, id_grupo, id_materia, id_periodo, descripcion, id_colegio, sync_uuid, id_dimension)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING *`,
@@ -813,12 +966,41 @@ export const syncCompetencyAcrossGrade = async (
 };
 
 export const harmonizeCompetenciesForSchoolYear = async (
-  client: PoolClient,
+  client: any,
   schoolId: number,
   yearId: number
 ): Promise<void> => {
+  const isKysely = client && typeof client.selectFrom === "function";
+  if (isKysely) {
+    const competenciesRes = await sql<{
+      sync_uuid: string;
+      id_grupo: number;
+      id_materia: number;
+      id_periodo: number;
+      descripcion: string;
+    }>`SELECT DISTINCT ON (c.sync_uuid) c.sync_uuid, c.id_grupo, c.id_materia, c.id_periodo, c.descripcion
+       FROM public.competencias c
+       WHERE c.id_colegio = ${schoolId} AND c.id_anio = ${yearId} AND c.sync_uuid IS NOT NULL`.execute(client);
+
+    for (const row of competenciesRes.rows) {
+      const peerGroups = await getGradePeerGroups(client, schoolId, row.id_grupo);
+      for (const peerGroupId of peerGroups) {
+        const existCheck = await sql`SELECT id_competencia FROM public.competencias WHERE sync_uuid = ${row.sync_uuid} AND id_grupo = ${peerGroupId}`.execute(client);
+        if (existCheck.rows.length === 0) {
+          const insertRes = await sql<{ id_competencia: number }>`INSERT INTO public.competencias (id_anio, id_grupo, id_materia, id_periodo, descripcion, id_colegio, sync_uuid)
+             VALUES (${yearId}, ${peerGroupId}, ${row.id_materia}, ${row.id_periodo}, ${row.descripcion}, ${schoolId}, ${row.sync_uuid})
+             RETURNING id_competencia`.execute(client);
+          await ensureDefaultEvidencias(client, insertRes.rows[0].id_competencia, schoolId);
+        } else {
+          await sql`UPDATE public.competencias SET descripcion = ${row.descripcion} WHERE sync_uuid = ${row.sync_uuid} AND id_grupo = ${peerGroupId}`.execute(client);
+        }
+      }
+    }
+    return;
+  }
+
   // Obtener todas las competencias distintas por sync_uuid en este año/colegio
-  const competenciesRes = await client.query<{
+  const competenciesRes = await (client as PoolClient).query<{
     sync_uuid: string;
     id_grupo: number;
     id_materia: number;
@@ -857,12 +1039,32 @@ export const harmonizeCompetenciesForSchoolYear = async (
 };
 
 export const ensureCompetencyForContext = async (
-  client: PoolClient,
+  client: any,
   context: TeachingContext,
   periodId: number
 ): Promise<CompetencyRow | null> => {
+  if (client && typeof client.selectFrom === "function") {
+    const existRes = await client
+      .selectFrom("competencias")
+      .selectAll()
+      .where("id_anio", "=", context.idAnio)
+      .where("id_grupo", "=", context.idGrupo)
+      .where("id_materia", "=", context.idMateria)
+      .where("id_periodo", "=", periodId)
+      .where("id_colegio", "=", context.idColegio)
+      .orderBy(
+        sql`CASE WHEN descripcion = 'Competencia pendiente por definir.' THEN 1 ELSE 0 END`,
+        "asc"
+      )
+      .orderBy("id_competencia", "asc")
+      .limit(1)
+      .executeTakeFirst();
+
+    return (existRes as CompetencyRow) || null;
+  }
+
   // Buscar si ya existe alguna competencia registrada para este contexto de grupo, materia, periodo, año y colegio
-  const existRes = await client.query<CompetencyRow>(
+  const existRes = await (client as PoolClient).query<CompetencyRow>(
     `SELECT * FROM public.competencias 
      WHERE id_anio = $1 AND id_grupo = $2 AND id_materia = $3 AND id_periodo = $4 AND id_colegio = $5
      ORDER BY CASE WHEN descripcion = 'Competencia pendiente por definir.' THEN 1 ELSE 0 END ASC, id_competencia ASC

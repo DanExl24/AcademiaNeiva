@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
-import { pool } from "../config/db";
+import { db } from "../config/kysely";
+import { CompiledQuery } from "kysely";
 
 // Helper to parse schoolId
 const parseSchoolId = (val: any): number => {
@@ -116,7 +117,7 @@ export const obtenerReporteCoherenciaCurricular = async (req: Request, res: Resp
 
     query += ` ORDER BY p.id_periodo ASC, grupo_nombre ASC, m.nombre ASC, am.id_actividadmateria ASC, edba.orden ASC`;
 
-    const result = await pool.query(query, params);
+    const result = await db.executeQuery(CompiledQuery.raw(query, params));
     res.json(result.rows);
   } catch (error: any) {
     console.error("Error al obtener reporte de coherencia curricular:", error);
@@ -263,7 +264,7 @@ export const obtenerReporteCoberturaDba = async (req: Request, res: Response): P
         END ASC
     `;
 
-    const summaryRes = await pool.query(summaryQuery, summaryParams);
+    const summaryRes = await db.executeQuery(CompiledQuery.raw(summaryQuery, summaryParams));
 
     // 2. Obtener lista detallada de evidencias y su estado de cobertura
     const detailsParams: any[] = [schoolId, periodParam, yearParam];
@@ -398,7 +399,7 @@ export const obtenerReporteCoberturaDba = async (req: Request, res: Response): P
         END ASC, d.numero_dba ASC, edba.orden ASC
     `;
 
-    const detailsRes = await pool.query(detailsQuery, detailsParams);
+    const detailsRes = await db.executeQuery(CompiledQuery.raw(detailsQuery, detailsParams));
 
     res.json({
       resumen: summaryRes.rows,
@@ -499,7 +500,7 @@ export const obtenerCatalogoDbaDirectivo = async (req: Request, res: Response): 
         END ASC, d.numero_dba ASC
     `;
 
-    const result = await pool.query(query, [schoolId, yearParam]);
+    const result = await db.executeQuery(CompiledQuery.raw(query, [schoolId, yearParam]));
     res.json(result.rows);
   } catch (error: any) {
     console.error("Error al obtener catálogo de DBA para directivo:", error);

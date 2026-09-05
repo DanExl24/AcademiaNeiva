@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { pool } from '../config/db';
+import { db } from '../config/kysely';
+import { sql } from 'kysely';
 
 import { JWT_SECRET } from '../config/jwt';
 
@@ -35,28 +36,28 @@ export const verifyToken = async (req: AuthRequest, res: Response, next: NextFun
 
     // Verificar si el token ha sido invalidado (blacklist)
     if (decoded.jti) {
-      const blacklistRes = await pool.query(
-        'SELECT 1 FROM token_blacklist WHERE jti = $1',
-        [decoded.jti]
-      );
-      if (blacklistRes.rows.length > 0) {
+      const blacklistRes = await db
+        .selectFrom("token_blacklist")
+        .select(sql<number>`1`.as("one"))
+        .where("jti", "=", decoded.jti)
+        .executeTakeFirst();
+      if (blacklistRes) {
         res.status(401).json({ error: 'Sesión invalidada por cierre forzado' });
         return;
       }
     }
 
     // Verificar estado del usuario e invalidación global en la base de datos
-    const userDbRes = await pool.query(
-      'SELECT estado, logged_out_at FROM usuario WHERE id_usuario = $1',
-      [decoded.id]
-    );
+    const dbUser = await db
+      .selectFrom("usuario")
+      .select(["estado", "logged_out_at"])
+      .where("id_usuario", "=", decoded.id)
+      .executeTakeFirst();
 
-    if (userDbRes.rows.length === 0) {
+    if (!dbUser) {
       res.status(401).json({ error: 'Usuario no encontrado' });
       return;
     }
-
-    const dbUser = userDbRes.rows[0];
 
     if (dbUser.estado !== 'ACTIVO') {
       res.status(401).json({ error: 'Tu cuenta se encuentra inactiva o suspendida.' });
@@ -106,18 +107,30 @@ export const verifyToken = async (req: AuthRequest, res: Response, next: NextFun
 
     // Si el usuario es administrador general, verificar supervisión activa
     if (req.user.roles.includes('admin_general')) {
-      const supervisionRes = await pool.query(
-        `SELECT a.*, c.nombre AS colegio_nombre
-         FROM auditoria_supervision a
-         JOIN colegio c ON c.id_colegio = a.id_colegio
-         WHERE a.id_admin_general = $1 AND a.estado_supervision = 'ACTIVA' AND a.eliminado = FALSE
-         LIMIT 1`,
-        [req.user.id]
-      );
+      const supervision = await db
+        .selectFrom("auditoria_supervision as a")
+        .innerJoin("colegio as c", "c.id_colegio", "a.id_colegio")
+        .select([
+          "a.id_auditoria",
+          "a.id_admin_general",
+          "a.id_colegio",
+          "a.fecha_entrada",
+          "a.fecha_salida",
+          "a.duracion_maxima_minutos",
+          "a.tipo_supervision",
+          "a.motivo_solicitud",
+          "a.estado_supervision",
+          "a.eliminado",
+          "c.nombre as colegio_nombre"
+        ])
+        .where("a.id_admin_general", "=", req.user.id)
+        .where("a.estado_supervision", "=", "ACTIVA")
+        .where("a.eliminado", "=", false)
+        .limit(1)
+        .executeTakeFirst();
 
-      if (supervisionRes.rows.length > 0) {
-        const supervision = supervisionRes.rows[0];
-        const entrada = new Date(supervision.fecha_entrada);
+      if (supervision) {
+        const entrada = new Date(supervision.fecha_entrada as any);
         const limitTime = entrada.getTime() + supervision.duracion_maxima_minutos * 60000;
         const now = new Date().getTime();
 
@@ -125,71 +138,66 @@ export const verifyToken = async (req: AuthRequest, res: Response, next: NextFun
           // LA SUPERVISIÓN HA EXPIRADO
           console.log(`[verifyToken] La supervisión ID: ${supervision.id_auditoria} para el administrador ${req.user.id} ha expirado. Finalizando automáticamente.`);
           
-          const client = await pool.connect();
           try {
-            await client.query('BEGIN');
+            await db.transaction().execute(async (trx) => {
+              // 1. Cambiar estado a EXPIRADA
+              await trx
+                .updateTable("auditoria_supervision")
+                .set({
+                  estado_supervision: "EXPIRADA",
+                  fecha_salida: sql`NOW()`
+                })
+                .where("id_auditoria", "=", supervision.id_auditoria)
+                .execute();
 
-            // 1. Cambiar estado a EXPIRADA
-            await client.query(
-              `UPDATE auditoria_supervision
-               SET estado_supervision = 'EXPIRADA',
-                   fecha_salida = NOW()
-               WHERE id_auditoria = $1`,
-              [supervision.id_auditoria]
-            );
+              // 2. Contar acciones
+              const accionesRes = await trx
+                .selectFrom("auditoria_acciones_realizadas")
+                .select(sql<number>`COUNT(*)::int`.as("total"))
+                .where("id_auditoria", "=", supervision.id_auditoria)
+                .executeTakeFirst();
+              const totalAcciones = accionesRes?.total || 0;
 
-            // 2. Contar acciones
-            const accionesRes = await client.query(
-              'SELECT COUNT(*)::int AS total FROM auditoria_acciones_realizadas WHERE id_auditoria = $1',
-              [supervision.id_auditoria]
-            );
-            const totalAcciones = accionesRes.rows[0].total || 0;
+              const diffMs = new Date().getTime() - entrada.getTime();
+              const diffMin = Math.round(diffMs / 60000);
+              const duracionStr = diffMin < 60 ? `${diffMin} minutos` : `${Math.floor(diffMin / 60)}h ${diffMin % 60}m`;
 
-            const diffMs = new Date().getTime() - entrada.getTime();
-            const diffMin = Math.round(diffMs / 60000);
-            const duracionStr = diffMin < 60 ? `${diffMin} minutos` : `${Math.floor(diffMin / 60)}h ${diffMin % 60}m`;
+              // 3. Notificar a directivos
+              const directivos = await trx
+                .selectFrom("directivo as d")
+                .innerJoin("usuario as u", "d.id_usuario", "u.id_usuario")
+                .select(["d.id", "u.email", "u.nombre", "u.apellido"])
+                .where("d.id_colegio", "=", supervision.id_colegio)
+                .where("d.estado", "=", "ACTIVO")
+                .execute();
 
-            // 3. Notificar a directivos
-            const directivos = await client.query(
-              `SELECT d.id, u.email, u.nombre, u.apellido
-               FROM directivo d
-               JOIN usuario u ON d.id_usuario = u.id_usuario
-               WHERE d.id_colegio = $1 AND d.estado = 'ACTIVO'`,
-              [supervision.id_colegio]
-            );
+              const adminEmail = req.user?.email || '';
 
-            const adminEmail = req.user.email;
-            const adminFullName = `${req.user.role} (${adminEmail})`;
+              for (const dir of directivos) {
+                await trx
+                  .insertInto("notificacion_supervision")
+                  .values({
+                    id_auditoria: supervision.id_auditoria,
+                    id_directivo: dir.id,
+                    tipo_notificacion: "SALIDA",
+                    mensaje: `La supervisión del Admin General ha EXPIRADO automáticamente. Duración: ${duracionStr}. Acciones: ${totalAcciones}`
+                  })
+                  .execute();
 
-            for (const dir of directivos.rows) {
-              await client.query(
-                `INSERT INTO notificacion_supervision (id_auditoria, id_directivo, tipo_notificacion, mensaje)
-                 VALUES ($1, $2, 'SALIDA', $3)`,
-                [
-                  supervision.id_auditoria,
-                  dir.id,
-                  `La supervisión del Admin General ha EXPIRADO automáticamente. Duración: ${duracionStr}. Acciones: ${totalAcciones}`
-                ]
-              );
-
-              // Enviar email asíncrono
-              const { AdminGeneralNotificationService } = require('../services/adminGeneralNotificationService');
-              AdminGeneralNotificationService.sendSupervisionFinalizada(
-                dir.email,
-                `${dir.nombre} ${dir.apellido || ''}`.trim(),
-                adminEmail,
-                supervision.colegio_nombre,
-                `${duracionStr} (Expiración automática por inactividad)`,
-                totalAcciones
-              ).catch((err: any) => console.error(err));
-            }
-
-            await client.query('COMMIT');
+                // Enviar email asíncrono
+                const { AdminGeneralNotificationService } = require('../services/adminGeneralNotificationService');
+                AdminGeneralNotificationService.sendSupervisionFinalizada(
+                  dir.email,
+                  `${dir.nombre} ${dir.apellido || ''}`.trim(),
+                  adminEmail,
+                  supervision.colegio_nombre,
+                  `${duracionStr} (Expiración automática por inactividad)`,
+                  totalAcciones
+                ).catch((err: any) => console.error(err));
+              }
+            });
           } catch (err) {
-            await client.query('ROLLBACK');
             console.error("Error auto-expiring supervision inside verifyToken:", err);
-          } finally {
-            client.release();
           }
 
           req.user.schoolId = null;
@@ -212,20 +220,18 @@ export const verifyToken = async (req: AuthRequest, res: Response, next: NextFun
           if (req.method === 'GET') {
             const auditDetails = getAuditLogDetails(req.originalUrl);
             if (auditDetails) {
-              pool.query(
-                `INSERT INTO auditoria_acciones_realizadas
-                 (id_auditoria, modulo, tipo_accion, accion, recurso_afectado)
-                 VALUES ($1, $2, $3, $4, $5)`,
-                [
-                  supervision.id_auditoria,
-                  auditDetails.modulo,
-                  auditDetails.tipo_accion,
-                  auditDetails.accion,
-                  auditDetails.recurso_afectado
-                ]
-              ).catch((err: any) => {
-                console.error('Error logging automatic GET action in active supervision:', err);
-              });
+              db.insertInto("auditoria_acciones_realizadas")
+                .values({
+                  id_auditoria: supervision.id_auditoria,
+                  modulo: auditDetails.modulo as any,
+                  tipo_accion: auditDetails.tipo_accion as any,
+                  accion: auditDetails.accion,
+                  recurso_afectado: auditDetails.recurso_afectado
+                })
+                .execute()
+                .catch((err: any) => {
+                  console.error('Error logging automatic GET action in active supervision:', err);
+                });
             }
           } else {
             // Para peticiones modificadoras, registrar en el evento 'finish' si no fueron auditadas manualmente
@@ -243,23 +249,21 @@ export const verifyToken = async (req: AuthRequest, res: Response, next: NextFun
                 const valor_nuevo = tipo_accion === 'MODIFICACION' ? req.body : null;
                 const motivo_cambio = req.body.motivo_cambio || req.body.motivo || 'Acción general realizada bajo modo supervisión';
 
-                pool.query(
-                  `INSERT INTO auditoria_acciones_realizadas
-                   (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, valor_antiguo, valor_nuevo, motivo_cambio)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-                  [
-                    supervision.id_auditoria,
-                    modulo,
-                    tipo_accion,
+                db.insertInto("auditoria_acciones_realizadas")
+                  .values({
+                    id_auditoria: supervision.id_auditoria,
+                    modulo: modulo as any,
+                    tipo_accion: tipo_accion as any,
                     accion,
                     recurso_afectado,
-                    valor_antiguo ? JSON.stringify(valor_antiguo) : null,
-                    valor_nuevo ? JSON.stringify(valor_nuevo) : null,
+                    valor_antiguo: valor_antiguo ? (valor_antiguo as any) : null,
+                    valor_nuevo: valor_nuevo ? (valor_nuevo as any) : null,
                     motivo_cambio
-                  ]
-                ).catch((err: any) => {
-                  console.error('Error logging automatic modifying action in active supervision:', err);
-                });
+                  })
+                  .execute()
+                  .catch((err: any) => {
+                    console.error('Error logging automatic modifying action in active supervision:', err);
+                  });
               }
             });
           }
@@ -382,23 +386,24 @@ export const verifyTokenOptional = async (req: AuthRequest, res: Response, next:
     const decoded = jwt.verify(token, JWT_SECRET) as any;
 
     if (decoded.jti) {
-      const blacklistRes = await pool.query(
-        'SELECT 1 FROM token_blacklist WHERE jti = $1',
-        [decoded.jti]
-      );
-      if (blacklistRes.rows.length > 0) {
+      const blacklistRes = await db
+        .selectFrom("token_blacklist")
+        .select(sql<number>`1`.as("one"))
+        .where("jti", "=", decoded.jti)
+        .executeTakeFirst();
+      if (blacklistRes) {
         next();
         return;
       }
     }
 
-    const userDbRes = await pool.query(
-      'SELECT estado, logged_out_at FROM usuario WHERE id_usuario = $1',
-      [decoded.id]
-    );
+    const dbUser = await db
+      .selectFrom("usuario")
+      .select(["estado", "logged_out_at"])
+      .where("id_usuario", "=", decoded.id)
+      .executeTakeFirst();
 
-    if (userDbRes.rows.length > 0 && userDbRes.rows[0].estado === 'ACTIVO') {
-      const dbUser = userDbRes.rows[0];
+    if (dbUser && dbUser.estado === 'ACTIVO') {
       
       const iat = decoded.iat * 1000;
       if (dbUser.logged_out_at && new Date(dbUser.logged_out_at).getTime() > iat) {

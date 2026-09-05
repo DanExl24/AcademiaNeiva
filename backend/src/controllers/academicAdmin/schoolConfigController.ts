@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
-import { PoolClient } from "pg";
-import { pool } from "../../config/db";
+import { db } from "../../config/kysely";
+import { sql } from "kysely";
 import bcrypt from "bcrypt";
 import { randomUUID } from "crypto";
 import { NotificationService } from "../../services/notificationService";
@@ -56,40 +56,56 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
     // 1. Get active or latest period within the target year if not provided or if invalid for targetYearId
     let targetPeriodId = periodId ? Number(periodId) : null;
     if (targetPeriodId) {
-      const validCheck = await pool.query(
-        `SELECT id_periodo FROM periodo_academico WHERE id_periodo = $1 AND id_anio = $2 AND id_colegio = $3`,
-        [targetPeriodId, targetYearId, schoolId]
-      );
-      if (validCheck.rows.length === 0) {
+      const validCheck = await db
+        .selectFrom("periodo_academico")
+        .select("id_periodo")
+        .where("id_periodo", "=", targetPeriodId)
+        .where("id_anio", "=", targetYearId)
+        .where("id_colegio", "=", schoolId)
+        .executeTakeFirst();
+      if (!validCheck) {
         targetPeriodId = null;
       }
     }
 
     if (!targetPeriodId) {
-      const defaultPeriodRes = await pool.query(
-        `SELECT id_periodo FROM periodo_academico 
-         WHERE id_anio = $1 AND id_colegio = $2 
-         ORDER BY 
-           CASE WHEN estado = 'ABIERTO' THEN 1 WHEN estado = 'CERRADO' THEN 2 ELSE 3 END, 
-           id_periodo DESC 
-         LIMIT 1`,
-        [targetYearId, schoolId]
-      );
-      if (defaultPeriodRes.rows.length > 0) {
-        targetPeriodId = defaultPeriodRes.rows[0].id_periodo;
+      const defaultPeriod = await db
+        .selectFrom("periodo_academico")
+        .select("id_periodo")
+        .where("id_anio", "=", targetYearId)
+        .where("id_colegio", "=", schoolId)
+        .orderBy(
+          sql`CASE WHEN estado = 'ABIERTO' THEN 1 WHEN estado = 'CERRADO' THEN 2 ELSE 3 END`,
+          "asc"
+        )
+        .orderBy("id_periodo", "desc")
+        .limit(1)
+        .executeTakeFirst();
+      if (defaultPeriod) {
+        targetPeriodId = defaultPeriod.id_periodo;
       }
     }
 
     let activePeriodInfo = null;
     if (targetPeriodId) {
-      const activePeriodFullRes = await pool.query(
-        `SELECT pa.id_periodo, pa.nombre, pa.estado, pa.mes_inicio, pa.dia_inicio, pa.mes_fin, pa.dia_fin, pa.id_anio, al.calendario, al.estado as anio_estado
-         FROM periodo_academico pa
-         JOIN anio_lectivo al ON pa.id_anio = al.id_anio
-         WHERE pa.id_periodo = $1`,
-        [targetPeriodId]
-      );
-      activePeriodInfo = activePeriodFullRes.rows[0] || null;
+      const activePeriodFull = await db
+        .selectFrom("periodo_academico as pa")
+        .innerJoin("anio_lectivo as al", "pa.id_anio", "al.id_anio")
+        .select([
+          "pa.id_periodo",
+          "pa.nombre",
+          "pa.estado",
+          "pa.mes_inicio",
+          "pa.dia_inicio",
+          "pa.mes_fin",
+          "pa.dia_fin",
+          "pa.id_anio",
+          "al.calendario",
+          "al.estado as anio_estado",
+        ])
+        .where("pa.id_periodo", "=", targetPeriodId)
+        .executeTakeFirst();
+      activePeriodInfo = activePeriodFull || null;
     }
 
     // 2. Principal Indicators (Counters)
@@ -97,105 +113,119 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
       studentsCountRes, teachersCountRes, disciplinaryRes, desertionRes,
       studentsByGradeRes, teachersByGradeRes, disciplinaryByGradeRes, desertionByGradeRes
     ] = await Promise.all([
-      pool.query(`SELECT COUNT(*) as total FROM matricula WHERE id_colegio = $1 AND id_anio = $2 AND estado NOT IN ('CANCELADA', 'RECHAZADA', 'TRASLADADA')`, [schoolId, targetYearId]),
-      pool.query("SELECT COUNT(*) as total FROM docente WHERE id_colegio = $1 AND estado = 'ACTIVO'", [schoolId]),
-      pool.query(
-        `SELECT COUNT(*) as total FROM observacion_estudiante 
-         WHERE id_colegio = $1 AND tipo = 'DISCIPLINARIA' ${targetPeriodId ? "AND id_periodo = $2" : ""}`,
-        targetPeriodId ? [schoolId, targetPeriodId] : [schoolId]
-      ),
-      pool.query(
-        `SELECT COUNT(*) as total FROM matricula WHERE id_colegio = $1 AND id_anio = $2 AND estado = 'CANCELADA'`,
-        [schoolId, targetYearId]
-      ),
-      pool.query(
-        `SELECT tg.nombre as grade, COUNT(m.id_matricula)::int as total
-         FROM matricula m
-         JOIN grupos g ON m.id_grupo = g.id_grupo
-         JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-         WHERE m.id_colegio = $1 AND m.id_anio = $2 AND m.estado NOT IN ('CANCELADA', 'RECHAZADA', 'TRASLADADA')
-         GROUP BY tg.nombre`,
-        [schoolId, targetYearId]
-      ),
-      pool.query(
-        `SELECT tg.nombre as grade, COUNT(DISTINCT dg.id_docente)::int as total
-         FROM detalle_grados dg
-         JOIN grupos g ON dg.id_grupo = g.id_grupo
-         JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-         WHERE dg.id_colegio = $1
-         GROUP BY tg.nombre`,
-        [schoolId]
-      ),
-      pool.query(
-        `SELECT tg.nombre as grade, COUNT(o.id_observacion)::int as total
-         FROM observacion_estudiante o
-         JOIN estudiante e ON o.id_estudiante = e.id_estudiante
-         JOIN matricula m ON e.id_estudiante = m.id_estudiante AND m.id_anio = $2
-         JOIN grupos g ON m.id_grupo = g.id_grupo
-         JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-         WHERE o.id_colegio = $1 AND o.tipo = 'DISCIPLINARIA' AND m.estado NOT IN ('CANCELADA', 'RECHAZADA', 'TRASLADADA') ${targetPeriodId ? "AND o.id_periodo = $3" : ""}
-         GROUP BY tg.nombre`,
-        targetPeriodId ? [schoolId, targetYearId, targetPeriodId] : [schoolId, targetYearId]
-      ),
-      pool.query(
-        `SELECT tg.nombre as grade, COUNT(m.id_matricula)::int as total
-         FROM matricula m
-         JOIN grupos g ON m.id_grupo = g.id_grupo
-         JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-         WHERE m.id_colegio = $1 AND m.id_anio = $2 AND m.estado = 'CANCELADA'
-         GROUP BY tg.nombre`,
-        [schoolId, targetYearId]
-      )
+      db.selectFrom("matricula")
+        .select(db.fn.count("id_matricula").as("total"))
+        .where("id_colegio", "=", schoolId)
+        .where("id_anio", "=", targetYearId)
+        .where("estado", "not in", ["CANCELADA", "RECHAZADA", "TRASLADADA"])
+        .executeTakeFirst(),
+      db.selectFrom("docente")
+        .select(db.fn.count("id_docente").as("total"))
+        .where("id_colegio", "=", schoolId)
+        .where("estado", "=", "ACTIVO")
+        .executeTakeFirst(),
+      (() => {
+        let q = db.selectFrom("observacion_estudiante")
+          .select(db.fn.count("id_observacion").as("total"))
+          .where("id_colegio", "=", schoolId)
+          .where("tipo", "=", "DISCIPLINARIA");
+        if (targetPeriodId) q = q.where("id_periodo", "=", targetPeriodId);
+        return q.executeTakeFirst();
+      })(),
+      db.selectFrom("matricula")
+        .select(db.fn.count("id_matricula").as("total"))
+        .where("id_colegio", "=", schoolId)
+        .where("id_anio", "=", targetYearId)
+        .where("estado", "=", "CANCELADA")
+        .executeTakeFirst(),
+      db.selectFrom("matricula as m")
+        .innerJoin("grupos as g", "m.id_grupo", "g.id_grupo")
+        .innerJoin("tipo_grado as tg", "g.id_tipo_grado", "tg.id_tipo_grado")
+        .select(["tg.nombre as grade", sql<number>`COUNT(m.id_matricula)::int`.as("total")])
+        .where("m.id_colegio", "=", schoolId)
+        .where("m.id_anio", "=", targetYearId)
+        .where("m.estado", "not in", ["CANCELADA", "RECHAZADA", "TRASLADADA"])
+        .groupBy("tg.nombre")
+        .execute(),
+      db.selectFrom("detalle_grados as dg")
+        .innerJoin("grupos as g", "dg.id_grupo", "g.id_grupo")
+        .innerJoin("tipo_grado as tg", "g.id_tipo_grado", "tg.id_tipo_grado")
+        .select(["tg.nombre as grade", sql<number>`COUNT(DISTINCT dg.id_docente)::int`.as("total")])
+        .where("dg.id_colegio", "=", schoolId)
+        .groupBy("tg.nombre")
+        .execute(),
+      (() => {
+        let q = db.selectFrom("observacion_estudiante as o")
+          .innerJoin("estudiante as e", "o.id_estudiante", "e.id_estudiante")
+          .innerJoin("matricula as m", (join) =>
+            join.onRef("e.id_estudiante", "=", "m.id_estudiante").on("m.id_anio", "=", targetYearId)
+          )
+          .innerJoin("grupos as g", "m.id_grupo", "g.id_grupo")
+          .innerJoin("tipo_grado as tg", "g.id_tipo_grado", "tg.id_tipo_grado")
+          .select(["tg.nombre as grade", sql<number>`COUNT(o.id_observacion)::int`.as("total")])
+          .where("o.id_colegio", "=", schoolId)
+          .where("o.tipo", "=", "DISCIPLINARIA")
+          .where("m.estado", "not in", ["CANCELADA", "RECHAZADA", "TRASLADADA"]);
+        if (targetPeriodId) q = q.where("o.id_periodo", "=", targetPeriodId);
+        return q.groupBy("tg.nombre").execute();
+      })(),
+      db.selectFrom("matricula as m")
+        .innerJoin("grupos as g", "m.id_grupo", "g.id_grupo")
+        .innerJoin("tipo_grado as tg", "g.id_tipo_grado", "tg.id_tipo_grado")
+        .select(["tg.nombre as grade", sql<number>`COUNT(m.id_matricula)::int`.as("total")])
+        .where("m.id_colegio", "=", schoolId)
+        .where("m.id_anio", "=", targetYearId)
+        .where("m.estado", "=", "CANCELADA")
+        .groupBy("tg.nombre")
+        .execute(),
     ]);
 
     // 3. Attendance % Today
     const todayStr = new Date().toLocaleDateString("en-CA");
-    const attendanceTodayRes = await pool.query(
-      `SELECT 
-         (COUNT(*) FILTER (WHERE estado = 'PRESENTE')::numeric / NULLIF(COUNT(*), 0) * 100) as rate
-       FROM registro_asistencia 
-       WHERE id_colegio = $1 AND fecha::date = $2::date`,
-      [schoolId, todayStr]
-    );
+    const attendanceTodayRes = await sql<{ rate: string | number | null }>`
+      SELECT 
+        (COUNT(*) FILTER (WHERE estado = 'PRESENTE')::numeric / NULLIF(COUNT(*), 0) * 100) as rate
+      FROM registro_asistencia 
+      WHERE id_colegio = ${schoolId} AND fecha::date = ${todayStr}::date
+    `.execute(db);
 
-    const attendanceByGradeRes = await pool.query(
-      `SELECT 
-         tg.nombre as grade,
-         (COUNT(*) FILTER (WHERE ra.estado = 'PRESENTE')::numeric / NULLIF(COUNT(*), 0) * 100) as rate
-       FROM registro_asistencia ra
-       JOIN matricula m ON ra.id_estudiante = m.id_estudiante AND m.id_anio = $3
-       JOIN grupos g ON m.id_grupo = g.id_grupo
-       JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-       WHERE ra.id_colegio = $1 AND ra.fecha::date = $2::date AND m.estado NOT IN ('CANCELADA', 'RECHAZADA', 'TRASLADADA')
-       GROUP BY tg.nombre`,
-      [schoolId, todayStr, targetYearId]
-    );
+    const attendanceByGradeRes = await sql<{ grade: string; rate: string | number | null }>`
+      SELECT 
+        tg.nombre as grade,
+        (COUNT(*) FILTER (WHERE ra.estado = 'PRESENTE')::numeric / NULLIF(COUNT(*), 0) * 100) as rate
+      FROM registro_asistencia ra
+      JOIN matricula m ON ra.id_estudiante = m.id_estudiante AND m.id_anio = ${targetYearId}
+      JOIN grupos g ON m.id_grupo = g.id_grupo
+      JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
+      WHERE ra.id_colegio = ${schoolId} AND ra.fecha::date = ${todayStr}::date AND m.estado NOT IN ('CANCELADA', 'RECHAZADA', 'TRASLADADA')
+      GROUP BY tg.nombre
+    `.execute(db);
 
     // Compile summaryByGrade
     const summaryByGrade: Record<string, any> = {};
 
-    studentsByGradeRes.rows.forEach(r => {
+    studentsByGradeRes.forEach(r => {
       if (!summaryByGrade[r.grade]) {
         summaryByGrade[r.grade] = { totalStudents: 0, totalTeachers: 0, attendanceToday: 0, generalAverage: 0, studentsAtRisk: 0, disciplinaryReports: 0, desertionRate: 0 };
       }
       summaryByGrade[r.grade].totalStudents = Number(r.total);
     });
 
-    teachersByGradeRes.rows.forEach(r => {
+    teachersByGradeRes.forEach(r => {
       if (!summaryByGrade[r.grade]) {
         summaryByGrade[r.grade] = { totalStudents: 0, totalTeachers: 0, attendanceToday: 0, generalAverage: 0, studentsAtRisk: 0, disciplinaryReports: 0, desertionRate: 0 };
       }
       summaryByGrade[r.grade].totalTeachers = Number(r.total);
     });
 
-    disciplinaryByGradeRes.rows.forEach(r => {
+    disciplinaryByGradeRes.forEach(r => {
       if (!summaryByGrade[r.grade]) {
         summaryByGrade[r.grade] = { totalStudents: 0, totalTeachers: 0, attendanceToday: 0, generalAverage: 0, studentsAtRisk: 0, disciplinaryReports: 0, desertionRate: 0 };
       }
       summaryByGrade[r.grade].disciplinaryReports = Number(r.total);
     });
 
-    desertionByGradeRes.rows.forEach(r => {
+    desertionByGradeRes.forEach(r => {
       if (!summaryByGrade[r.grade]) {
         summaryByGrade[r.grade] = { totalStudents: 0, totalTeachers: 0, attendanceToday: 0, generalAverage: 0, studentsAtRisk: 0, disciplinaryReports: 0, desertionRate: 0 };
       }
@@ -206,8 +236,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
       if (!summaryByGrade[r.grade]) {
         summaryByGrade[r.grade] = { totalStudents: 0, totalTeachers: 0, attendanceToday: 0, generalAverage: 0, studentsAtRisk: 0, disciplinaryReports: 0, desertionRate: 0 };
       }
-      summaryByGrade[r.grade].attendanceToday = Number(Number(r.rate || 0).toFixed(1));
-    });
+      summaryByGrade[r.grade].attendanceToday = Number(Number(r.rate || 0).toFixed(1));    });
 
     // 4. Academic Performance & Risk (Live calculation fallback)
     let performanceMetrics: { average: number; atRisk: number } = { average: 0, atRisk: 0 };
@@ -218,7 +247,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
         FROM resultado_academico ra
         JOIN detalle_grados dg_ra ON ra.id_detallegrado = dg_ra.id_detallegrado
         JOIN matricula m ON ra.id_estudiante = m.id_estudiante AND m.id_anio = ${targetYearId} AND m.estado NOT IN ('CANCELADA', 'RECHAZADA', 'TRASLADADA')
-        WHERE dg_ra.id_colegio = $1 AND ra.id_periodo = $2
+        WHERE dg_ra.id_colegio = ${schoolId} AND ra.id_periodo = ${targetPeriodId}
 
         UNION ALL
 
@@ -227,7 +256,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
         FROM notas_actividad na
         JOIN actividad_materia am ON na.id_actividadmateria = am.id_actividadmateria
         JOIN matricula m ON na.id_estudiante = m.id_estudiante AND m.id_anio = ${targetYearId} AND m.estado NOT IN ('CANCELADA', 'RECHAZADA', 'TRASLADADA')
-        WHERE am.id_periodo = $2 AND am.id_colegio = $1
+        WHERE am.id_periodo = ${targetPeriodId} AND am.id_colegio = ${schoolId}
         AND NOT EXISTS (
           SELECT 1 FROM resultado_academico ra3
           WHERE ra3.id_estudiante = na.id_estudiante
@@ -239,34 +268,31 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
     `;
 
     if (targetPeriodId) {
-      const perfRes = await pool.query(
-        `${buildLiveCTE()}
-         SELECT 
-           AVG(promedio) as avg_general,
-           COUNT(DISTINCT id_estudiante) FILTER (WHERE promedio < $3) as at_risk
-         FROM current_results cr
-         JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
-         WHERE dg.id_colegio = $1`,
-        [schoolId, targetPeriodId, notaAprobacion]
-      );
+      const perfRes = await sql<any>`
+        ${sql.raw(buildLiveCTE())}
+        SELECT 
+          AVG(promedio) as avg_general,
+          COUNT(DISTINCT id_estudiante) FILTER (WHERE promedio < ${notaAprobacion}) as at_risk
+        FROM current_results cr
+        JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
+        WHERE dg.id_colegio = ${schoolId}
+      `.execute(db);
       performanceMetrics.average = Number(Number(perfRes.rows[0]?.avg_general || 0).toFixed(2));
       performanceMetrics.atRisk = Number(perfRes.rows[0]?.at_risk || 0);
 
-      const perfByGradeRes = await pool.query(
-        `${buildLiveCTE()}
-         SELECT 
-           tg.nombre as grade,
-           AVG(cr.promedio) as avg_general,
-           COUNT(DISTINCT cr.id_estudiante) FILTER (WHERE cr.promedio < $3) as at_risk
-         FROM current_results cr
-         JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
-         JOIN grupos g ON dg.id_grupo = g.id_grupo
-         JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-         WHERE dg.id_colegio = $1
-         GROUP BY tg.nombre`,
-        [schoolId, targetPeriodId, notaAprobacion]
-      );
-
+      const perfByGradeRes = await sql<any>`
+        ${sql.raw(buildLiveCTE())}
+        SELECT 
+          tg.nombre as grade,
+          AVG(cr.promedio) as avg_general,
+          COUNT(DISTINCT cr.id_estudiante) FILTER (WHERE cr.promedio < ${notaAprobacion}) as at_risk
+        FROM current_results cr
+        JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
+        JOIN grupos g ON dg.id_grupo = g.id_grupo
+        JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
+        WHERE dg.id_colegio = ${schoolId}
+        GROUP BY tg.nombre
+      `.execute(db);
 
       perfByGradeRes.rows.forEach(r => {
         if (!summaryByGrade[r.grade]) {
@@ -285,44 +311,41 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
     });
 
     // 5. Observations & Convivencia Summary
-    const obsRes = await pool.query(
-      `SELECT 
-         COUNT(*)::int as total,
-         COUNT(*) FILTER (WHERE o.tipo::text IN ('ACADEMICA', 'ACADEMICO'))::int as academicas,
-         COUNT(*) FILTER (WHERE o.tipo::text IN ('DISCIPLINARIA', 'DISCIPLINARIO'))::int as disciplinarias,
-         COUNT(*) FILTER (WHERE o.tipo::text IN ('CONVIVENCIA', 'CONVIVENCIAL'))::int as convivenciales
-       FROM observacion_estudiante o
-       JOIN detalle_grados dg ON o.id_detallegrado = dg.id_detallegrado
-       WHERE dg.id_colegio = $1 ${targetPeriodId ? `AND o.id_periodo = $2` : ''}`,
-      targetPeriodId ? [schoolId, targetPeriodId] : [schoolId]
-    );
+    const obsRes = await sql<any>`
+      SELECT 
+        COUNT(*)::int as total,
+        COUNT(*) FILTER (WHERE o.tipo::text IN ('ACADEMICA', 'ACADEMICO'))::int as academicas,
+        COUNT(*) FILTER (WHERE o.tipo::text IN ('DISCIPLINARIA', 'DISCIPLINARIO'))::int as disciplinarias,
+        COUNT(*) FILTER (WHERE o.tipo::text IN ('CONVIVENCIA', 'CONVIVENCIAL'))::int as convivenciales
+      FROM observacion_estudiante o
+      JOIN detalle_grados dg ON o.id_detallegrado = dg.id_detallegrado
+      WHERE dg.id_colegio = ${schoolId} ${targetPeriodId ? sql`AND o.id_periodo = ${targetPeriodId}` : sql``}
+    `.execute(db);
 
-    const sancionRes = await pool.query(
-      `SELECT COUNT(DISTINCT s.id_sancion)::int as total
-       FROM sancion s
-       JOIN estudiante e ON s.id_estudiante = e.id_estudiante
-       JOIN matricula m ON e.id_estudiante = m.id_estudiante AND m.id_anio = $2 AND m.estado NOT IN ('CANCELADA', 'RECHAZADA', 'TRASLADADA')
-       JOIN detalle_grados dg ON m.id_grupo = dg.id_grupo
-       WHERE dg.id_colegio = $1 AND s.estado = 'ACTIVA'`,
-      [schoolId, targetYearId]
-    );
+    const sancionRes = await sql<any>`
+      SELECT COUNT(DISTINCT s.id_sancion)::int as total
+      FROM sancion s
+      JOIN estudiante e ON s.id_estudiante = e.id_estudiante
+      JOIN matricula m ON e.id_estudiante = m.id_estudiante AND m.id_anio = ${targetYearId} AND m.estado NOT IN ('CANCELADA', 'RECHAZADA', 'TRASLADADA')
+      JOIN detalle_grados dg ON m.id_grupo = dg.id_grupo
+      WHERE dg.id_colegio = ${schoolId} AND s.estado = 'ACTIVA'
+    `.execute(db);
 
-    const obsByGradeRes = await pool.query(
-      `SELECT 
-         tg.nombre as grado,
-         COUNT(*)::int as total,
-         COUNT(*) FILTER (WHERE o.tipo::text IN ('ACADEMICA', 'ACADEMICO'))::int as academicas,
-         COUNT(*) FILTER (WHERE o.tipo::text IN ('DISCIPLINARIA', 'DISCIPLINARIO'))::int as disciplinarias,
-         COUNT(*) FILTER (WHERE o.tipo::text IN ('CONVIVENCIA', 'CONVIVENCIAL'))::int as convivenciales
-       FROM observacion_estudiante o
-       JOIN detalle_grados dg ON o.id_detallegrado = dg.id_detallegrado
-       JOIN grupos g ON dg.id_grupo = g.id_grupo
-       JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-       WHERE dg.id_colegio = $1 ${targetPeriodId ? `AND o.id_periodo = $2` : ''}
-       GROUP BY tg.id_tipo_grado, tg.nombre
-       ORDER BY tg.id_tipo_grado`,
-      targetPeriodId ? [schoolId, targetPeriodId] : [schoolId]
-    );
+    const obsByGradeRes = await sql<any>`
+      SELECT 
+        tg.nombre as grado,
+        COUNT(*)::int as total,
+        COUNT(*) FILTER (WHERE o.tipo::text IN ('ACADEMICA', 'ACADEMICO'))::int as academicas,
+        COUNT(*) FILTER (WHERE o.tipo::text IN ('DISCIPLINARIA', 'DISCIPLINARIO'))::int as disciplinarias,
+        COUNT(*) FILTER (WHERE o.tipo::text IN ('CONVIVENCIA', 'CONVIVENCIAL'))::int as convivenciales
+      FROM observacion_estudiante o
+      JOIN detalle_grados dg ON o.id_detallegrado = dg.id_detallegrado
+      JOIN grupos g ON dg.id_grupo = g.id_grupo
+      JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
+      WHERE dg.id_colegio = ${schoolId} ${targetPeriodId ? sql`AND o.id_periodo = ${targetPeriodId}` : sql``}
+      GROUP BY tg.id_tipo_grado, tg.nombre
+      ORDER BY tg.id_tipo_grado
+    `.execute(db);
 
     const observationsSummary = {
       total: Number(obsRes.rows[0]?.total || 0),
@@ -344,70 +367,66 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
     };
     if (targetPeriodId) {
       const [gradePerfRes, subjectPerfRes, coursePerfRes, subjectCoursePerfRes] = await Promise.all([
-        pool.query(
-          `${buildLiveCTE()}
-           SELECT tg.nombre, ROUND(AVG(cr.promedio), 2) as average
-           FROM current_results cr
-           JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
-           JOIN grupos g ON dg.id_grupo = g.id_grupo
-           JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-           WHERE dg.id_colegio = $1
-           GROUP BY tg.id_tipo_grado, tg.nombre
-           ORDER BY tg.id_tipo_grado`,
-          [schoolId, targetPeriodId]
-        ),
-        pool.query(
-          `${buildLiveCTE()}
-           SELECT m.nombre, ROUND(AVG(cr.promedio), 2) as average
-           FROM current_results cr
-           JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
-           JOIN materias m ON dg.id_materia = m.id_materia
-           WHERE dg.id_colegio = $1
-           GROUP BY m.id_materia, m.nombre
-           ORDER BY average DESC
-           LIMIT 10`,
-          [schoolId, targetPeriodId]
-        ),
-        pool.query(
-          `${buildLiveCTE()}
-           SELECT 
-             g.id_grupo,
-             tg.nombre as grado_nombre,
-             s.nombre as seccion_nombre,
-             j.nombre as jornada_nombre,
-             ROUND(AVG(cr.promedio), 2) as average
-           FROM current_results cr
-           JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
-           JOIN grupos g ON dg.id_grupo = g.id_grupo
-           JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-           JOIN secciones s ON g.id_seccion = s.id_seccion
-           JOIN jornada j ON g.id_jornada = j.id_jornada
-            WHERE dg.id_colegio = $1
-           GROUP BY g.id_grupo, tg.nombre, s.nombre, j.nombre
-           ORDER BY tg.nombre, LENGTH(s.nombre), s.nombre`,
-          [schoolId, targetPeriodId]
-        ),
-        pool.query(
-          `${buildLiveCTE()}
-           SELECT 
-             g.id_grupo,
-             m.nombre as subject_nombre, 
-             tg.nombre as grado_nombre,
-             s.nombre as seccion_nombre,
-             j.nombre as jornada_nombre,
-             ROUND(AVG(cr.promedio), 2) as average
-           FROM current_results cr
-           JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
-           JOIN materias m ON dg.id_materia = m.id_materia
-           JOIN grupos g ON dg.id_grupo = g.id_grupo
-           JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-           JOIN secciones s ON g.id_seccion = s.id_seccion
-           JOIN jornada j ON g.id_jornada = j.id_jornada
-           WHERE dg.id_colegio = $1
-           GROUP BY m.id_materia, m.nombre, g.id_grupo, tg.nombre, s.nombre, j.nombre
-           ORDER BY tg.nombre, LENGTH(s.nombre), s.nombre, average DESC`,
-          [schoolId, targetPeriodId]
-        )
+        sql<any>`
+          ${sql.raw(buildLiveCTE())}
+          SELECT tg.nombre, ROUND(AVG(cr.promedio), 2) as average
+          FROM current_results cr
+          JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
+          JOIN grupos g ON dg.id_grupo = g.id_grupo
+          JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
+          WHERE dg.id_colegio = ${schoolId}
+          GROUP BY tg.id_tipo_grado, tg.nombre
+          ORDER BY tg.id_tipo_grado
+        `.execute(db),
+        sql<any>`
+          ${sql.raw(buildLiveCTE())}
+          SELECT m.nombre, ROUND(AVG(cr.promedio), 2) as average
+          FROM current_results cr
+          JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
+          JOIN materias m ON dg.id_materia = m.id_materia
+          WHERE dg.id_colegio = ${schoolId}
+          GROUP BY m.id_materia, m.nombre
+          ORDER BY average DESC
+          LIMIT 10
+        `.execute(db),
+        sql<any>`
+          ${sql.raw(buildLiveCTE())}
+          SELECT 
+            g.id_grupo,
+            tg.nombre as grado_nombre,
+            s.nombre as seccion_nombre,
+            j.nombre as jornada_nombre,
+            ROUND(AVG(cr.promedio), 2) as average
+          FROM current_results cr
+          JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
+          JOIN grupos g ON dg.id_grupo = g.id_grupo
+          JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
+          JOIN secciones s ON g.id_seccion = s.id_seccion
+          JOIN jornada j ON g.id_jornada = j.id_jornada
+          WHERE dg.id_colegio = ${schoolId}
+          GROUP BY g.id_grupo, tg.nombre, s.nombre, j.nombre
+          ORDER BY tg.nombre, LENGTH(s.nombre), s.nombre
+        `.execute(db),
+        sql<any>`
+          ${sql.raw(buildLiveCTE())}
+          SELECT 
+            g.id_grupo,
+            m.nombre as subject_nombre, 
+            tg.nombre as grado_nombre,
+            s.nombre as seccion_nombre,
+            j.nombre as jornada_nombre,
+            ROUND(AVG(cr.promedio), 2) as average
+          FROM current_results cr
+          JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
+          JOIN materias m ON dg.id_materia = m.id_materia
+          JOIN grupos g ON dg.id_grupo = g.id_grupo
+          JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
+          JOIN secciones s ON g.id_seccion = s.id_seccion
+          JOIN jornada j ON g.id_jornada = j.id_jornada
+          WHERE dg.id_colegio = ${schoolId}
+          GROUP BY m.id_materia, m.nombre, g.id_grupo, tg.nombre, s.nombre, j.nombre
+          ORDER BY tg.nombre, LENGTH(s.nombre), s.nombre, average DESC
+        `.execute(db)
       ]);
       charts.performanceByGrade = gradePerfRes.rows.map(r => ({
         nombre: r.nombre,
@@ -436,41 +455,39 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
 
     // Evolution (all periods of the current year) - Historical promedios
     // For evolution, we use already calculated averages when possible
-    const evolutionRes = await pool.query(
-      `SELECT p.nombre, ROUND(AVG(ra.promedio), 2) as average
-       FROM resultado_academico ra
-       JOIN periodo_academico p ON ra.id_periodo = p.id_periodo
-       JOIN detalle_grados dg ON ra.id_detallegrado = dg.id_detallegrado
-       WHERE dg.id_colegio = $1 AND p.id_anio = $2
-       GROUP BY p.id_periodo, p.nombre
-       ORDER BY p.id_periodo`,
-      [schoolId, targetYearId]
-    );
+    const evolutionRes = await sql<any>`
+      SELECT p.nombre, ROUND(AVG(ra.promedio), 2) as average
+      FROM resultado_academico ra
+      JOIN periodo_academico p ON ra.id_periodo = p.id_periodo
+      JOIN detalle_grados dg ON ra.id_detallegrado = dg.id_detallegrado
+      WHERE dg.id_colegio = ${schoolId} AND p.id_anio = ${targetYearId}
+      GROUP BY p.id_periodo, p.nombre
+      ORDER BY p.id_periodo
+    `.execute(db);
     charts.evolution = evolutionRes.rows.map(r => ({
       nombre: r.nombre,
       average: Number(r.average || 0)
     }));
 
-    const evolutionByCourseRes = await pool.query(
-      `SELECT 
-         p.nombre as periodo_nombre, 
-         g.id_grupo,
-         tg.nombre as grado_nombre,
-         s.nombre as seccion_nombre,
-         j.nombre as jornada_nombre,
-         ROUND(AVG(ra.promedio), 2) as average
-       FROM resultado_academico ra
-       JOIN periodo_academico p ON ra.id_periodo = p.id_periodo
-       JOIN detalle_grados dg ON ra.id_detallegrado = dg.id_detallegrado
-       JOIN grupos g ON dg.id_grupo = g.id_grupo
-       JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-       JOIN secciones s ON g.id_seccion = s.id_seccion
-       JOIN jornada j ON g.id_jornada = j.id_jornada
-       WHERE dg.id_colegio = $1 AND p.id_anio = $2
-       GROUP BY p.id_periodo, p.nombre, g.id_grupo, tg.nombre, s.nombre, j.nombre
-        ORDER BY p.id_periodo, tg.nombre, LENGTH(s.nombre), s.nombre`,
-      [schoolId, targetYearId]
-    );
+    const evolutionByCourseRes = await sql<any>`
+      SELECT 
+        p.nombre as periodo_nombre, 
+        g.id_grupo,
+        tg.nombre as grado_nombre,
+        s.nombre as seccion_nombre,
+        j.nombre as jornada_nombre,
+        ROUND(AVG(ra.promedio), 2) as average
+      FROM resultado_academico ra
+      JOIN periodo_academico p ON ra.id_periodo = p.id_periodo
+      JOIN detalle_grados dg ON ra.id_detallegrado = dg.id_detallegrado
+      JOIN grupos g ON dg.id_grupo = g.id_grupo
+      JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
+      JOIN secciones s ON g.id_seccion = s.id_seccion
+      JOIN jornada j ON g.id_jornada = j.id_jornada
+      WHERE dg.id_colegio = ${schoolId} AND p.id_anio = ${targetYearId}
+      GROUP BY p.id_periodo, p.nombre, g.id_grupo, tg.nombre, s.nombre, j.nombre
+      ORDER BY p.id_periodo, tg.nombre, LENGTH(s.nombre), s.nombre
+    `.execute(db);
     charts.evolutionByCourse = evolutionByCourseRes.rows.map(r => ({
       periodo_nombre: r.periodo_nombre,
       id_grupo: Number(r.id_grupo),
@@ -506,6 +523,8 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
         id_estudiante: number;
         nombre_completo: string;
         id_grupo: number;
+        grado_nombre: string;
+        curso: string;
         materias_reprobadas: number;
         promedio_general: number;
         detalles_materias: { materia_nombre: string; promedio: number }[];
@@ -520,101 +539,97 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
     if (targetPeriodId) {
       const [criticalRes, gradeAlertsRes, groupRiskRes, studentsAtRiskRes] = await Promise.all([
         // Top 5 subjects with most students failing
-        pool.query(
-          `${buildLiveCTE()}
-           SELECT 
-             m.nombre, 
-             COUNT(DISTINCT cr.id_estudiante)::int as failures,
-             JSON_AGG(
-               JSON_BUILD_OBJECT(
-                 'id_estudiante', e.id_estudiante,
-                 'nombre_completo', e.nombre || ' ' || e.apellido,
-                 'promedio', cr.promedio,
-                 'curso', tg.nombre || ' ' || s.nombre
-               )
-             ) as estudiantes_reprobados
-           FROM current_results cr
-           JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
-           JOIN materias m ON dg.id_materia = m.id_materia
-           JOIN estudiante e ON cr.id_estudiante = e.id_estudiante
-           JOIN grupos g ON dg.id_grupo = g.id_grupo
-           JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-           JOIN secciones s ON g.id_seccion = s.id_seccion
-           WHERE dg.id_colegio = $1 AND cr.promedio < $3
-           GROUP BY m.id_materia, m.nombre
-           ORDER BY failures DESC
-           LIMIT 5`,
-          [schoolId, targetPeriodId, notaAprobacion]
-        ),
+        sql<any>`
+          ${sql.raw(buildLiveCTE())}
+          SELECT 
+            m.nombre, 
+            COUNT(DISTINCT cr.id_estudiante)::int as failures,
+            JSON_AGG(
+              JSON_BUILD_OBJECT(
+                'id_estudiante', e.id_estudiante,
+                'nombre_completo', e.nombre || ' ' || e.apellido,
+                'promedio', cr.promedio,
+                'curso', tg.nombre || ' ' || s.nombre
+              )
+            ) as estudiantes_reprobados
+          FROM current_results cr
+          JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
+          JOIN materias m ON dg.id_materia = m.id_materia
+          JOIN estudiante e ON cr.id_estudiante = e.id_estudiante
+          JOIN grupos g ON dg.id_grupo = g.id_grupo
+          JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
+          JOIN secciones s ON g.id_seccion = s.id_seccion
+          WHERE dg.id_colegio = ${schoolId} AND cr.promedio < ${notaAprobacion}
+          GROUP BY m.id_materia, m.nombre
+          ORDER BY failures DESC
+          LIMIT 5
+        `.execute(db),
         // Concentration of unique students at risk by grade level
-        pool.query(
-          `${buildLiveCTE()}
-           SELECT tg.nombre, COUNT(DISTINCT cr.id_estudiante) as alerts
-           FROM current_results cr
-           JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
-           JOIN grupos g ON dg.id_grupo = g.id_grupo
-           JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-           WHERE dg.id_colegio = $1 AND cr.promedio < $3
-           GROUP BY tg.id_tipo_grado, tg.nombre
-           ORDER BY alerts DESC`,
-          [schoolId, targetPeriodId, notaAprobacion]
-        ),
+        sql<any>`
+          ${sql.raw(buildLiveCTE())}
+          SELECT tg.nombre, COUNT(DISTINCT cr.id_estudiante) as alerts
+          FROM current_results cr
+          JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
+          JOIN grupos g ON dg.id_grupo = g.id_grupo
+          JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
+          WHERE dg.id_colegio = ${schoolId} AND cr.promedio < ${notaAprobacion}
+          GROUP BY tg.id_tipo_grado, tg.nombre
+          ORDER BY alerts DESC
+        `.execute(db),
         // Per-group risk: students failing at least one subject vs students passing everything
-        pool.query(
-          `${buildLiveCTE(`,
-           student_status AS (
-             SELECT 
-               cr.id_estudiante,
-               dg.id_grupo,
-               bool_or(cr.promedio < $3) as is_at_risk
-             FROM current_results cr
-             JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
-             WHERE dg.id_colegio = $1
-             GROUP BY cr.id_estudiante, dg.id_grupo
-           )`)}
-           SELECT 
-              g.id_grupo,
-              tg.nombre as grado_nombre,
-              s.nombre as seccion_nombre,
-              j.nombre as jornada_nombre,
-              tg.nombre || ' ' || s.nombre as curso,
-              COUNT(*) FILTER (WHERE ss.is_at_risk) as at_risk,
-              COUNT(*) FILTER (WHERE NOT ss.is_at_risk) as safe
-            FROM student_status ss
-            JOIN grupos g ON ss.id_grupo = g.id_grupo
-            JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-            JOIN secciones s ON g.id_seccion = s.id_seccion
-            JOIN jornada j ON g.id_jornada = j.id_jornada
-            GROUP BY g.id_grupo, tg.nombre, s.nombre, j.nombre
-            ORDER BY at_risk DESC`,
-          [schoolId, targetPeriodId, notaAprobacion]
-        ),
-        pool.query(
-          `${buildLiveCTE()}
-           SELECT 
-             cr.id_estudiante,
-             e.nombre || ' ' || e.apellido as nombre_completo,
-             dg.id_grupo,
-             tg.nombre as grado_nombre,
-             (tg.nombre || ' ' || s.nombre) as curso,
-             COUNT(*) FILTER (WHERE cr.promedio < $3)::int as materias_reprobadas,
-             ROUND(AVG(cr.promedio), 2)::numeric as promedio_general,
-             JSON_AGG(
-               JSON_BUILD_OBJECT('materia_nombre', m.nombre, 'promedio', cr.promedio)
-             ) FILTER (WHERE cr.promedio < $3) as detalles_materias
-           FROM current_results cr
-           JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
-           JOIN materias m ON dg.id_materia = m.id_materia
-           JOIN estudiante e ON cr.id_estudiante = e.id_estudiante
-           JOIN grupos g ON dg.id_grupo = g.id_grupo
-           JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-           JOIN secciones s ON g.id_seccion = s.id_seccion
-           WHERE dg.id_colegio = $1
-           GROUP BY cr.id_estudiante, e.nombre, e.apellido, dg.id_grupo, tg.nombre, s.nombre
-           HAVING bool_or(cr.promedio < $3)
-           ORDER BY materias_reprobadas DESC, promedio_general ASC`,
-          [schoolId, targetPeriodId, notaAprobacion]
-        )
+        sql<any>`
+          ${sql.raw(buildLiveCTE(`,
+          student_status AS (
+            SELECT 
+              cr.id_estudiante,
+              dg.id_grupo,
+              bool_or(cr.promedio < ${notaAprobacion}) as is_at_risk
+            FROM current_results cr
+            JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
+            WHERE dg.id_colegio = ${schoolId}
+            GROUP BY cr.id_estudiante, dg.id_grupo
+          )`))}
+          SELECT 
+            g.id_grupo,
+            tg.nombre as grado_nombre,
+            s.nombre as seccion_nombre,
+            j.nombre as jornada_nombre,
+            tg.nombre || ' ' || s.nombre as curso,
+            COUNT(*) FILTER (WHERE ss.is_at_risk) as at_risk,
+            COUNT(*) FILTER (WHERE NOT ss.is_at_risk) as safe
+          FROM student_status ss
+          JOIN grupos g ON ss.id_grupo = g.id_grupo
+          JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
+          JOIN secciones s ON g.id_seccion = s.id_seccion
+          JOIN jornada j ON g.id_jornada = j.id_jornada
+          GROUP BY g.id_grupo, tg.nombre, s.nombre, j.nombre
+          ORDER BY at_risk DESC
+        `.execute(db),
+        sql<any>`
+          ${sql.raw(buildLiveCTE())}
+          SELECT 
+            cr.id_estudiante,
+            e.nombre || ' ' || e.apellido as nombre_completo,
+            dg.id_grupo,
+            tg.nombre as grado_nombre,
+            (tg.nombre || ' ' || s.nombre) as curso,
+            COUNT(*) FILTER (WHERE cr.promedio < ${notaAprobacion})::int as materias_reprobadas,
+            ROUND(AVG(cr.promedio), 2)::numeric as promedio_general,
+            JSON_AGG(
+              JSON_BUILD_OBJECT('materia_nombre', m.nombre, 'promedio', cr.promedio)
+            ) FILTER (WHERE cr.promedio < ${notaAprobacion}) as detalles_materias
+          FROM current_results cr
+          JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
+          JOIN materias m ON dg.id_materia = m.id_materia
+          JOIN estudiante e ON cr.id_estudiante = e.id_estudiante
+          JOIN grupos g ON dg.id_grupo = g.id_grupo
+          JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
+          JOIN secciones s ON g.id_seccion = s.id_seccion
+          WHERE dg.id_colegio = ${schoolId}
+          GROUP BY cr.id_estudiante, e.nombre, e.apellido, dg.id_grupo, tg.nombre, s.nombre
+          HAVING bool_or(cr.promedio < ${notaAprobacion})
+          ORDER BY materias_reprobadas DESC, promedio_general ASC
+        `.execute(db)
       ]);
 
       lowPerformance.criticalSubjects = criticalRes.rows.map(r => ({
@@ -644,19 +659,19 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
       }));
     }
 
-    const totalStuds = Number(studentsCountRes.rows[0].total);
+    const totalStuds = Number(studentsCountRes?.total || 0);
     const atRiskStuds = performanceMetrics.atRisk;
     const calcApprovalRate = totalStuds > 0 ? Number(((totalStuds - atRiskStuds) / totalStuds * 100).toFixed(1)) : 100;
 
     const summaryData = {
       totalStudents: totalStuds,
-      totalTeachers: Number(teachersCountRes.rows[0].total),
-      attendanceToday: Number(Number(attendanceTodayRes.rows[0].rate || 0).toFixed(1)),
+      totalTeachers: Number(teachersCountRes?.total || 0),
+      attendanceToday: Number(Number(attendanceTodayRes?.rows?.[0]?.rate || 0).toFixed(1)),
       generalAverage: performanceMetrics.average,
       approvalRate: calcApprovalRate,
       studentsAtRisk: atRiskStuds,
-      disciplinaryReports: Number(disciplinaryRes.rows[0].total),
-      desertionRate: Number(desertionRes.rows[0].total),
+      disciplinaryReports: Number(disciplinaryRes?.total || 0),
+      desertionRate: Number(desertionRes?.total || 0),
     };
 
     res.json({
@@ -689,30 +704,51 @@ export const getMySchoolData = async (req: Request, res: Response): Promise<void
   }
 
   try {
-    const [schoolRes, studentsRes, teachersRes, parentsRes] = await Promise.all([
-      pool.query(
-        `SELECT id_colegio, nombre, tipo_colegio, sede, contacto, correo, dane, tipo_calendario, escudo_url, color_primario, color_secundario 
-         FROM colegio 
-         WHERE id_colegio = $1`,
-        [schoolId]
-      ),
-      pool.query(`SELECT COUNT(*)::int AS count FROM estudiante WHERE id_colegio = $1 AND estado = 'ACTIVO'`, [schoolId]),
-      pool.query(`SELECT COUNT(*)::int AS count FROM docente WHERE id_colegio = $1 AND estado = 'ACTIVO'`, [schoolId]),
-      pool.query(`SELECT COUNT(*)::int AS count FROM padre_familia WHERE id_colegio = $1`, [schoolId])
+    const [school, studentsCount, teachersCount, parentsCount] = await Promise.all([
+      db.selectFrom("colegio")
+        .select([
+          "id_colegio",
+          "nombre",
+          "tipo_colegio",
+          "sede",
+          "contacto",
+          "correo",
+          "dane",
+          "tipo_calendario",
+          "escudo_url",
+          "color_primario",
+          "color_secundario",
+        ])
+        .where("id_colegio", "=", schoolId)
+        .executeTakeFirst(),
+      db.selectFrom("estudiante")
+        .select(sql<number>`COUNT(*)::int`.as("count"))
+        .where("id_colegio", "=", schoolId)
+        .where("estado", "=", "ACTIVO")
+        .executeTakeFirst(),
+      db.selectFrom("docente")
+        .select(sql<number>`COUNT(*)::int`.as("count"))
+        .where("id_colegio", "=", schoolId)
+        .where("estado", "=", "ACTIVO")
+        .executeTakeFirst(),
+      db.selectFrom("padre_familia")
+        .select(sql<number>`COUNT(*)::int`.as("count"))
+        .where("id_colegio", "=", schoolId)
+        .executeTakeFirst(),
     ]);
 
-    if (schoolRes.rows.length === 0) {
+    if (!school) {
       res.status(404).json({ error: "Colegio no encontrado" });
       return;
     }
 
     res.json({
-      ...schoolRes.rows[0],
-      school: schoolRes.rows[0],
+      ...school,
+      school,
       kpis: {
-        totalEstudiantes: studentsRes.rows[0].count,
-        totalDocentes: teachersRes.rows[0].count,
-        totalPadres: parentsRes.rows[0].count
+        totalEstudiantes: studentsCount?.count ?? 0,
+        totalDocentes: teachersCount?.count ?? 0,
+        totalPadres: parentsCount?.count ?? 0,
       }
     });
   } catch (error: any) {
@@ -739,33 +775,38 @@ export const updateMySchoolIdentity = async (req: Request, res: Response): Promi
         res.status(400).json({ error: "Se requiere justificar el cambio para registrar en la auditoría." });
         return;
       }
-      const auditRes = await pool.query(
-        `SELECT id_auditoria 
-         FROM auditoria_supervision 
-         WHERE id_colegio = $1 AND id_admin_general = $2 AND estado_supervision = 'ACTIVA'`,
-        [schoolId, authReq.user!.id]
-      );
-      if (auditRes.rows.length > 0) {
-        activeAuditoriaId = auditRes.rows[0].id_auditoria;
+      const audit = await db
+        .selectFrom("auditoria_supervision")
+        .select("id_auditoria")
+        .where("id_colegio", "=", schoolId)
+        .where("id_admin_general", "=", authReq.user!.id)
+        .where("estado_supervision", "=", "ACTIVA")
+        .executeTakeFirst();
+      if (audit) {
+        activeAuditoriaId = audit.id_auditoria;
       }
     }
 
-    const currentRes = await pool.query(
-      "SELECT escudo_url, color_primario, color_secundario FROM colegio WHERE id_colegio = $1",
-      [schoolId]
-    );
-    if (currentRes.rows.length === 0) {
+    const currentVal = await db
+      .selectFrom("colegio")
+      .select(["escudo_url", "color_primario", "color_secundario"])
+      .where("id_colegio", "=", schoolId)
+      .executeTakeFirst();
+
+    if (!currentVal) {
       res.status(404).json({ error: "Colegio no encontrado" });
       return;
     }
-    const currentVal = currentRes.rows[0];
 
-    await pool.query(
-      `UPDATE colegio 
-       SET escudo_url = $1, color_primario = $2, color_secundario = $3 
-       WHERE id_colegio = $4`,
-      [escudo_url || null, color_primario || null, color_secundario || null, schoolId]
-    );
+    await db
+      .updateTable("colegio")
+      .set({
+        escudo_url: escudo_url || null,
+        color_primario: color_primario || null,
+        color_secundario: color_secundario || null,
+      })
+      .where("id_colegio", "=", schoolId)
+      .execute();
 
     if (activeAuditoriaId) {
       const valorAntiguo = {
@@ -779,12 +820,19 @@ export const updateMySchoolIdentity = async (req: Request, res: Response): Promi
         color_secundario: color_secundario || null
       };
       
-      await pool.query(
-        `INSERT INTO auditoria_acciones_realizadas
-         (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, valor_antiguo, valor_nuevo, motivo_cambio)
-         VALUES ($1, 'CONFIGURACION', 'MODIFICACION', 'Modificación de Identidad Institucional', $2, $3, $4, $5)`,
-        [activeAuditoriaId, `Colegio ID: ${schoolId}`, JSON.stringify(valorAntiguo), JSON.stringify(valorNuevo), motivo_cambio]
-      );
+      await db
+        .insertInto("auditoria_acciones_realizadas")
+        .values({
+          id_auditoria: activeAuditoriaId,
+          modulo: "CONFIGURACION",
+          tipo_accion: "MODIFICACION",
+          accion: "Modificación de Identidad Institucional",
+          recurso_afectado: `Colegio ID: ${schoolId}`,
+          valor_antiguo: JSON.stringify(valorAntiguo),
+          valor_nuevo: JSON.stringify(valorNuevo),
+          motivo_cambio,
+        })
+        .execute();
     }
 
     res.json({ message: "Identidad del colegio actualizada exitosamente" });
@@ -817,33 +865,38 @@ export const resetMySchoolIdentity = async (req: Request, res: Response): Promis
         res.status(400).json({ error: "Se requiere justificar el cambio para registrar en la auditoría." });
         return;
       }
-      const auditRes = await pool.query(
-        `SELECT id_auditoria 
-         FROM auditoria_supervision 
-         WHERE id_colegio = $1 AND id_admin_general = $2 AND estado_supervision = 'ACTIVA'`,
-        [schoolId, authReq.user!.id]
-      );
-      if (auditRes.rows.length > 0) {
-        activeAuditoriaId = auditRes.rows[0].id_auditoria;
+      const audit = await db
+        .selectFrom("auditoria_supervision")
+        .select("id_auditoria")
+        .where("id_colegio", "=", schoolId)
+        .where("id_admin_general", "=", authReq.user!.id)
+        .where("estado_supervision", "=", "ACTIVA")
+        .executeTakeFirst();
+      if (audit) {
+        activeAuditoriaId = audit.id_auditoria;
       }
     }
 
-    const currentRes = await pool.query(
-      "SELECT escudo_url, color_primario, color_secundario FROM colegio WHERE id_colegio = $1",
-      [schoolId]
-    );
-    if (currentRes.rows.length === 0) {
+    const currentVal = await db
+      .selectFrom("colegio")
+      .select(["escudo_url", "color_primario", "color_secundario"])
+      .where("id_colegio", "=", schoolId)
+      .executeTakeFirst();
+
+    if (!currentVal) {
       res.status(404).json({ error: "Colegio no encontrado" });
       return;
     }
-    const currentVal = currentRes.rows[0];
 
-    await pool.query(
-      `UPDATE colegio 
-       SET escudo_url = NULL, color_primario = NULL, color_secundario = NULL 
-       WHERE id_colegio = $1`,
-      [schoolId]
-    );
+    await db
+      .updateTable("colegio")
+      .set({
+        escudo_url: null,
+        color_primario: null,
+        color_secundario: null,
+      })
+      .where("id_colegio", "=", schoolId)
+      .execute();
 
     if (activeAuditoriaId) {
       const valorAntiguo = {
@@ -857,12 +910,19 @@ export const resetMySchoolIdentity = async (req: Request, res: Response): Promis
         color_secundario: null
       };
       
-      await pool.query(
-        `INSERT INTO auditoria_acciones_realizadas
-         (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, valor_antiguo, valor_nuevo, motivo_cambio)
-         VALUES ($1, 'CONFIGURACION', 'MODIFICACION', 'Restablecer Identidad Institucional por defecto', $2, $3, $4, $5)`,
-        [activeAuditoriaId, `Colegio ID: ${schoolId}`, JSON.stringify(valorAntiguo), JSON.stringify(valorNuevo), motivo_cambio]
-      );
+      await db
+        .insertInto("auditoria_acciones_realizadas")
+        .values({
+          id_auditoria: activeAuditoriaId,
+          modulo: "CONFIGURACION",
+          tipo_accion: "MODIFICACION",
+          accion: "Restablecer Identidad Institucional por defecto",
+          recurso_afectado: `Colegio ID: ${schoolId}`,
+          valor_antiguo: JSON.stringify(valorAntiguo),
+          valor_nuevo: JSON.stringify(valorNuevo),
+          motivo_cambio,
+        })
+        .execute();
     }
 
     res.json({ message: "Identidad del colegio restablecida por defecto" });
@@ -920,13 +980,16 @@ export const updateSchoolDefaultSettings = async (req: Request, res: Response): 
 
   const yearId = req.body.yearId ? Number(req.body.yearId) : null;
   if (yearId && schoolId) {
-    const yearCheck = await pool.query(
-      `SELECT estado, calendario FROM anio_lectivo WHERE id_anio = $1 AND id_colegio = $2`,
-      [yearId, schoolId]
-    );
-    if (yearCheck.rows[0]?.estado === 'CERRADO') {
+    const yearCheck = await db
+      .selectFrom("anio_lectivo")
+      .select(["estado", "calendario"])
+      .where("id_anio", "=", yearId)
+      .where("id_colegio", "=", schoolId)
+      .executeTakeFirst();
+
+    if (yearCheck?.estado === 'CERRADO') {
       res.status(400).json({ 
-        error: `El año lectivo ${yearCheck.rows[0]?.calendario || ''} se encuentra CERRADO. No es posible modificar la configuración en un ciclo escolar cerrado.` 
+        error: `El año lectivo ${yearCheck.calendario || ''} se encuentra CERRADO. No es posible modificar la configuración en un ciclo escolar cerrado.` 
       });
       return;
     }
@@ -947,98 +1010,112 @@ export const updateSchoolDefaultSettings = async (req: Request, res: Response): 
     return;
   }
 
-  const client = await pool.connect();
   try {
-    await client.query("BEGIN");
-    await ensureSchoolSettingsTable();
+    const result = await db.transaction().execute(async (trx) => {
+      await ensureSchoolSettingsTable();
 
-    const existingSettingsRes = await client.query(
-      `SELECT nota_minima, nota_maxima, nota_aprobacion, escala_modo, COALESCE(materias_reprobatorias_promocion, 3) AS materias_reprobatorias_promocion
-       FROM configuracion_colegio
-       WHERE id_colegio = $1
-       FOR UPDATE`,
-      [schoolId]
-    );
+      const existingSettingsRes = await trx
+        .selectFrom("configuracion_colegio")
+        .select([
+          "nota_minima",
+          "nota_maxima",
+          "nota_aprobacion",
+          "escala_modo",
+          sql<number>`COALESCE(materias_reprobatorias_promocion, 3)`.as("materias_reprobatorias_promocion")
+        ])
+        .where("id_colegio", "=", schoolId)
+        .executeTakeFirst();
 
-    const previous =
-      existingSettingsRes.rows[0] ??
-      (await ensureSchoolDefaultSettings(schoolId));
-    const nextScaleMode = (requestedScaleMode || previous.escala_modo || "AUTOMATICO") as "AUTOMATICO" | "MANUAL";
-    const nextMateriasReprobatorias = req.body.materias_reprobatorias_promocion !== undefined && !Number.isNaN(Number(req.body.materias_reprobatorias_promocion))
-      ? Math.max(1, Math.min(10, Math.round(Number(req.body.materias_reprobatorias_promocion))))
-      : Number(previous.materias_reprobatorias_promocion || 3);
+      const previous =
+        existingSettingsRes ??
+        (await ensureSchoolDefaultSettings(schoolId));
+      const nextScaleMode = (requestedScaleMode || previous.escala_modo || "AUTOMATICO") as "AUTOMATICO" | "MANUAL";
+      const nextMateriasReprobatorias = req.body.materias_reprobatorias_promocion !== undefined && !Number.isNaN(Number(req.body.materias_reprobatorias_promocion))
+        ? Math.max(1, Math.min(10, Math.round(Number(req.body.materias_reprobatorias_promocion))))
+        : Number(previous.materias_reprobatorias_promocion || 3);
 
-    const currentScalesRes = await client.query(
-      `SELECT nivel, valor_maximo
-       FROM escala_valoracion
-       WHERE id_colegio = $1`,
-      [schoolId]
-    );
+      const currentScalesRes = await trx
+        .selectFrom("escala_valoracion")
+        .select(["nivel", "valor_maximo"])
+        .where("id_colegio", "=", schoolId)
+        .execute();
 
-    const currentBasic = currentScalesRes.rows.find((row) => row.nivel === "BASICO");
-    const currentHigh = currentScalesRes.rows.find((row) => row.nivel === "ALTO");
+      const currentBasic = currentScalesRes.find((row) => row.nivel === "BASICO");
+      const currentHigh = currentScalesRes.find((row) => row.nivel === "ALTO");
 
-    const updated = await client.query(
-      `INSERT INTO configuracion_colegio (id_colegio, nota_minima, nota_maxima, nota_aprobacion, escala_modo, materias_reprobatorias_promocion)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (id_colegio)
-       DO UPDATE SET
-         nota_minima = EXCLUDED.nota_minima,
-         nota_maxima = EXCLUDED.nota_maxima,
-         nota_aprobacion = EXCLUDED.nota_aprobacion,
-         escala_modo = EXCLUDED.escala_modo,
-         materias_reprobatorias_promocion = EXCLUDED.materias_reprobatorias_promocion
-       RETURNING id_colegio, nota_minima, nota_maxima, nota_aprobacion, escala_modo, materias_reprobatorias_promocion`,
-      [schoolId, notaMinima, notaMaxima, notaAprobacion, nextScaleMode, nextMateriasReprobatorias]
-    );
+      const updated = await trx
+        .insertInto("configuracion_colegio")
+        .values({
+          id_colegio: schoolId,
+          nota_minima: notaMinima,
+          nota_maxima: notaMaxima,
+          nota_aprobacion: notaAprobacion,
+          escala_modo: nextScaleMode,
+          materias_reprobatorias_promocion: nextMateriasReprobatorias,
+        })
+        .onConflict((oc) =>
+          oc.column("id_colegio").doUpdateSet({
+            nota_minima: notaMinima,
+            nota_maxima: notaMaxima,
+            nota_aprobacion: notaAprobacion,
+            escala_modo: nextScaleMode,
+            materias_reprobatorias_promocion: nextMateriasReprobatorias,
+          })
+        )
+        .returning([
+          "id_colegio",
+          "nota_minima",
+          "nota_maxima",
+          "nota_aprobacion",
+          "escala_modo",
+          "materias_reprobatorias_promocion"
+        ])
+        .executeTakeFirstOrThrow();
 
-    const scalesChanged =
-      Number(previous.nota_minima) !== notaMinima ||
-      Number(previous.nota_maxima) !== notaMaxima ||
-      Number(previous.nota_aprobacion) !== notaAprobacion ||
-      (previous.escala_modo || "AUTOMATICO") !== nextScaleMode;
+      const scalesChanged =
+        Number(previous.nota_minima) !== notaMinima ||
+        Number(previous.nota_maxima) !== notaMaxima ||
+        Number(previous.nota_aprobacion) !== notaAprobacion ||
+        (previous.escala_modo || "AUTOMATICO") !== nextScaleMode;
 
-    let syncedScales;
-    if (scalesChanged) {
-      syncedScales = await syncSchoolScalesAndGrades(
-        client,
-        schoolId,
-        Number(previous.nota_minima),
-        Number(previous.nota_maxima),
-        notaMinima,
-        notaMaxima,
-        notaAprobacion,
-        nextScaleMode,
-        nextScaleMode === "MANUAL"
-          ? {
-              basicMax: currentBasic ? Number(currentBasic.valor_maximo) : undefined,
-              altoMax: currentHigh ? Number(currentHigh.valor_maximo) : undefined,
-            }
-          : undefined
-      );
-    } else {
-      const currentScales = await client.query(
-        `SELECT id_escalavaloracion, nivel, valor_minimo, valor_maximo
-         FROM escala_valoracion
-         WHERE id_colegio = $1
-         ORDER BY valor_minimo`,
-        [schoolId]
-      );
-      syncedScales = currentScales.rows;
-    }
+      let syncedScales;
+      if (scalesChanged) {
+        syncedScales = await syncSchoolScalesAndGrades(
+          trx,
+          schoolId,
+          Number(previous.nota_minima),
+          Number(previous.nota_maxima),
+          notaMinima,
+          notaMaxima,
+          notaAprobacion,
+          nextScaleMode,
+          nextScaleMode === "MANUAL"
+            ? {
+                basicMax: currentBasic ? Number(currentBasic.valor_maximo) : undefined,
+                altoMax: currentHigh ? Number(currentHigh.valor_maximo) : undefined,
+              }
+            : undefined
+        );
+      } else {
+        syncedScales = await trx
+          .selectFrom("escala_valoracion")
+          .select(["id_escalavaloracion", "nivel", "valor_minimo", "valor_maximo"])
+          .where("id_colegio", "=", schoolId)
+          .orderBy("valor_minimo", "asc")
+          .execute();
+      }
 
-    await client.query("COMMIT");
+      return { updated, syncedScales };
+    });
+
     res.json({
-      ...updated.rows[0],
-      scales: syncedScales,
+      ...result.updated,
+      scales: result.syncedScales,
       message: "Configuración institucional aplicada y notas sincronizadas correctamente",
     });
   } catch (error: any) {
-    await client.query("ROLLBACK");
     console.error("Error updating school default settings:", error);
     res.status(500).json({ error: "Error en el servidor" });
-  } finally {
-    client.release();
   }
 };
 
@@ -1055,13 +1132,16 @@ export const updatePromotionPolicy = async (req: Request, res: Response): Promis
   const yearId = req.body.yearId ? Number(req.body.yearId) : null;
 
   if (yearId && schoolId) {
-    const yearCheck = await pool.query(
-      `SELECT estado, calendario FROM anio_lectivo WHERE id_anio = $1 AND id_colegio = $2`,
-      [yearId, schoolId]
-    );
-    if (yearCheck.rows[0]?.estado === 'CERRADO') {
+    const yearCheck = await db
+      .selectFrom("anio_lectivo")
+      .select(["estado", "calendario"])
+      .where("id_anio", "=", yearId)
+      .where("id_colegio", "=", schoolId)
+      .executeTakeFirst();
+
+    if (yearCheck?.estado === 'CERRADO') {
       res.status(400).json({ 
-        error: `El año lectivo ${yearCheck.rows[0]?.calendario || ''} se encuentra CERRADO. No es posible modificar la política de promoción en un ciclo escolar cerrado.` 
+        error: `El año lectivo ${yearCheck.calendario || ''} se encuentra CERRADO. No es posible modificar la política de promoción en un ciclo escolar cerrado.` 
       });
       return;
     }
@@ -1071,17 +1151,23 @@ export const updatePromotionPolicy = async (req: Request, res: Response): Promis
     await ensureSchoolSettingsTable();
     await ensureSchoolDefaultSettings(schoolId);
 
-    const updated = await pool.query(
-      `UPDATE configuracion_colegio
-       SET materias_reprobatorias_promocion = $1
-       WHERE id_colegio = $2
-       RETURNING id_colegio, nota_minima, nota_maxima, nota_aprobacion, escala_modo, materias_reprobatorias_promocion`,
-      [materiasReprobatorias, schoolId]
-    );
+    const updated = await db
+      .updateTable("configuracion_colegio")
+      .set({ materias_reprobatorias_promocion: materiasReprobatorias })
+      .where("id_colegio", "=", schoolId)
+      .returning([
+        "id_colegio",
+        "nota_minima",
+        "nota_maxima",
+        "nota_aprobacion",
+        "escala_modo",
+        "materias_reprobatorias_promocion"
+      ])
+      .executeTakeFirstOrThrow();
 
     res.json({
       success: true,
-      ...updated.rows[0],
+      ...updated,
       message: "Criterio de promoción institucional (S.I.E.E.) actualizado correctamente"
     });
   } catch (error: any) {
@@ -1089,7 +1175,6 @@ export const updatePromotionPolicy = async (req: Request, res: Response): Promis
     res.status(500).json({ error: "Error al actualizar la política de promoción" });
   }
 };
-
 
 export const getEnrollmentConfig = async (req: Request, res: Response): Promise<void> => {
   const schoolId = parseSchoolId(req.params.schoolId);
@@ -1100,18 +1185,25 @@ export const getEnrollmentConfig = async (req: Request, res: Response): Promise<
   }
 
   try {
-    const result = await pool.query(
-      `SELECT id_configuracion, id_colegio, id_anio, fecha_inicio, fecha_cierre, habilitada 
-       FROM configuracion_inscripcion 
-       WHERE id_colegio = $1 AND id_anio = $2`,
-      [schoolId, yearId]
-    );
+    const config = await db
+      .selectFrom("configuracion_inscripcion")
+      .select([
+        "id_configuracion",
+        "id_colegio",
+        "id_anio",
+        "fecha_inicio",
+        "fecha_cierre",
+        "habilitada"
+      ])
+      .where("id_colegio", "=", schoolId)
+      .where("id_anio", "=", yearId)
+      .executeTakeFirst();
 
     const hasApproved = false;
 
-    if (result.rows.length > 0) {
+    if (config) {
       res.json({
-        ...result.rows[0],
+        ...config,
         hasApproved
       });
     } else {
@@ -1149,12 +1241,15 @@ export const saveEnrollmentConfig = async (req: Request, res: Response): Promise
 
   // Validate that enrollment dates match the year of the target academic year
   try {
-    const yearInfoRes = await pool.query(
-      `SELECT calendario FROM anio_lectivo WHERE id_anio = $1 AND id_colegio = $2`,
-      [id_anio, id_colegio]
-    );
-    if (yearInfoRes.rows.length > 0) {
-      const calStr = yearInfoRes.rows[0].calendario || '';
+    const yearInfo = await db
+      .selectFrom("anio_lectivo")
+      .select("calendario")
+      .where("id_anio", "=", id_anio)
+      .where("id_colegio", "=", id_colegio)
+      .executeTakeFirst();
+
+    if (yearInfo) {
+      const calStr = yearInfo.calendario || '';
       const yearMatch = calStr.match(/\d{4}/g);
       if (yearMatch && yearMatch.length > 0) {
         const allowedYears = yearMatch.map((y: string) => parseInt(y));
@@ -1182,55 +1277,61 @@ export const saveEnrollmentConfig = async (req: Request, res: Response): Promise
         res.status(400).json({ error: "Se requiere justificar el cambio para registrar en la auditoría." });
         return;
       }
-      const auditRes = await pool.query(
-        `SELECT id_auditoria 
-         FROM auditoria_supervision 
-         WHERE id_colegio = $1 AND id_admin_general = $2 AND estado_supervision = 'ACTIVA'`,
-        [id_colegio, authReq.user!.id]
-      );
-      if (auditRes.rows.length > 0) {
-        activeAuditoriaId = auditRes.rows[0].id_auditoria;
+      const audit = await db
+        .selectFrom("auditoria_supervision")
+        .select("id_auditoria")
+        .where("id_colegio", "=", id_colegio)
+        .where("id_admin_general", "=", authReq.user!.id)
+        .where("estado_supervision", "=", "ACTIVA")
+        .executeTakeFirst();
+      if (audit) {
+        activeAuditoriaId = audit.id_auditoria;
       }
     }
 
     // Fetch existing configuration for audit logging
-    const existingRes = await pool.query(
-      `SELECT fecha_inicio, fecha_cierre, habilitada 
-       FROM configuracion_inscripcion 
-       WHERE id_colegio = $1 AND id_anio = $2`,
-      [id_colegio, id_anio]
-    );
-    const oldConfig = existingRes.rows[0] || null;
+    const oldConfig = await db
+      .selectFrom("configuracion_inscripcion")
+      .select(["fecha_inicio", "fecha_cierre", "habilitada"])
+      .where("id_colegio", "=", id_colegio)
+      .where("id_anio", "=", id_anio)
+      .executeTakeFirst();
 
     // Save/Update config
-    const result = await pool.query(
-      `INSERT INTO configuracion_inscripcion (id_colegio, id_anio, fecha_inicio, fecha_cierre, habilitada)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (id_colegio, id_anio)
-       DO UPDATE SET 
-         fecha_inicio = EXCLUDED.fecha_inicio, 
-         fecha_cierre = EXCLUDED.fecha_cierre, 
-         habilitada = EXCLUDED.habilitada
-       RETURNING *`,
-      [id_colegio, id_anio, fecha_inicio, fecha_cierre, habilitada !== undefined ? Boolean(habilitada) : true]
-    );
-
-    const newConfig = result.rows[0];
+    const newConfig = await db
+      .insertInto("configuracion_inscripcion")
+      .values({
+        id_colegio,
+        id_anio,
+        fecha_inicio,
+        fecha_cierre,
+        habilitada: habilitada !== undefined ? Boolean(habilitada) : true,
+      })
+      .onConflict((oc) =>
+        oc.columns(["id_colegio", "id_anio"]).doUpdateSet({
+          fecha_inicio,
+          fecha_cierre,
+          habilitada: habilitada !== undefined ? Boolean(habilitada) : true,
+        })
+      )
+      .returningAll()
+      .executeTakeFirstOrThrow();
 
     // Logging action if supervised
     if (activeAuditoriaId) {
-      await pool.query(
-        `INSERT INTO auditoria_acciones_realizadas
-         (id_auditoria, modulo, tipo_accion, accion, recurso_afectado, valor_antiguo, valor_nuevo, motivo_cambio)
-         VALUES ($1, 'CONFIGURACION', 'MODIFICACION', 'Modificación de Fechas de Inscripción', $2, $3, $4, $5)`,
-        [
-          activeAuditoriaId, 
-          `Colegio ID: ${id_colegio}, Año ID: ${id_anio}`, 
-          oldConfig ? JSON.stringify(oldConfig) : null, 
-          JSON.stringify(newConfig), 
-          motivo_cambio
-        ]
-      );
+      await db
+        .insertInto("auditoria_acciones_realizadas")
+        .values({
+          id_auditoria: activeAuditoriaId,
+          modulo: "CONFIGURACION",
+          tipo_accion: "MODIFICACION",
+          accion: "Modificación de Fechas de Inscripción",
+          recurso_afectado: `Colegio ID: ${id_colegio}, Año ID: ${id_anio}`,
+          valor_antiguo: oldConfig ? JSON.stringify(oldConfig) : null,
+          valor_nuevo: JSON.stringify(newConfig),
+          motivo_cambio,
+        })
+        .execute();
     }
 
     res.json({ message: "Configuración de inscripción guardada exitosamente", config: newConfig });
@@ -1248,34 +1349,42 @@ export const getActivePeriodInfo = async (req: Request, res: Response): Promise<
       : (authUser?.schoolId ? Number(authUser.schoolId) : (authUser?.id_colegio ? Number(authUser.id_colegio) : null));
     const yearId = req.query.yearId ? Number(req.query.yearId) : null;
 
-    let query = `
-      SELECT pa.id_periodo, pa.nombre, pa.estado, pa.mes_inicio, pa.dia_inicio, pa.mes_fin, pa.dia_fin, pa.id_anio,
-             al.calendario, al.estado as anio_estado
-      FROM periodo_academico pa
-      JOIN anio_lectivo al ON pa.id_anio = al.id_anio
-      WHERE pa.estado = 'ABIERTO'
-    `;
-    const params: any[] = [];
+    let query = db
+      .selectFrom("periodo_academico as pa")
+      .innerJoin("anio_lectivo as al", "pa.id_anio", "al.id_anio")
+      .select([
+        "pa.id_periodo",
+        "pa.nombre",
+        "pa.estado",
+        "pa.mes_inicio",
+        "pa.dia_inicio",
+        "pa.mes_fin",
+        "pa.dia_fin",
+        "pa.id_anio",
+        "al.calendario",
+        "al.estado as anio_estado",
+      ])
+      .where("pa.estado", "=", "ABIERTO");
 
     if (schoolId) {
-      params.push(schoolId);
-      query += ` AND pa.id_colegio = $${params.length}`;
+      query = query.where("pa.id_colegio", "=", schoolId);
     }
 
     if (yearId) {
-      params.push(yearId);
-      query += ` AND pa.id_anio = $${params.length}`;
+      query = query.where("pa.id_anio", "=", yearId);
     }
 
-    query += ` ORDER BY pa.id_periodo DESC LIMIT 1`;
+    const activePeriod = await query
+      .orderBy("pa.id_periodo", "desc")
+      .limit(1)
+      .executeTakeFirst();
 
-    const result = await pool.query(query, params);
-    if (result.rows.length === 0) {
+    if (!activePeriod) {
       res.json({ activePeriod: null });
       return;
     }
 
-    res.json({ activePeriod: result.rows[0] });
+    res.json({ activePeriod });
   } catch (error: any) {
     console.error("Error in getActivePeriodInfo:", error);
     res.status(500).json({ error: "Error al obtener periodo activo" });

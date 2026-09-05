@@ -1,6 +1,4 @@
 import { Request, Response } from "express";
-import { PoolClient } from "pg";
-import { pool } from "../../config/db";
 import { db } from "../../config/kysely";
 import { sql } from "kysely";
 import { randomUUID } from "crypto";
@@ -817,67 +815,61 @@ export const updateManualScaleConfiguration = async (req: Request, res: Response
     }
   }
 
-  const client = await pool.connect();
   try {
-    await client.query("BEGIN");
-    await ensureSchoolSettingsTable();
+    const syncedScales = await db.transaction().execute(async (trx) => {
+      await ensureSchoolSettingsTable();
 
-    const settingsRes = await client.query(
-      `SELECT nota_minima, nota_maxima, nota_aprobacion
-       FROM configuracion_colegio
-       WHERE id_colegio = $1
-       FOR UPDATE`,
-      [schoolId]
-    );
+      const settingsRes = await trx
+        .selectFrom("configuracion_colegio")
+        .select(["nota_minima", "nota_maxima", "nota_aprobacion"])
+        .where("id_colegio", "=", schoolId)
+        .forUpdate()
+        .executeTakeFirst();
 
-    const settings = settingsRes.rows[0] ?? (await ensureSchoolDefaultSettings(schoolId));
-    const notaMinima = Number(settings.nota_minima);
-    const notaMaxima = Number(settings.nota_maxima);
-    const notaAprobacion = Number(settings.nota_aprobacion);
+      const settings = settingsRes ?? (await ensureSchoolDefaultSettings(schoolId));
+      const notaMinima = Number(settings.nota_minima);
+      const notaMaxima = Number(settings.nota_maxima);
+      const notaAprobacion = Number(settings.nota_aprobacion);
 
-    if (basicoMax < notaAprobacion || basicoMax > notaMaxima - 0.2) {
-      await client.query("ROLLBACK");
-      res.status(400).json({ error: "El máximo de BASICO deja sin espacio válido al resto de escalas" });
-      return;
-    }
+      if (basicoMax < notaAprobacion || basicoMax > notaMaxima - 0.2) {
+        throw { statusCode: 400, message: "El máximo de BASICO deja sin espacio válido al resto de escalas" };
+      }
 
-    if (altoMax < basicoMax + 0.1 || altoMax > notaMaxima - 0.1) {
-      await client.query("ROLLBACK");
-      res.status(400).json({ error: "El máximo de ALTO debe quedar por encima de BASICO y por debajo de SUPERIOR" });
-      return;
-    }
+      if (altoMax < basicoMax + 0.1 || altoMax > notaMaxima - 0.1) {
+        throw { statusCode: 400, message: "El máximo de ALTO debe quedar por encima de BASICO y por debajo de SUPERIOR" };
+      }
 
-    await client.query(
-      `UPDATE configuracion_colegio
-       SET escala_modo = 'MANUAL'
-       WHERE id_colegio = $1`,
-      [schoolId]
-    );
+      await trx
+        .updateTable("configuracion_colegio")
+        .set({ escala_modo: "MANUAL" })
+        .where("id_colegio", "=", schoolId)
+        .execute();
 
-    const syncedScales = await syncSchoolScalesAndGrades(
-      client,
-      schoolId,
-      notaMinima,
-      notaMaxima,
-      notaMinima,
-      notaMaxima,
-      notaAprobacion,
-      "MANUAL",
-      { basicMax: basicoMax, altoMax }
-    );
+      return await syncSchoolScalesAndGrades(
+        trx,
+        schoolId,
+        notaMinima,
+        notaMaxima,
+        notaMinima,
+        notaMaxima,
+        notaAprobacion,
+        "MANUAL",
+        { basicMax: basicoMax, altoMax }
+      );
+    });
 
-    await client.query("COMMIT");
     res.json({
       message: "Escalas manuales actualizadas correctamente",
       scales: syncedScales,
       escala_modo: "MANUAL",
     });
   } catch (error: any) {
-    await client.query("ROLLBACK");
-    console.error("Error updating manual scale configuration:", error);
-    res.status(500).json({ error: error.message || "Error en el servidor" });
-  } finally {
-    client.release();
+    if (error.statusCode) {
+      res.status(error.statusCode).json({ error: error.message });
+      return;
+    }
+    console.error("Error updating manual scales:", error);
+    res.status(500).json({ error: "Error en el servidor" });
   }
 };
 
@@ -926,154 +918,174 @@ export const upsertCompetencyByAdmin = async (req: Request, res: Response): Prom
       return;
     }
 
-    const client = await pool.connect();
-    try {
-      const context: TeachingContext = {
-        idDetalleGrado: 0,
-        idGrupo: groupId,
-        idMateria: subjectId,
-        idColegio: schoolId,
-        idAnio: Number(period.id_anio),
-      };
+    const context: TeachingContext = {
+      idDetalleGrado: 0,
+      idGrupo: groupId,
+      idMateria: subjectId,
+      idColegio: schoolId,
+      idAnio: Number(period.id_anio),
+    };
 
-      await client.query("BEGIN");
-      const created = await syncCompetencyAcrossGrade(client, context, periodId, descripcion, undefined, idDimension);
+      const created = await db.transaction().execute(async (trx) => {
+        const createdComp = await syncCompetencyAcrossGrade(trx, context, periodId, descripcion, undefined, idDimension);
 
-      // Si se proporcionó id_evidencias_dba, vincularlas a las competencias de todo el grado
-      if (idEvidenciasDba !== undefined && Array.isArray(idEvidenciasDba)) {
-        const sisterCompsRes = await client.query<{ id_competencia: number }>(
-          `SELECT id_competencia 
-           FROM competencias 
-           WHERE id_colegio = $1 
-             AND (id_competencia = $2 OR (sync_uuid IS NOT NULL AND sync_uuid = $3))`,
-          [schoolId, created.id_competencia, created.sync_uuid]
-        );
-        const sisterCompIds = sisterCompsRes.rows.map((r) => r.id_competencia);
+        // Si se proporcionó id_evidencias_dba, vincularlas a las competencias de todo el grado
+        if (idEvidenciasDba !== undefined && Array.isArray(idEvidenciasDba)) {
+          const sisterCompsRes = await trx
+            .selectFrom("competencias")
+            .select("id_competencia")
+            .where("id_colegio", "=", schoolId)
+            .where((eb) =>
+              eb.or([
+                eb("id_competencia", "=", createdComp.id_competencia),
+                eb.and([
+                  eb("sync_uuid", "is not", null),
+                  eb("sync_uuid", "=", createdComp.sync_uuid as string)
+                ])
+              ])
+            )
+            .execute();
+          const sisterCompIds = sisterCompsRes.map((r) => r.id_competencia);
 
-        if (idEvidenciasDba.length === 0) {
-          await client.query(
-            `DELETE FROM evidencia_aprendizaje 
-             WHERE id_competencia = ANY($1::int[]) AND id_evidencia_dba IS NOT NULL`,
-            [sisterCompIds]
-          );
-        } else {
-          // Validar que ninguna de las evidencias oficiales seleccionadas esté vinculada a otra competencia del mismo año, asignatura y grupo (o paralelos)
-          const alreadyAssignedRes = await client.query<{
-            id_evidencia_dba: number;
-            id_periodo: number;
-            periodo_nombre: string;
-            competencia_descripcion: string;
-          }>(
-            `SELECT ea.id_evidencia_dba, c.id_periodo, p.nombre AS periodo_nombre, c.descripcion AS competencia_descripcion
-             FROM evidencia_aprendizaje ea
-             JOIN competencias c ON c.id_competencia = ea.id_competencia
-             JOIN periodo_academico p ON p.id_periodo = c.id_periodo
-             WHERE c.id_colegio = $1
-               AND c.id_anio = $2
-               AND c.id_materia = $3
-               AND c.id_grupo IN (
-                 SELECT g2.id_grupo
-                 FROM grupos g1
-                 JOIN grupos g2 ON g2.id_nivel = g1.id_nivel AND g2.id_tipo_grado = g1.id_tipo_grado
-                 WHERE g1.id_grupo = $4 AND g1.id_colegio = $1
-               )
-               AND (c.sync_uuid != $5 OR c.sync_uuid IS NULL)
-               AND c.id_competencia != $6
-               AND ea.id_evidencia_dba = ANY($7::int[])`,
-            [schoolId, created.id_anio, created.id_materia, created.id_grupo, created.sync_uuid, created.id_competencia, idEvidenciasDba]
-          );
+          if (idEvidenciasDba.length === 0) {
+            if (sisterCompIds.length > 0) {
+              await trx
+                .deleteFrom("evidencia_aprendizaje")
+                .where("id_competencia", "in", sisterCompIds)
+                .where("id_evidencia_dba", "is not", null)
+                .execute();
+            }
+          } else {
+            // Validar que ninguna de las evidencias oficiales seleccionadas esté vinculada a otra competencia del mismo año, asignatura y grupo (o paralelos)
+            const alreadyAssignedRes = await trx
+              .selectFrom("evidencia_aprendizaje as ea")
+              .innerJoin("competencias as c", "c.id_competencia", "ea.id_competencia")
+              .innerJoin("periodo_academico as p", "p.id_periodo", "c.id_periodo")
+              .select([
+                "ea.id_evidencia_dba",
+                "c.id_periodo",
+                "p.nombre as periodo_nombre",
+                "c.descripcion as competencia_descripcion"
+              ])
+              .where("c.id_colegio", "=", schoolId)
+              .where("c.id_anio", "=", createdComp.id_anio)
+              .where("c.id_materia", "=", createdComp.id_materia)
+              .where("c.id_grupo", "in", (qb) =>
+                qb
+                  .selectFrom("grupos as g1")
+                  .innerJoin("grupos as g2", (join) =>
+                    join.onRef("g2.id_nivel", "=", "g1.id_nivel").onRef("g2.id_tipo_grado", "=", "g1.id_tipo_grado")
+                  )
+                  .select("g2.id_grupo")
+                  .where("g1.id_grupo", "=", createdComp.id_grupo)
+                  .where("g1.id_colegio", "=", schoolId)
+              )
+              .where((eb) =>
+                eb.or([
+                  eb("c.sync_uuid", "!=", createdComp.sync_uuid as string),
+                  eb("c.sync_uuid", "is", null)
+                ])
+              )
+              .where("c.id_competencia", "!=", createdComp.id_competencia)
+              .where("ea.id_evidencia_dba", "in", idEvidenciasDba)
+              .execute();
 
-          if (alreadyAssignedRes.rows.length > 0) {
-            await client.query("ROLLBACK");
-            const names = alreadyAssignedRes.rows
-              .map((r) => `Evidencia ID ${r.id_evidencia_dba} (${r.periodo_nombre} - ${r.competencia_descripcion})`)
-              .join(", ");
-            res.status(400).json({ error: `Una o más evidencias ya están asignadas a otra competencia: ${names}` });
-            return;
-          }
+            if (alreadyAssignedRes.length > 0) {
+              const names = alreadyAssignedRes
+                .map((r) => `Evidencia ID ${r.id_evidencia_dba} (${r.periodo_nombre} - ${r.competencia_descripcion})`)
+                .join(", ");
+              throw {
+                statusCode: 400,
+                message: `Una o más evidencias ya están asignadas a otra competencia: ${names}`
+              };
+            }
 
-          const officialEvsRes = await client.query<{
-            id_evidencia_dba: number;
-            descripcion: string;
-            orden: number;
-          }>(
-            `SELECT id_evidencia_dba, descripcion, orden 
-             FROM evidencias_dba 
-             WHERE id_evidencia_dba = ANY($1::int[]) AND estado = 'ACTIVO'`,
-            [idEvidenciasDba]
-          );
+            const officialEvsRes = await trx
+              .selectFrom("evidencias_dba")
+              .select(["id_evidencia_dba", "descripcion", "orden"])
+              .where("id_evidencia_dba", "in", idEvidenciasDba)
+              .where("estado", "=", "ACTIVO")
+              .execute();
 
-          if (officialEvsRes.rows.length > 0) {
-            // Eliminar evidencias por defecto generadas automáticamente (sin DBA) al vincular evidencias de DBA
-            await client.query(
-              `DELETE FROM evidencia_aprendizaje 
-               WHERE id_competencia = ANY($1::int[]) AND id_evidencia_dba IS NULL`,
-              [sisterCompIds]
-            );
-
-            for (const targetCompId of sisterCompIds) {
-              const existingRes = await client.query<{
-                id_evidencia: number;
-                id_evidencia_dba: number;
-              }>(
-                `SELECT id_evidencia, id_evidencia_dba FROM evidencia_aprendizaje 
-                 WHERE id_competencia = $1 AND id_evidencia_dba IS NOT NULL`,
-                [targetCompId]
-              );
-
-              const existingMap = new Map<number, number>();
-              existingRes.rows.forEach((r) => existingMap.set(r.id_evidencia_dba, r.id_evidencia));
-
-              const activeDbaIds = officialEvsRes.rows.map((r) => r.id_evidencia_dba);
-
-              const deleteIds: number[] = [];
-              existingRes.rows.forEach((r) => {
-                if (!activeDbaIds.includes(r.id_evidencia_dba)) {
-                  deleteIds.push(r.id_evidencia);
-                }
-              });
-
-              if (deleteIds.length > 0) {
-                await client.query(
-                  `DELETE FROM evidencia_aprendizaje WHERE id_evidencia = ANY($1::int[])`,
-                  [deleteIds]
-                );
+            if (officialEvsRes.length > 0) {
+              if (sisterCompIds.length > 0) {
+                await trx
+                  .deleteFrom("evidencia_aprendizaje")
+                  .where("id_competencia", "in", sisterCompIds)
+                  .where("id_evidencia_dba", "is", null)
+                  .execute();
               }
 
-              for (const offEv of officialEvsRes.rows) {
-                if (existingMap.has(offEv.id_evidencia_dba)) {
-                  await client.query(
-                    `UPDATE evidencia_aprendizaje 
-                     SET descripcion = $1, orden = $2 
-                     WHERE id_evidencia = $3`,
-                    [offEv.descripcion, offEv.orden, existingMap.get(offEv.id_evidencia_dba)]
-                  );
-                } else {
-                  await client.query(
-                    `INSERT INTO evidencia_aprendizaje (id_competencia, descripcion, orden, id_colegio, id_evidencia_dba)
-                     VALUES ($1, $2, $3, $4, $5)`,
-                    [targetCompId, offEv.descripcion, offEv.orden, schoolId, offEv.id_evidencia_dba]
-                  );
+              for (const targetCompId of sisterCompIds) {
+                const existingRes = await trx
+                  .selectFrom("evidencia_aprendizaje")
+                  .select(["id_evidencia", "id_evidencia_dba"])
+                  .where("id_competencia", "=", targetCompId)
+                  .where("id_evidencia_dba", "is not", null)
+                  .execute();
+
+                const existingMap = new Map<number, number>();
+                existingRes.forEach((r) => {
+                  if (r.id_evidencia_dba) existingMap.set(r.id_evidencia_dba, r.id_evidencia);
+                });
+
+                const activeDbaIds = officialEvsRes.map((r) => r.id_evidencia_dba);
+                const deleteIds: number[] = [];
+                existingRes.forEach((r) => {
+                  if (r.id_evidencia_dba && !activeDbaIds.includes(r.id_evidencia_dba)) {
+                    deleteIds.push(r.id_evidencia);
+                  }
+                });
+
+                if (deleteIds.length > 0) {
+                  await trx
+                    .deleteFrom("evidencia_aprendizaje")
+                    .where("id_evidencia", "in", deleteIds)
+                    .execute();
+                }
+
+                for (const offEv of officialEvsRes) {
+                  const existingId = existingMap.get(offEv.id_evidencia_dba);
+                  if (existingId) {
+                    await trx
+                      .updateTable("evidencia_aprendizaje")
+                      .set({
+                        descripcion: offEv.descripcion,
+                        orden: offEv.orden
+                      })
+                      .where("id_evidencia", "=", existingId)
+                      .execute();
+                  } else {
+                    await trx
+                      .insertInto("evidencia_aprendizaje")
+                      .values({
+                        id_competencia: targetCompId,
+                        descripcion: offEv.descripcion,
+                        orden: offEv.orden,
+                        id_colegio: schoolId,
+                        id_evidencia_dba: offEv.id_evidencia_dba
+                      })
+                      .execute();
+                  }
                 }
               }
             }
           }
         }
-      }
 
-      await client.query("COMMIT");
+        return createdComp;
+      });
+
       res.json(created);
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
+    } catch (error: any) {
+      if (error.statusCode) {
+        res.status(error.statusCode).json({ error: error.message });
+        return;
+      }
+      console.error("Error upserting competency by admin:", error);
+      res.status(500).json({ error: "Error en el servidor" });
     }
-  } catch (error: any) {
-    console.error("Error upserting competency by admin:", error);
-    res.status(500).json({ error: "Error en el servidor" });
-  }
-};
+  };
 
 export const deleteCompetencyByAdmin = async (req: Request, res: Response): Promise<void> => {
   const competencyId = Number(req.params.id);

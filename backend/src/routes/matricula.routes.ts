@@ -20,7 +20,7 @@ import { verifyDocumentToken } from "../middleware/documentSecurity";
 import { validateDto } from "../middleware/validateDto";
 import { SubmitEnrollmentSchema, ValidateDocumentSchema, FinalizeEnrollmentSchema, CancelEnrollmentSchema } from "../dtos/matricula.dto";
 
-import { pool } from "../config/db";
+import { db } from "../config/kysely";
 
 const router = Router();
 
@@ -37,8 +37,12 @@ const protectIfIntegerId = (req: any, res: any, next: any) => {
 
 router.get("/", async (req, res) => {
   try {
-    const result = await pool.query("SELECT id_colegio, nombre FROM colegio ORDER BY nombre");
-    res.json(result.rows);
+    const result = await db
+      .selectFrom("colegio")
+      .select(["id_colegio", "nombre"])
+      .orderBy("nombre", "asc")
+      .execute();
+    res.json(result);
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -49,27 +53,32 @@ router.get("/school/:schoolId/enrollment-config", async (req, res) => {
     const { schoolId } = req.params;
     
     // Find active year for school
-    const yearRes = await pool.query(
-      `SELECT id_anio, calendario FROM anio_lectivo WHERE id_colegio = $1 AND estado = 'ABIERTO' ORDER BY id_anio DESC LIMIT 1`,
-      [schoolId]
-    );
-    if (yearRes.rows.length === 0) {
+    const yearRes = await db
+      .selectFrom("anio_lectivo")
+      .select(["id_anio", "calendario"])
+      .where("id_colegio", "=", Number(schoolId))
+      .where("estado", "=", "ABIERTO")
+      .orderBy("id_anio", "desc")
+      .limit(1)
+      .executeTakeFirst();
+
+    if (!yearRes) {
       res.json({ config: null, yearLabel: null });
       return;
     }
-    const yearId = yearRes.rows[0].id_anio;
-    const yearLabel = yearRes.rows[0].calendario;
+    const yearId = yearRes.id_anio;
+    const yearLabel = yearRes.calendario;
     
     const hasApproved = false;
 
-    const configRes = await pool.query(
-      `SELECT id_configuracion, fecha_inicio, fecha_cierre, habilitada 
-       FROM configuracion_inscripcion 
-       WHERE id_colegio = $1 AND id_anio = $2`,
-      [schoolId, yearId]
-    );
+    const configRes = await db
+      .selectFrom("configuracion_inscripcion")
+      .select(["id_configuracion", "fecha_inicio", "fecha_cierre", "habilitada"])
+      .where("id_colegio", "=", Number(schoolId))
+      .where("id_anio", "=", yearId)
+      .executeTakeFirst();
     
-    if (configRes.rows.length === 0) {
+    if (!configRes) {
       res.json({
         config: {
           id_configuracion: null,
@@ -87,7 +96,7 @@ router.get("/school/:schoolId/enrollment-config", async (req, res) => {
     
     res.json({
       config: {
-        ...configRes.rows[0],
+        ...configRes,
         hasApproved
       },
       yearLabel
