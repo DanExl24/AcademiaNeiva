@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { 
   ArrowLeft, Plus, Search, BookOpenCheck, Sparkles, RefreshCw, 
-  PenSquare, Trash2, Check, X, AlertTriangle, Lock 
+  PenSquare, Trash2, Check, X, AlertTriangle, Lock, Calendar 
 } from 'lucide-vue-next'
 import { academicService } from '../../services/academicService'
 import { useAuthStore } from '../../stores/auth'
@@ -21,7 +21,8 @@ interface AcademicPeriod {
   nombre: string
   estado: 'ABIERTO' | 'CERRADO'
   porcentaje: number
-  id_año: number
+  id_anio?: number
+  id_año?: number
 }
 
 interface AssignmentOption {
@@ -68,6 +69,14 @@ const yearStore = useAcademicYearStore()
 const notify = useNotificationStore()
 const schoolId = computed(() => Number(auth.user?.schoolId || 0))
 const isClosedYear = computed(() => Boolean(yearStore.isClosedYear))
+
+const academicYears = computed(() => yearStore.availableYears)
+const selectedYearId = computed({
+  get: () => yearStore.selectedYearId,
+  set: (val: number | null) => {
+    if (val) yearStore.setSelectedYearId(val)
+  }
+})
 
 const loading = ref(true)
 const saving = ref(false)
@@ -376,8 +385,9 @@ const loadData = async () => {
   try {
     loading.value = true
     const params: any = { keys: 'periods,assignments,competencies,dimensions' }
-    if (yearStore.selectedYearId) {
-      params.yearId = yearStore.selectedYearId
+    const targetYearId = selectedYearId.value || yearStore.selectedYearId || (academicYears.value[0]?.id_anio ?? null)
+    if (targetYearId) {
+      params.yearId = targetYearId
     }
     const response = await academicService.getSettings(schoolId.value, params)
     if (currentRequestId !== activeLoadRequestId) return
@@ -405,8 +415,9 @@ const harmonizeCompetencies = async () => {
     harmonizing.value = true
     notify.addNotification('Sincronizando competencias entre cursos paralelos...', 'info')
     const params: any = { keys: 'periods,assignments,competencies,dimensions', harmonize: 'true' }
-    if (yearStore.selectedYearId) {
-      params.yearId = yearStore.selectedYearId
+    const targetYearId = selectedYearId.value || yearStore.selectedYearId || (academicYears.value[0]?.id_anio ?? null)
+    if (targetYearId) {
+      params.yearId = targetYearId
     }
     const response = await academicService.getSettings(schoolId.value, params)
     periods.value = response.periods || []
@@ -483,6 +494,10 @@ const onFormContextChange = async (arg?: number | Event) => {
 }
 
 const openCreateModal = () => {
+  if (isClosedYear.value) {
+    toast.error('El año lectivo se encuentra cerrado. No se pueden asignar nuevas competencias.')
+    return
+  }
   resetForm()
   availableFormDba.value = []
   formDbaVersion.value = null
@@ -494,6 +509,14 @@ const openCreateModal = () => {
 }
 
 const openEditModal = async (item: CompetencyItem) => {
+  if (isClosedYear.value) {
+    toast.error('El año lectivo se encuentra cerrado. No se pueden modificar competencias.')
+    return
+  }
+  if (isPeriodClosed(item.id_periodo)) {
+    toast.error('El periodo se encuentra cerrado. No se pueden modificar competencias.')
+    return
+  }
   competencyForm.value = {
     id_periodo: String(item.id_periodo),
     gradeKey: `${item.nivel_nombre}:${item.tipo_grado_nombre}`,
@@ -521,6 +544,11 @@ const openEditModal = async (item: CompetencyItem) => {
 }
 
 const saveCompetency = async () => {
+  if (isClosedYear.value) {
+    notify.addNotification('El año lectivo se encuentra cerrado. No se pueden asignar ni modificar competencias.', 'error')
+    return
+  }
+
   if (!competencyForm.value.id_periodo || !competencyForm.value.gradeKey || !competencyForm.value.subjectKey || !competencyForm.value.descripcion.trim()) {
     notify.addNotification('Selecciona grado, materia, periodo y escribe la competencia.', 'warning')
     return
@@ -823,7 +851,7 @@ const applyDbaEnunciado = (enunciado: string) => {
 }
 
 onMounted(async () => {
-  if (!yearStore.availableYears.length) {
+  if (schoolId.value && !yearStore.availableYears.length) {
     await yearStore.loadYearsForSchool(schoolId.value, auth.token || undefined)
   }
   await loadData()
@@ -831,12 +859,26 @@ onMounted(async () => {
 
 watch(
   () => yearStore.selectedYearId,
-  (newVal, oldVal) => {
-    if (newVal && newVal !== oldVal && oldVal !== undefined) {
-      loadData()
+  async (newVal) => {
+    if (newVal) {
+      selectedPeriod.value = ''
+      selectedGrade.value = ''
+      selectedSubject.value = ''
+      selectedStatus.value = ''
+      await loadData()
+      if (selectedGrade.value && selectedSubject.value) {
+        await fetchDiagnostic()
+      }
     }
   }
 )
+
+watch(schoolId, async (newSchoolId) => {
+  if (newSchoolId) {
+    await yearStore.loadYearsForSchool(newSchoolId, auth.token || undefined)
+    await loadData()
+  }
+})
 </script>
 
 <template>
@@ -858,6 +900,20 @@ watch(
         </div>
 
         <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3">
+          <!-- Selector de Año Lectivo directo en cabecera -->
+          <div v-if="academicYears.length > 0" class="flex items-center gap-2 bg-white/10 border border-white/20 rounded-xl sm:rounded-2xl px-3 py-2 sm:py-2.5 backdrop-blur-sm">
+            <Calendar class="h-4 w-4 text-emerald-200 shrink-0" />
+            <span class="text-xs font-black uppercase tracking-wider text-emerald-100 hidden sm:inline">Año:</span>
+            <select
+              v-model="selectedYearId"
+              class="bg-transparent text-white font-black text-xs sm:text-sm outline-none cursor-pointer pr-1"
+            >
+              <option v-for="y in academicYears" :key="y.id_anio" :value="y.id_anio" class="bg-slate-900 text-white font-bold">
+                Año {{ y.calendario }} {{ y.estado === 'CERRADO' ? '🔒 (Cerrado)' : '✨ (Abierto)' }}
+              </option>
+            </select>
+          </div>
+
           <button
             type="button"
             @click="harmonizeCompetencies"
@@ -929,7 +985,15 @@ watch(
             <h2 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white">Explorar asignaciones</h2>
             <p class="mt-1 sm:mt-2 text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-400">Filtra por periodo o contexto para revisar y actualizar competencias.</p>
           </div>
-          <div class="grid w-full max-w-5xl grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
+          <div class="grid w-full max-w-5xl grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
+            <label class="space-y-1.5 sm:space-y-2">
+              <span class="text-[11px] sm:text-xs font-black text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-widest">Año Lectivo</span>
+              <select v-model="selectedYearId" class="w-full rounded-xl sm:rounded-2xl border border-slate-200 bg-slate-50 p-2.5 sm:p-3 text-xs sm:text-sm font-semibold text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-white outline-none cursor-pointer">
+                <option v-for="y in academicYears" :key="y.id_anio" :value="y.id_anio">
+                  {{ y.calendario }} {{ y.estado === 'CERRADO' ? '🔒' : '✨' }}
+                </option>
+              </select>
+            </label>
             <label class="space-y-1.5 sm:space-y-2">
               <span class="text-[11px] sm:text-xs font-black text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-widest">Buscar</span>
               <div class="flex items-center gap-2.5 sm:gap-3 rounded-xl sm:rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 sm:px-4 sm:py-3 dark:bg-slate-800 dark:border-slate-700">
@@ -989,6 +1053,7 @@ watch(
           </div>
 
           <button
+            v-if="!isClosedYear"
             type="button"
             @click="openCreateModal"
             class="w-full sm:w-auto inline-flex min-h-11 sm:min-h-12 items-center justify-center gap-2 rounded-xl sm:rounded-2xl bg-emerald-600 px-5 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm font-black text-white shadow-sm transition hover:bg-emerald-500 uppercase tracking-widest cursor-pointer"
@@ -996,6 +1061,10 @@ watch(
             <Plus class="h-4 w-4" />
             Nueva competencia
           </button>
+          <div v-else class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 text-xs font-black uppercase tracking-wider border border-amber-300/40">
+            <Lock class="h-4 w-4" />
+            <span>Año Cerrado (Solo Lectura)</span>
+          </div>
         </div>
 
         <!-- Diagnostic Banner DBA -->

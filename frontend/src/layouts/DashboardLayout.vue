@@ -70,7 +70,7 @@ const isDedicatedEnrollmentView = computed(() => {
 })
 
 const showYearSelector = computed(() => {
-  if (auth.activeRole === 'admin_general') return false
+  if (auth.activeRole === 'admin_general' && !auth.isSupervising) return false
   if (isDedicatedEnrollmentView.value) return false
   return true
 })
