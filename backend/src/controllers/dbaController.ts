@@ -1,5 +1,4 @@
 import { Response } from "express";
-import { pool } from "../config/db";
 import { db } from "../config/kysely";
 import { sql } from "kysely";
 import { AuthRequest } from "../middleware/authMiddleware";
@@ -228,23 +227,35 @@ export const cambiarEstadoDBA = async (req: AuthRequest, res: Response): Promise
       return;
     }
 
+    const dbaId = Number(id);
+    if (!dbaId) {
+      res.status(400).json({ error: "ID de DBA inválido" });
+      return;
+    }
+
     // Obtener información del DBA
-    const dbaRes = await pool.query(`SELECT * FROM dba WHERE id_dba = $1`, [id]);
-    if (dbaRes.rows.length === 0) {
+    const dba = await db
+      .selectFrom("dba")
+      .selectAll()
+      .where("id_dba", "=", dbaId)
+      .executeTakeFirst();
+
+    if (!dba) {
       res.status(404).json({ error: "DBA no encontrado" });
       return;
     }
-    const dba = dbaRes.rows[0];
 
     // RN-DBA-008: Si se va a inactivar, verificar si ya fue asignado a algún colegio
     if (estado === "INACTIVO") {
-      const activeCheck = await pool.query(
-        `SELECT id FROM colegio_version_curricular 
-         WHERE area = $1 AND grado = $2 AND version_curricular = $3 LIMIT 1`,
-        [dba.area, dba.grado, dba.version_curricular]
-      );
+      const activeCheck = await db
+        .selectFrom("colegio_version_curricular")
+        .select("id")
+        .where("area", "=", dba.area)
+        .where("grado", "=", dba.grado)
+        .where("version_curricular", "=", dba.version_curricular)
+        .executeTakeFirst();
 
-      if (activeCheck.rows.length > 0) {
+      if (activeCheck) {
         res.status(400).json({ 
           error: "No se puede inactivar este DBA porque la versión curricular del área/grado está asignada a uno o más colegios" 
         });
@@ -252,12 +263,17 @@ export const cambiarEstadoDBA = async (req: AuthRequest, res: Response): Promise
       }
     }
 
-    const result = await pool.query(
-      `UPDATE dba SET estado = $1, updated_at = NOW() WHERE id_dba = $2 RETURNING *`,
-      [estado, id]
-    );
+    const updated = await db
+      .updateTable("dba")
+      .set({
+        estado,
+        updated_at: sql`NOW()`
+      })
+      .where("id_dba", "=", dbaId)
+      .returningAll()
+      .executeTakeFirstOrThrow();
 
-    res.json(result.rows[0]);
+    res.json(updated);
   } catch (error: any) {
     console.error("Error al cambiar estado del DBA:", error);
     res.status(500).json({ error: "Error al cambiar el estado del DBA" });
@@ -277,25 +293,40 @@ export const crearEvidencia = async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
+    const dbaId = Number(id);
+    if (!dbaId) {
+      res.status(400).json({ error: "ID de DBA inválido" });
+      return;
+    }
+
     // RN-DBA-003: Verificar que el DBA exista y esté activo
-    const dbaCheck = await pool.query(`SELECT estado FROM dba WHERE id_dba = $1`, [id]);
-    if (dbaCheck.rows.length === 0) {
+    const dbaCheck = await db
+      .selectFrom("dba")
+      .select("estado")
+      .where("id_dba", "=", dbaId)
+      .executeTakeFirst();
+
+    if (!dbaCheck) {
       res.status(404).json({ error: "DBA no encontrado" });
       return;
     }
-    if (dbaCheck.rows[0].estado !== "ACTIVO") {
+    if (dbaCheck.estado !== "ACTIVO") {
       res.status(400).json({ error: "No se pueden agregar evidencias a un DBA inactivo" });
       return;
     }
 
-    const result = await pool.query(
-      `INSERT INTO evidencias_dba (id_dba, descripcion, orden, estado, created_at)
-       VALUES ($1, $2, $3, 'ACTIVO', NOW())
-       RETURNING *`,
-      [id, descripcion, orden || 1]
-    );
+    const newEvidencia = await db
+      .insertInto("evidencias_dba")
+      .values({
+        id_dba: dbaId,
+        descripcion,
+        orden: Number(orden) || 1,
+        estado: "ACTIVO"
+      })
+      .returningAll()
+      .executeTakeFirstOrThrow();
 
-    res.status(201).json(result.rows[0]);
+    res.status(201).json(newEvidencia);
   } catch (error: any) {
     console.error("Error al crear evidencia:", error);
     res.status(500).json({ error: "Error al crear la evidencia" });
@@ -315,21 +346,34 @@ export const actualizarEvidencia = async (req: AuthRequest, res: Response): Prom
       return;
     }
 
-    const checkRes = await pool.query(`SELECT id_evidencia_dba FROM evidencias_dba WHERE id_evidencia_dba = $1`, [id]);
-    if (checkRes.rows.length === 0) {
+    const evidenciaId = Number(id);
+    if (!evidenciaId) {
+      res.status(400).json({ error: "ID de evidencia inválido" });
+      return;
+    }
+
+    const check = await db
+      .selectFrom("evidencias_dba")
+      .select("id_evidencia_dba")
+      .where("id_evidencia_dba", "=", evidenciaId)
+      .executeTakeFirst();
+
+    if (!check) {
       res.status(404).json({ error: "Evidencia de aprendizaje no encontrada" });
       return;
     }
 
-    const result = await pool.query(
-      `UPDATE evidencias_dba 
-       SET descripcion = $1, orden = $2
-       WHERE id_evidencia_dba = $3
-       RETURNING *`,
-      [descripcion, orden || 1, id]
-    );
+    const updated = await db
+      .updateTable("evidencias_dba")
+      .set({
+        descripcion,
+        orden: Number(orden) || 1
+      })
+      .where("id_evidencia_dba", "=", evidenciaId)
+      .returningAll()
+      .executeTakeFirstOrThrow();
 
-    res.json(result.rows[0]);
+    res.json(updated);
   } catch (error: any) {
     console.error("Error al actualizar evidencia:", error);
     res.status(500).json({ error: "Error al actualizar la evidencia" });
@@ -349,18 +393,31 @@ export const cambiarEstadoEvidencia = async (req: AuthRequest, res: Response): P
       return;
     }
 
-    const checkRes = await pool.query(`SELECT id_evidencia_dba FROM evidencias_dba WHERE id_evidencia_dba = $1`, [id]);
-    if (checkRes.rows.length === 0) {
+    const evidenciaId = Number(id);
+    if (!evidenciaId) {
+      res.status(400).json({ error: "ID de evidencia inválido" });
+      return;
+    }
+
+    const check = await db
+      .selectFrom("evidencias_dba")
+      .select("id_evidencia_dba")
+      .where("id_evidencia_dba", "=", evidenciaId)
+      .executeTakeFirst();
+
+    if (!check) {
       res.status(404).json({ error: "Evidencia de aprendizaje no encontrada" });
       return;
     }
 
-    const result = await pool.query(
-      `UPDATE evidencias_dba SET estado = $1 WHERE id_evidencia_dba = $2 RETURNING *`,
-      [estado, id]
-    );
+    const updated = await db
+      .updateTable("evidencias_dba")
+      .set({ estado })
+      .where("id_evidencia_dba", "=", evidenciaId)
+      .returningAll()
+      .executeTakeFirstOrThrow();
 
-    res.json(result.rows[0]);
+    res.json(updated);
   } catch (error: any) {
     console.error("Error al cambiar estado de evidencia:", error);
     res.status(500).json({ error: "Error al cambiar el estado de la evidencia" });
@@ -372,10 +429,13 @@ export const cambiarEstadoEvidencia = async (req: AuthRequest, res: Response): P
 // ============================================================================
 export const listarVersiones = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const result = await pool.query(
-      `SELECT DISTINCT version_curricular FROM dba ORDER BY version_curricular DESC`
-    );
-    const versiones = result.rows.map(row => row.version_curricular);
+    const rows = await db
+      .selectFrom("dba")
+      .select("version_curricular")
+      .distinct()
+      .orderBy("version_curricular", "desc")
+      .execute();
+    const versiones = rows.map((row) => row.version_curricular);
     res.json(versiones);
   } catch (error: any) {
     console.error("Error al listar versiones de DBA:", error);
@@ -388,10 +448,13 @@ export const listarVersiones = async (req: AuthRequest, res: Response): Promise<
 // ============================================================================
 export const listarAreas = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const result = await pool.query(
-      `SELECT DISTINCT area FROM dba ORDER BY area ASC`
-    );
-    const areas = result.rows.map(row => row.area);
+    const rows = await db
+      .selectFrom("dba")
+      .select("area")
+      .distinct()
+      .orderBy("area", "asc")
+      .execute();
+    const areas = rows.map((row) => row.area);
     res.json(areas);
   } catch (error: any) {
     console.error("Error al listar áreas de DBA:", error);
@@ -414,29 +477,43 @@ export const asignarVersionColegio = async (req: AuthRequest, res: Response): Pr
     // 1. Resolver colegios
     let schoolIds: number[] = [];
     if (id_colegio === "TODOS" || id_colegio === "todos") {
-      const activeSchools = await pool.query("SELECT id_colegio FROM colegio WHERE estado = 'ACTIVO'");
-      schoolIds = activeSchools.rows.map(r => r.id_colegio);
+      const activeSchools = await db
+        .selectFrom("colegio")
+        .select("id_colegio")
+        .where("estado", "=", "ACTIVO")
+        .execute();
+      schoolIds = activeSchools.map((r) => r.id_colegio);
     } else {
-      const colCheck = await pool.query(`SELECT id_colegio FROM colegio WHERE id_colegio = $1`, [id_colegio]);
-      if (colCheck.rows.length === 0) {
+      const colCheck = await db
+        .selectFrom("colegio")
+        .select("id_colegio")
+        .where("id_colegio", "=", Number(id_colegio))
+        .executeTakeFirst();
+
+      if (!colCheck) {
         res.status(404).json({ error: "Colegio no encontrado" });
         return;
       }
-      schoolIds = [Number(id_colegio)];
+      schoolIds = [colCheck.id_colegio];
     }
 
     // 2. Resolver áreas
     let areasToAssign: string[] = [];
     if (area === "TODAS" || area === "todas") {
-      const areaRes = await pool.query(
-        `SELECT DISTINCT area FROM dba WHERE version_curricular = $1 AND estado = 'ACTIVO' ORDER BY area`,
-        [version_curricular]
-      );
-      if (areaRes.rows.length === 0) {
+      const areaRows = await db
+        .selectFrom("dba")
+        .select("area")
+        .distinct()
+        .where("version_curricular", "=", version_curricular)
+        .where("estado", "=", "ACTIVO")
+        .orderBy("area", "asc")
+        .execute();
+
+      if (areaRows.length === 0) {
         res.status(400).json({ error: "No existen DBA activos en el catálogo para esta versión curricular" });
         return;
       }
-      areasToAssign = areaRes.rows.map(r => r.area);
+      areasToAssign = areaRows.map((r) => r.area);
     } else {
       areasToAssign = [area];
     }
@@ -448,34 +525,52 @@ export const asignarVersionColegio = async (req: AuthRequest, res: Response): Pr
       let gradesToAssign: string[] = [];
 
       if (grado === "TODOS") {
-        const dbaCheck = await pool.query(
-          `SELECT DISTINCT grado FROM dba 
-           WHERE area = $1 AND version_curricular = $2 AND estado = 'ACTIVO'`,
-          [currentArea, version_curricular]
-        );
-        if (dbaCheck.rows.length === 0) continue;
-        gradesToAssign = dbaCheck.rows.map(r => r.grado);
+        const dbaCheck = await db
+          .selectFrom("dba")
+          .select("grado")
+          .distinct()
+          .where("area", "=", currentArea)
+          .where("version_curricular", "=", version_curricular)
+          .where("estado", "=", "ACTIVO")
+          .execute();
+
+        if (dbaCheck.length === 0) continue;
+        gradesToAssign = dbaCheck.map((r) => r.grado);
       } else {
-        const dbaCheck = await pool.query(
-          `SELECT 1 FROM dba 
-           WHERE area = $1 AND grado = $2 AND version_curricular = $3 AND estado = 'ACTIVO' LIMIT 1`,
-          [currentArea, grado, version_curricular]
-        );
-        if (dbaCheck.rows.length === 0) continue;
+        const dbaCheck = await db
+          .selectFrom("dba")
+          .select("id_dba")
+          .where("area", "=", currentArea)
+          .where("grado", "=", grado)
+          .where("version_curricular", "=", version_curricular)
+          .where("estado", "=", "ACTIVO")
+          .executeTakeFirst();
+
+        if (!dbaCheck) continue;
         gradesToAssign = [grado];
       }
 
       for (const sId of schoolIds) {
         for (const g of gradesToAssign) {
-          const result = await pool.query(
-            `INSERT INTO colegio_version_curricular (id_colegio, area, grado, version_curricular, fecha_asignacion)
-             VALUES ($1, $2, $3, $4, NOW())
-             ON CONFLICT (id_colegio, area, grado)
-             DO UPDATE SET version_curricular = EXCLUDED.version_curricular, fecha_asignacion = NOW()
-             RETURNING *`,
-            [sId, currentArea, g, version_curricular]
-          );
-          insertedRows.push(result.rows[0]);
+          const result = await db
+            .insertInto("colegio_version_curricular")
+            .values({
+              id_colegio: sId,
+              area: currentArea,
+              grado: g,
+              version_curricular,
+              fecha_asignacion: sql`NOW()`
+            })
+            .onConflict((oc) =>
+              oc.columns(["id_colegio", "area", "grado"]).doUpdateSet({
+                version_curricular,
+                fecha_asignacion: sql`NOW()`
+              })
+            )
+            .returningAll()
+            .executeTakeFirstOrThrow();
+
+          insertedRows.push(result);
         }
       }
     }
@@ -498,14 +593,29 @@ export const asignarVersionColegio = async (req: AuthRequest, res: Response): Pr
 export const listarAsignaciones = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { colegioId } = req.params;
+    const schoolId = Number(colegioId);
 
-    const result = await pool.query(
-      `SELECT cvc.*, c.nombre as nombre_colegio 
-       FROM colegio_version_curricular cvc
-       JOIN colegio c ON c.id_colegio = cvc.id_colegio
-       WHERE cvc.id_colegio = $1
-       ORDER BY cvc.area ASC, 
-         CASE cvc.grado
+    if (!schoolId) {
+      res.status(400).json({ error: "ID de colegio inválido" });
+      return;
+    }
+
+    const rows = await db
+      .selectFrom("colegio_version_curricular as cvc")
+      .innerJoin("colegio as c", "c.id_colegio", "cvc.id_colegio")
+      .select([
+        "cvc.id",
+        "cvc.id_colegio",
+        "cvc.area",
+        "cvc.grado",
+        "cvc.version_curricular",
+        "cvc.fecha_asignacion",
+        "c.nombre as nombre_colegio"
+      ])
+      .where("cvc.id_colegio", "=", schoolId)
+      .orderBy("cvc.area", "asc")
+      .orderBy(
+        sql`CASE cvc.grado
            WHEN 'PRIMERO' THEN 1
            WHEN 'SEGUNDO' THEN 2
            WHEN 'TERCERO' THEN 3
@@ -518,11 +628,12 @@ export const listarAsignaciones = async (req: AuthRequest, res: Response): Promi
            WHEN 'DECIMO' THEN 10
            WHEN 'ONCE' THEN 11
            ELSE 12
-         END ASC`,
-      [colegioId]
-    );
+         END`,
+        "asc"
+      )
+      .execute();
 
-    res.json(result.rows);
+    res.json(rows);
   } catch (error: any) {
     console.error("Error al listar asignaciones de colegio:", error);
     res.status(500).json({ error: "Error al listar las asignaciones del colegio" });
@@ -534,18 +645,20 @@ export const listarAsignaciones = async (req: AuthRequest, res: Response): Promi
 // ============================================================================
 export const estadisticasDBA = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const statsDba = await pool.query(`SELECT COUNT(*)::int as total FROM dba`);
-    const statsEvidencias = await pool.query(`SELECT COUNT(*)::int as total FROM evidencias_dba`);
-    const statsAreas = await pool.query(`SELECT COUNT(DISTINCT area)::int as total FROM dba`);
-    const statsVersiones = await pool.query(`SELECT COUNT(DISTINCT version_curricular)::int as total FROM dba`);
-    const statsActivos = await pool.query(`SELECT COUNT(*)::int as total FROM dba WHERE estado = 'ACTIVO'`);
+    const [statsDba, statsEvidencias, statsAreas, statsVersiones, statsActivos] = await Promise.all([
+      db.selectFrom("dba").select(sql<number>`COUNT(*)::int`.as("total")).executeTakeFirst(),
+      db.selectFrom("evidencias_dba").select(sql<number>`COUNT(*)::int`.as("total")).executeTakeFirst(),
+      db.selectFrom("dba").select(sql<number>`COUNT(DISTINCT area)::int`.as("total")).executeTakeFirst(),
+      db.selectFrom("dba").select(sql<number>`COUNT(DISTINCT version_curricular)::int`.as("total")).executeTakeFirst(),
+      db.selectFrom("dba").select(sql<number>`COUNT(*)::int`.as("total")).where("estado", "=", "ACTIVO").executeTakeFirst(),
+    ]);
 
     res.json({
-      totalDba: statsDba.rows[0].total,
-      totalEvidencias: statsEvidencias.rows[0].total,
-      totalAreas: statsAreas.rows[0].total,
-      totalVersiones: statsVersiones.rows[0].total,
-      totalActivos: statsActivos.rows[0].total
+      totalDba: statsDba?.total ?? 0,
+      totalEvidencias: statsEvidencias?.total ?? 0,
+      totalAreas: statsAreas?.total ?? 0,
+      totalVersiones: statsVersiones?.total ?? 0,
+      totalActivos: statsActivos?.total ?? 0
     });
   } catch (error: any) {
     console.error("Error al obtener estadísticas de DBA:", error);
@@ -579,11 +692,12 @@ export const importarDBAPDF = async (req: AuthRequest, res: Response): Promise<v
     const overwriteVal = req.body.overwrite === 'true' || req.body.overwrite === true;
 
     if (overwriteVal) {
-      console.log(`Sobreasecribiendo: Eliminando DBAs anteriores para el área "${area}" versión "${version_curricular}"`);
-      await pool.query(
-        "DELETE FROM dba WHERE UPPER(TRIM(area)) = UPPER(TRIM($1)) AND version_curricular = $2",
-        [area, version_curricular]
-      );
+      console.log(`Sobrescribiendo: Eliminando DBAs anteriores para el área "${area}" versión "${version_curricular}"`);
+      await db
+        .deleteFrom("dba")
+        .where(sql`UPPER(TRIM(area))`, "=", area.trim().toUpperCase())
+        .where("version_curricular", "=", version_curricular)
+        .execute();
     }
 
     let scriptName = "importar_dba.py";
@@ -720,16 +834,24 @@ export const eliminarDBA = async (req: AuthRequest, res: Response): Promise<void
 
   try {
     // Verificar si el DBA existe
-    const dbaRes = await pool.query("SELECT id_dba, numero_dba FROM dba WHERE id_dba = $1", [dbaId]);
-    if (dbaRes.rows.length === 0) {
+    const dba = await db
+      .selectFrom("dba")
+      .select(["id_dba", "numero_dba"])
+      .where("id_dba", "=", dbaId)
+      .executeTakeFirst();
+
+    if (!dba) {
       res.status(404).json({ error: "DBA no encontrado" });
       return;
     }
 
     // Proceder a eliminar (la base de datos se encargará de cascada para evidencias y nulos)
-    await pool.query("DELETE FROM dba WHERE id_dba = $1", [dbaId]);
+    await db
+      .deleteFrom("dba")
+      .where("id_dba", "=", dbaId)
+      .execute();
 
-    res.json({ message: `DBA #${dbaRes.rows[0].numero_dba} eliminado exitosamente.` });
+    res.json({ message: `DBA #${dba.numero_dba} eliminado exitosamente.` });
   } catch (error: any) {
     console.error("Error al eliminar DBA:", error);
     res.status(500).json({ error: "Error al eliminar el DBA de la base de datos" });
@@ -741,12 +863,15 @@ export const eliminarDBA = async (req: AuthRequest, res: Response): Promise<void
 // ============================================================================
 export const listarCombinacionesDba = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const result = await pool.query(
-      `SELECT DISTINCT area, version_curricular 
-       FROM dba 
-       ORDER BY area, version_curricular`
-    );
-    res.json(result.rows);
+    const rows = await db
+      .selectFrom("dba")
+      .select(["area", "version_curricular"])
+      .distinct()
+      .orderBy("area", "asc")
+      .orderBy("version_curricular", "asc")
+      .execute();
+
+    res.json(rows);
   } catch (error: any) {
     console.error("Error al listar combinaciones de dba:", error);
     res.status(500).json({ error: "Error al listar las materias y versiones existentes" });
