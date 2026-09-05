@@ -384,6 +384,7 @@ export class MatriculaService {
       .leftJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
       .leftJoin('secciones as s', 'g.id_seccion', 's.id_seccion')
       .leftJoin('jornada as j', 'g.id_jornada', 'j.id_jornada')
+      .leftJoin('anio_lectivo as al', 'al.id_anio', 'm.id_anio')
       .leftJoin('nivel_escolar as ne', (join) =>
         join.onRef('ne.id_nivel', '=', sql<number>`COALESCE(m.id_nivel, g.id_nivel, tg.id_nivel)`)
       )
@@ -433,6 +434,7 @@ export class MatriculaService {
         's.nombre as seccion',
         'g.id_jornada',
         'j.nombre as jornada',
+        'al.calendario as anio_lectivo',
         'e.nombre as student_firstname',
         'e.apellido as student_lastname',
         'e.codigo as student_code',

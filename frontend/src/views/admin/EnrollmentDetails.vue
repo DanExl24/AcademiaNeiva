@@ -429,10 +429,37 @@ const formatRenewalStateLabel = (state?: string) => {
                   <p class="font-bold text-indigo-600 dark:text-indigo-400">{{ matricula.student_code }}</p>
                 </div>
               </div>
-              <div class="p-5 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800">
-                <p class="text-xs font-black text-slate-400 uppercase tracking-widest mb-1.5">Grado y Sección</p>
-                <p class="text-xl font-black text-slate-900 dark:text-white">{{ matricula.tipo_grado }} · {{ matricula.seccion }}</p>
-                <p class="text-xs font-bold text-indigo-500 uppercase mt-1">{{ matricula.grado_nivel }} · {{ matricula.jornada }}</p>
+              <div class="p-5 bg-gradient-to-br from-indigo-50/70 to-purple-50/40 dark:from-slate-800/60 dark:to-indigo-950/30 rounded-2xl border border-indigo-100 dark:border-slate-800 space-y-3">
+                <div class="flex items-center justify-between">
+                  <p class="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">Nivel Académico y Asignación</p>
+                  <span v-if="matricula.jornada" class="px-2.5 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-[10px] font-black uppercase tracking-wider border border-indigo-200 dark:border-indigo-800">
+                    Jornada {{ matricula.jornada }}
+                  </span>
+                </div>
+                <div class="grid grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Nivel Escolar</span>
+                    <p class="text-sm font-black text-slate-900 dark:text-white">{{ matricula.grado_nivel || 'Sin nivel' }}</p>
+                  </div>
+                  <div>
+                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Grado</span>
+                    <p class="text-sm font-black text-slate-900 dark:text-white">{{ matricula.tipo_grado || 'Sin grado' }}</p>
+                  </div>
+                  <div>
+                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Grupo / Salón</span>
+                    <p class="text-sm font-black text-indigo-600 dark:text-indigo-400">
+                      {{ matricula.seccion ? ('Sección ' + matricula.seccion) : (matricula.id_grupo ? ('Grupo #' + matricula.id_grupo) : 'Sin salón') }}
+                    </p>
+                  </div>
+                  <div>
+                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Jornada</span>
+                    <p class="text-sm font-black text-slate-900 dark:text-white">{{ matricula.jornada || 'No definida' }}</p>
+                  </div>
+                </div>
+                <div v-if="matricula.school_name || matricula.anio_lectivo" class="pt-2 border-t border-indigo-100/60 dark:border-slate-700/60 flex items-center justify-between text-[11px] text-slate-500 font-semibold">
+                  <span v-if="matricula.school_name">{{ matricula.school_name }}</span>
+                  <span v-if="matricula.anio_lectivo">Año {{ matricula.anio_lectivo }}</span>
+                </div>
               </div>
             </div>
           </div>

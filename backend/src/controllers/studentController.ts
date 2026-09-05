@@ -793,6 +793,7 @@ export const getStudentSummary = async (req: Request, res: Response) => {
       .leftJoin("grupos as g", "m.id_grupo", "g.id_grupo")
       .leftJoin("tipo_grado as tg", "g.id_tipo_grado", "tg.id_tipo_grado")
       .leftJoin("secciones as s", "g.id_seccion", "s.id_seccion")
+      .leftJoin("jornada as j", "g.id_jornada", "j.id_jornada")
       .leftJoin("nivel_escolar as n", (join) =>
         join.onRef("n.id_nivel", "=", sql<number>`COALESCE(m.id_nivel, g.id_nivel)`)
       )
@@ -810,6 +811,7 @@ export const getStudentSummary = async (req: Request, res: Response) => {
         "tg.nombre as grado_nombre",
         "s.nombre as seccion_nombre",
         "n.nombre as nivel_nombre",
+        "j.nombre as jornada",
         "m.id_grupo",
         "u.email as student_email",
         "u.fecha_creacion as user_created_at"
@@ -1045,6 +1047,7 @@ export const getStudentSummary = async (req: Request, res: Response) => {
       codigo: student.codigo,
       curso: student.grado_nombre && student.seccion_nombre ? `${student.grado_nombre}-${student.seccion_nombre}` : "Sin Grupo",
       nivel: student.nivel_nombre || "Sin Nivel",
+      jornada: student.jornada || "Sin Jornada",
       estado_estudiante: student.estado, 
       motivo_estado: student.motivo_estado,
       estado_academico: estadoAcademico, 

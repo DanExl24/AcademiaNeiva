@@ -665,7 +665,10 @@ const exportToSIMAT = () => {
             <p class="text-xs sm:text-sm font-black text-slate-900 dark:text-white">
               {{ getCourseDisplayName({ grado_nombre: s.grado_nombre, seccion_nombre: s.seccion_nombre || '' }) }}
             </p>
-            <p class="text-xs font-bold text-indigo-500 uppercase mt-0.5">{{ s.nivel_nombre }}</p>
+            <p class="text-xs font-bold text-indigo-500 uppercase mt-0.5 flex items-center gap-1.5 flex-wrap">
+              <span>{{ s.nivel_nombre }}</span>
+              <span v-if="s.jornada_nombre" class="text-slate-400 font-semibold text-[11px]">· {{ s.jornada_nombre }}</span>
+            </p>
           </div>
           <span v-else class="text-xs font-bold text-red-400 uppercase tracking-wide italic">Sin grupo</span>
         </td>
@@ -1124,7 +1127,7 @@ const exportToSIMAT = () => {
                   </h4>
                   <p class="text-xs font-bold text-slate-400">CÓDIGO: {{ studentSummary.codigo }}</p>
                   <p class="text-xs font-black text-indigo-600 dark:text-indigo-400 mt-1 uppercase tracking-wide">
-                    Curso: {{ studentSummary.curso }}
+                    Curso: {{ studentSummary.curso }} <span v-if="studentSummary.jornada && studentSummary.jornada !== 'Sin Jornada'" class="text-slate-400 font-semibold">· Jornada {{ studentSummary.jornada }}</span>
                   </p>
                 </div>
               </div>
@@ -1150,6 +1153,27 @@ const exportToSIMAT = () => {
                 ]">
                   Académico: {{ studentSummary.estado_academico }}
                 </span>
+
+                <!-- Jornada Badge -->
+                <span v-if="studentSummary.jornada && studentSummary.jornada !== 'Sin Jornada'" class="bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider border border-purple-200 dark:border-purple-800">
+                  Jornada: {{ studentSummary.jornada }}
+                </span>
+              </div>
+            </div>
+
+            <!-- Academic Location Card -->
+            <div class="bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/80 rounded-2xl p-4 grid grid-cols-3 gap-3 text-center">
+              <div>
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Nivel</span>
+                <p class="text-xs font-black text-slate-900 dark:text-white mt-0.5 truncate">{{ studentSummary.nivel || 'Sin Nivel' }}</p>
+              </div>
+              <div>
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Curso / Grupo</span>
+                <p class="text-xs font-black text-indigo-600 dark:text-indigo-400 mt-0.5 truncate">{{ studentSummary.curso || 'Sin Grupo' }}</p>
+              </div>
+              <div>
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Jornada</span>
+                <p class="text-xs font-black text-purple-600 dark:text-purple-400 mt-0.5 truncate">{{ studentSummary.jornada || 'Sin Jornada' }}</p>
               </div>
             </div>
 

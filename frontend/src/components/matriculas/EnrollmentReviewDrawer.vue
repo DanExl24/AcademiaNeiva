@@ -20,7 +20,10 @@ import {
   Copy,
   Check,
   Ticket,
-  History
+  History,
+  GraduationCap,
+  School,
+  Calendar
 } from 'lucide-vue-next'
 
 interface Props {
@@ -436,6 +439,66 @@ const formatDateTime = (date: string | null | undefined) => {
                     <div>
                       <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Correo Electrónico</p>
                       <p class="text-sm font-bold text-indigo-600 dark:text-indigo-400 break-all">{{ matricula.correo_padre }}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Academic Level & School Assignment Card -->
+                <div class="bg-gradient-to-br from-indigo-50/70 via-white to-purple-50/40 dark:from-slate-800/60 dark:via-slate-900/80 dark:to-indigo-950/30 border border-indigo-100 dark:border-slate-800 rounded-3xl p-6 space-y-4 shadow-xs">
+                  <div class="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-indigo-100/60 dark:border-slate-700/60">
+                    <div class="flex items-center gap-2.5">
+                      <div class="p-2.5 bg-indigo-600 text-white rounded-xl shadow-xs">
+                        <GraduationCap :size="18" />
+                      </div>
+                      <div>
+                        <h4 class="font-black text-slate-900 dark:text-white uppercase text-xs tracking-widest">Nivel Académico y Asignación Escolar</h4>
+                        <p class="text-[11px] text-slate-400 font-medium">Ubicación institucional del estudiante matriculado</p>
+                      </div>
+                    </div>
+                    <span v-if="matricula.jornada" class="px-3 py-1 rounded-full bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-[10px] font-black uppercase tracking-wider border border-indigo-200 dark:border-indigo-800">
+                      Jornada {{ matricula.jornada }}
+                    </span>
+                  </div>
+
+                  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div class="p-3.5 bg-white dark:bg-slate-800/80 rounded-2xl border border-slate-100 dark:border-slate-700/60 space-y-1">
+                      <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Nivel Escolar</p>
+                      <p class="font-black text-slate-900 dark:text-white text-xs truncate">{{ matricula.grado_nivel || 'Sin nivel' }}</p>
+                    </div>
+
+                    <div class="p-3.5 bg-white dark:bg-slate-800/80 rounded-2xl border border-slate-100 dark:border-slate-700/60 space-y-1">
+                      <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Grado</p>
+                      <p class="font-black text-slate-900 dark:text-white text-xs truncate">{{ matricula.tipo_grado || 'Sin grado' }}</p>
+                    </div>
+
+                    <div class="p-3.5 bg-white dark:bg-slate-800/80 rounded-2xl border border-slate-100 dark:border-slate-700/60 space-y-1">
+                      <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Grupo / Salón</p>
+                      <p class="font-black text-indigo-600 dark:text-indigo-400 text-xs truncate">
+                        {{ matricula.seccion ? ('Sección ' + matricula.seccion) : (matricula.id_grupo ? ('Grupo #' + matricula.id_grupo) : 'Sin salón') }}
+                      </p>
+                    </div>
+
+                    <div class="p-3.5 bg-white dark:bg-slate-800/80 rounded-2xl border border-slate-100 dark:border-slate-700/60 space-y-1">
+                      <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Jornada</p>
+                      <p class="font-black text-slate-900 dark:text-white text-xs truncate">{{ matricula.jornada || 'No definida' }}</p>
+                    </div>
+                  </div>
+
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div class="p-3 bg-white/70 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700/50 flex items-center gap-2.5">
+                      <School :size="16" class="text-indigo-500 shrink-0" />
+                      <div class="min-w-0">
+                        <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Institución / Sede</p>
+                        <p class="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">{{ matricula.school_name || 'Institución Principal' }}</p>
+                      </div>
+                    </div>
+
+                    <div class="p-3 bg-white/70 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700/50 flex items-center gap-2.5">
+                      <Calendar :size="16" class="text-indigo-500 shrink-0" />
+                      <div class="min-w-0">
+                        <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Año Lectivo</p>
+                        <p class="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">{{ matricula.anio_lectivo || ('Año ' + (matricula.id_anio || '')) }}</p>
+                      </div>
                     </div>
                   </div>
                 </div>
