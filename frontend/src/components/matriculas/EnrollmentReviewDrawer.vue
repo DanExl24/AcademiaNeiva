@@ -19,7 +19,8 @@ import {
   Clock,
   Copy,
   Check,
-  Ticket
+  Ticket,
+  History
 } from 'lucide-vue-next'
 
 interface Props {
@@ -682,43 +683,88 @@ const formatDateTime = (date: string | null | undefined) => {
                     <div
                       v-for="doc in matricula.documentos"
                       :key="doc.id_documento"
-                      class="bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center gap-3"
+                      class="bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-4 space-y-3"
                     >
-                      <div class="flex items-center gap-3 flex-1">
-                        <div class="p-2.5 bg-white dark:bg-slate-700 rounded-xl border border-slate-100 dark:border-slate-600 shadow-xs">
-                          <FileText :size="18" class="text-indigo-500" />
+                      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div class="flex items-center gap-3 flex-1 min-w-0">
+                          <div class="p-2.5 bg-white dark:bg-slate-700 rounded-xl border border-slate-100 dark:border-slate-600 shadow-xs shrink-0">
+                            <FileText :size="18" class="text-indigo-500" />
+                          </div>
+                          <div class="min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap">
+                              <p class="font-black text-slate-900 dark:text-white text-sm">{{ getDocLabel(doc.tipo_documento) }}</p>
+                              <span :class="[getDocStatusClass(doc.estado), 'text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full']">{{ doc.estado }}</span>
+                              <span v-if="doc.versiones_anteriores && doc.versiones_anteriores.length > 0" class="px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 text-[10px] font-black uppercase tracking-wider border border-purple-200 dark:border-purple-800">
+                                v{{ doc.version || (doc.versiones_anteriores.length + 1) }} (Actual)
+                              </span>
+                              <span v-if="matricula?.tipo === 'REINGRESO' && doc.estado_renovacion" :class="[getRenewalBadgeClass(doc.estado_renovacion), 'text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border']">
+                                {{ formatRenewalStateLabel(doc.estado_renovacion) }}
+                              </span>
+                            </div>
+                            <p v-if="doc.nombre_original" class="text-[11px] text-slate-400 font-mono mt-0.5 truncate max-w-xs sm:max-w-md">
+                              {{ doc.nombre_original }}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <div class="flex items-center gap-2 flex-wrap">
-                            <p class="font-black text-slate-900 dark:text-white text-sm">{{ getDocLabel(doc.tipo_documento) }}</p>
-                            <span :class="[getDocStatusClass(doc.estado), 'text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full']">{{ doc.estado }}</span>
-                            <span v-if="matricula?.tipo === 'REINGRESO' && doc.estado_renovacion" :class="[getRenewalBadgeClass(doc.estado_renovacion), 'text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border']">
-                              {{ formatRenewalStateLabel(doc.estado_renovacion) }}
-                            </span>
+
+                        <div class="flex items-center gap-2 shrink-0">
+                          <a :href="formatUrl(doc)" target="_blank"
+                             class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-700 border border-slate-100 dark:border-slate-600 rounded-xl text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-600 text-xs font-bold transition-all shadow-xs"
+                             title="Ver Documento Actual">
+                            <ExternalLink :size="14" />
+                            <span>Ver Actual</span>
+                          </a>
+                          <div class="flex items-center bg-white dark:bg-slate-700 border border-slate-100 dark:border-slate-600 rounded-xl p-1 gap-1">
+                            <button
+                              @click="emit('updateDocStatus', { idDocumento: doc.id_documento, estado: 'VALIDADO' })"
+                              :class="[doc.estado === 'VALIDADO' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-400 hover:text-emerald-600', 'p-1.5 rounded-lg text-xs font-black transition-all cursor-pointer']"
+                              title="Validar Documento"
+                            >
+                              <CheckCircle :size="14" />
+                            </button>
+                            <button
+                              @click="emit('updateDocStatus', { idDocumento: doc.id_documento, estado: 'RECHAZADO' })"
+                              :class="[doc.estado === 'RECHAZADO' ? 'bg-red-600 text-white shadow-xs' : 'text-slate-400 hover:text-red-600', 'p-1.5 rounded-lg text-xs font-black transition-all cursor-pointer']"
+                              title="Rechazar Documento"
+                            >
+                              <XCircle :size="14" />
+                            </button>
                           </div>
                         </div>
                       </div>
 
-                      <div class="flex items-center gap-2 shrink-0">
-                        <a :href="formatUrl(doc.url)" target="_blank"
-                           class="p-2 bg-white dark:bg-slate-700 border border-slate-100 dark:border-slate-600 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-50 transition-all shadow-xs">
-                          <ExternalLink :size="16" />
-                        </a>
-                        <div class="flex items-center bg-white dark:bg-slate-700 border border-slate-100 dark:border-slate-600 rounded-xl p-1 gap-1">
-                          <button
-                            @click="emit('updateDocStatus', { idDocumento: doc.id_documento, estado: 'VALIDADO' })"
-                            :class="[doc.estado === 'VALIDADO' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-400 hover:text-emerald-600', 'p-1.5 rounded-lg text-xs font-black transition-all cursor-pointer']"
-                            title="Validar Documento"
+                      <!-- Historial de versiones anteriores (Documentos rechazados y subsanados) -->
+                      <div v-if="doc.versiones_anteriores && doc.versiones_anteriores.length > 0" class="space-y-2 pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
+                        <div
+                          v-for="prev in doc.versiones_anteriores"
+                          :key="prev.id_documento"
+                          class="p-3 bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200/70 dark:border-purple-800/60 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+                        >
+                          <div class="flex items-center gap-2 flex-1 min-w-0">
+                            <History :size="14" class="text-purple-600 dark:text-purple-400 shrink-0" />
+                            <div class="min-w-0">
+                              <div class="flex items-center gap-2">
+                                <span class="text-[10px] font-black uppercase tracking-wider text-purple-700 dark:text-purple-300">
+                                  Versión Anterior Subsanada (v{{ prev.version || 1 }})
+                                </span>
+                                <span class="text-[9px] font-black px-1.5 py-0.5 bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300 rounded-md">
+                                  {{ prev.estado }}
+                                </span>
+                              </div>
+                              <p class="text-[11px] text-purple-900/80 dark:text-purple-300/80 font-medium truncate">
+                                Archivo reemplazado: <strong class="font-mono text-purple-950 dark:text-purple-200">{{ prev.nombre_original || prev.url }}</strong>
+                              </p>
+                            </div>
+                          </div>
+
+                          <a
+                            :href="formatUrl(prev)"
+                            target="_blank"
+                            class="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[11px] font-bold shadow-xs transition shrink-0"
                           >
-                            <CheckCircle :size="14" />
-                          </button>
-                          <button
-                            @click="emit('updateDocStatus', { idDocumento: doc.id_documento, estado: 'RECHAZADO' })"
-                            :class="[doc.estado === 'RECHAZADO' ? 'bg-red-600 text-white shadow-xs' : 'text-slate-400 hover:text-red-600', 'p-1.5 rounded-lg text-xs font-black transition-all cursor-pointer']"
-                            title="Rechazar Documento"
-                          >
-                            <XCircle :size="14" />
-                          </button>
+                            <ExternalLink :size="12" />
+                            <span>Ver Documento Anterior ↗</span>
+                          </a>
                         </div>
                       </div>
                     </div>

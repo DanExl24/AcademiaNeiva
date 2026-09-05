@@ -690,28 +690,34 @@ const formatRenewalStateLabel = (state?: string) => {
                       <FileText :size="12" /> Ver archivo antiguo ↗
                     </a>
                   </div>
-                  <div v-if="doc.versiones_anteriores && doc.versiones_anteriores.length > 0" class="mt-2.5 p-3 bg-purple-50/80 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-xl space-y-1.5">
-                    <div class="flex items-center justify-between flex-wrap gap-2">
-                      <span class="text-[10px] font-black uppercase tracking-wider text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
-                        <History :size="13" class="text-purple-600 dark:text-purple-400 shrink-0" />
-                        Versión Anterior Subsanada (v{{ doc.versiones_anteriores[0].version }})
-                      </span>
-                      <a
-                        :href="formatUrl(doc.versiones_anteriores[0])"
-                        target="_blank"
-                        class="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[10px] font-bold shadow-xs transition"
-                      >
-                        <ExternalLink :size="12" /> Ver Documento Rechazado (Anterior) ↗
-                      </a>
+                  <div v-if="doc.versiones_anteriores && doc.versiones_anteriores.length > 0" class="mt-2.5 space-y-2">
+                    <div
+                      v-for="prev in doc.versiones_anteriores"
+                      :key="prev.id_documento"
+                      class="p-3 bg-purple-50/80 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-xl space-y-1.5"
+                    >
+                      <div class="flex items-center justify-between flex-wrap gap-2">
+                        <span class="text-[10px] font-black uppercase tracking-wider text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
+                          <History :size="13" class="text-purple-600 dark:text-purple-400 shrink-0" />
+                          Versión Anterior Subsanada (v{{ prev.version || 1 }})
+                        </span>
+                        <a
+                          :href="formatUrl(prev)"
+                          target="_blank"
+                          class="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[10px] font-bold shadow-xs transition"
+                        >
+                          <ExternalLink :size="12" /> Ver Documento Rechazado (Anterior) ↗
+                        </a>
+                      </div>
+                      <p class="text-[11px] text-purple-900/80 dark:text-purple-300/80 font-medium">
+                        📄 Archivo reemplazado: <strong class="font-mono text-purple-950 dark:text-purple-200">{{ prev.nombre_original || prev.url }}</strong>
+                      </p>
                     </div>
-                    <p class="text-[11px] text-purple-900/80 dark:text-purple-300/80 font-medium">
-                      📄 Archivo reemplazado: <strong class="font-mono text-purple-950 dark:text-purple-200">{{ doc.versiones_anteriores[0].nombre_original || doc.versiones_anteriores[0].url }}</strong>
-                    </p>
                   </div>
                 </div>
               </div>
               <div class="flex items-center gap-2 shrink-0">
-                <a :href="formatUrl(doc.url)" target="_blank" class="p-2 bg-white dark:bg-slate-700 border border-slate-100 dark:border-slate-600 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 transition-all"><ExternalLink :size="16" /></a>
+                <a :href="formatUrl(doc)" target="_blank" class="p-2 bg-white dark:bg-slate-700 border border-slate-100 dark:border-slate-600 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 transition-all" title="Ver Documento Actual"><ExternalLink :size="16" /></a>
                 <div class="flex items-center bg-white dark:bg-slate-700 border border-slate-100 dark:border-slate-600 rounded-xl p-1 gap-1">
                   <template v-if="doc.estado === 'PENDIENTE'">
                     <button @click="updateDocumentStatus(doc.id_documento, 'VALIDADO')" :disabled="isReadonly"
