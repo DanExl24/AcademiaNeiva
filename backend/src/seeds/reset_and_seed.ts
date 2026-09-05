@@ -1288,39 +1288,46 @@ async function run(): Promise<void> {
 async function seedDbaCatalog(): Promise<void> {
   console.log("\n🌱 Iniciando importación y siembra del catálogo de DBA...");
 
-  const rootDir = path.resolve(__dirname, "../../..");
-  const dbaPdfs = [
-    { pdf: path.join(rootDir, "guides/DBA/DBA_matematicas.pdf"), area: "Matemáticas", version: "2016", startPage: 8, script: "importar_dba.py" },
-    { pdf: path.join(rootDir, "guides/DBA/DBA_lenguaje.pdf"), area: "Español", version: "2016", startPage: 8, script: "importar_dba.py" },
-    { pdf: path.join(rootDir, "guides/DBA/DBA_naturales.pdf"), area: "Ciencias Naturales", version: "2016", startPage: 8, script: "importar_dba.py" },
-    { pdf: path.join(rootDir, "guides/DBA/DBA_sociales.pdf"), area: "Ciencias Sociales", version: "2016", startPage: 8, script: "importar_dba.py" },
-    { pdf: path.join(rootDir, "guides/DBA/DBA_transicion.pdf"), area: "Desarrollo Integral", version: "2016", startPage: 8, script: "importar_dba.py" },
-    { pdf: path.join(rootDir, "guides/DBA/dba_ingles_transicion_quinto.pdf"), area: "Inglés", version: "2016", startPage: 8, script: "importar_dba_primaria_ingles.py" },
-    { pdf: path.join(rootDir, "guides/DBA/DBA_ingles_sexto_once.pdf"), area: "Inglés", version: "2016", startPage: 15, script: "importar_dba.py" }
-  ];
-
-  // 1. Ejecutar importaciones de Python
-  for (const item of dbaPdfs) {
-    console.log(`⏳ Importando ${item.area} desde ${item.pdf} (pág. ${item.startPage})...`);
-    try {
-      const pdfPath = item.pdf.replace(/\\/g, "/");
-      const cmd = `python scripts/${item.script} --pdf "${pdfPath}" --area "${item.area}" --version "${item.version}" --start-page ${item.startPage}`;
-      execSync(cmd, { stdio: "inherit", cwd: path.resolve(__dirname, "../..") });
-    } catch (err) {
-      console.error(`❌ Error importando ${item.pdf}:`, err);
-    }
-  }
-
-  // 2. Realizar consultas para reasignación y mapeo
   const client = await pool.connect();
   try {
-    console.log("🔄 Reasignando DBA de inglés Transición a la materia Desarrollo Integral...");
-    await client.query(`
-      UPDATE dba 
-      SET area = 'Desarrollo Integral',
-          numero_dba = numero_dba + 100
-      WHERE area = 'Inglés' AND grado = 'TRANSICION' AND version_curricular = '2016'
-    `);
+    const sqlPath = path.join(__dirname, "dba_catalog.sql");
+    if (fs.existsSync(sqlPath)) {
+      console.log("⚡ Cargando catálogo oficial de DBA y evidencias desde dba_catalog.sql...");
+      const sqlContent = fs.readFileSync(sqlPath, "utf-8");
+      await client.query(sqlContent);
+      console.log("✅ Catálogo oficial de DBA y evidencias cargado exitosamente desde SQL.");
+    } else {
+      console.log("⚠️ dba_catalog.sql no encontrado, intentando importar vía scripts Python...");
+      const rootDir = path.resolve(__dirname, "../../..");
+      const dbaPdfs = [
+        { pdf: path.join(rootDir, "guides/DBA/DBA_matematicas.pdf"), area: "Matemáticas", version: "2016", startPage: 8, script: "importar_dba.py" },
+        { pdf: path.join(rootDir, "guides/DBA/DBA_lenguaje.pdf"), area: "Español", version: "2016", startPage: 8, script: "importar_dba.py" },
+        { pdf: path.join(rootDir, "guides/DBA/DBA_naturales.pdf"), area: "Ciencias Naturales", version: "2016", startPage: 8, script: "importar_dba.py" },
+        { pdf: path.join(rootDir, "guides/DBA/DBA_sociales.pdf"), area: "Ciencias Sociales", version: "2016", startPage: 8, script: "importar_dba.py" },
+        { pdf: path.join(rootDir, "guides/DBA/DBA_transicion.pdf"), area: "Desarrollo Integral", version: "2016", startPage: 8, script: "importar_dba.py" },
+        { pdf: path.join(rootDir, "guides/DBA/dba_ingles_transicion_quinto.pdf"), area: "Inglés", version: "2016", startPage: 8, script: "importar_dba_primaria_ingles.py" },
+        { pdf: path.join(rootDir, "guides/DBA/DBA_ingles_sexto_once.pdf"), area: "Inglés", version: "2016", startPage: 15, script: "importar_dba.py" }
+      ];
+
+      for (const item of dbaPdfs) {
+        console.log(`⏳ Importando ${item.area} desde ${item.pdf} (pág. ${item.startPage})...`);
+        try {
+          const pdfPath = item.pdf.replace(/\\/g, "/");
+          const cmd = `python scripts/${item.script} --pdf "${pdfPath}" --area "${item.area}" --version "${item.version}" --start-page ${item.startPage}`;
+          execSync(cmd, { stdio: "inherit", cwd: path.resolve(__dirname, "../..") });
+        } catch (err) {
+          console.error(`❌ Error importando ${item.pdf}:`, err);
+        }
+      }
+
+      console.log("🔄 Reasignando DBA de inglés Transición a la materia Desarrollo Integral...");
+      await client.query(`
+        UPDATE dba 
+        SET area = 'Desarrollo Integral',
+            numero_dba = numero_dba + 100
+        WHERE area = 'Inglés' AND grado = 'TRANSICION' AND version_curricular = '2016'
+      `);
+    }
 
     const colegiosRes = await client.query<{ id_colegio: number }>("SELECT id_colegio FROM colegio");
     
