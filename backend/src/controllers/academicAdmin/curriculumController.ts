@@ -1499,29 +1499,45 @@ export const getDbaPlaneacionDisponibles = async (req: Request, res: Response): 
 
     const subjectName = subjectRow?.nombre || "";
 
-    const cvcRes = await db
+    let cvcRes = await db
       .selectFrom("colegio_version_curricular as cvc")
       .select("cvc.version_curricular")
       .where("cvc.id_colegio", "=", schoolId)
       .where((eb) => {
-        const conds = [eb("cvc.area", "=", subjectName)];
-        if (gradeName === "TRANSICION" && subjectName === "Desarrollo Integral") {
+        const conds = [
+          eb(sql`UPPER(TRIM(cvc.area))`, "=", subjectName.trim().toUpperCase()),
+        ];
+        if (gradeName === "TRANSICION" && (subjectName === "Desarrollo Integral" || subjectName.includes("Transición"))) {
           conds.push(eb("cvc.area", "in", ["Desarrollo Integral", "Transición", "Desarrollo Integral (Transición)"]));
         }
         return eb.or(conds);
       })
-      .where("cvc.grado", "=", gradeName)
+      .where((eb) => eb(sql`UPPER(TRIM(cvc.grado))`, "=", gradeName.trim().toUpperCase()))
       .executeTakeFirst();
 
     if (!cvcRes) {
-      res.json({ dba: [], versionCurricular: null });
-      return;
+      await ensureSchoolDefaultSettings(schoolId);
+      cvcRes = await db
+        .selectFrom("colegio_version_curricular as cvc")
+        .select("cvc.version_curricular")
+        .where("cvc.id_colegio", "=", schoolId)
+        .where((eb) => {
+          const conds = [
+            eb(sql`UPPER(TRIM(cvc.area))`, "=", subjectName.trim().toUpperCase()),
+          ];
+          if (gradeName === "TRANSICION" && (subjectName === "Desarrollo Integral" || subjectName.includes("Transición"))) {
+            conds.push(eb("cvc.area", "in", ["Desarrollo Integral", "Transición", "Desarrollo Integral (Transición)"]));
+          }
+          return eb.or(conds);
+        })
+        .where((eb) => eb(sql`UPPER(TRIM(cvc.grado))`, "=", gradeName.trim().toUpperCase()))
+        .executeTakeFirst();
     }
 
-    const versionCurricular = cvcRes.version_curricular;
+    let versionCurricular = cvcRes?.version_curricular || "2016";
 
     // 3. Obtener DBAs y sus evidencias oficiales activas
-    const dbaRows = await db
+    let dbaRows = await db
       .selectFrom("dba as d")
       .select([
         "d.id_dba",
@@ -1547,17 +1563,67 @@ export const getDbaPlaneacionDisponibles = async (req: Request, res: Response): 
             .as("evidencias"),
       ])
       .where((eb) => {
-        const conds = [eb("d.area", "=", subjectName)];
-        if (gradeName === "TRANSICION" && subjectName === "Desarrollo Integral") {
+        const conds = [
+          eb(sql`UPPER(TRIM(d.area))`, "=", subjectName.trim().toUpperCase()),
+        ];
+        if (gradeName === "TRANSICION" && (subjectName === "Desarrollo Integral" || subjectName.includes("Transición"))) {
           conds.push(eb("d.area", "in", ["Desarrollo Integral", "Transición", "Desarrollo Integral (Transición)"]));
         }
         return eb.or(conds);
       })
-      .where("d.grado", "=", gradeName)
+      .where((eb) => eb(sql`UPPER(TRIM(d.grado))`, "=", gradeName.trim().toUpperCase()))
       .where("d.version_curricular", "=", versionCurricular)
       .where("d.estado", "=", "ACTIVO")
       .orderBy("d.numero_dba", "asc")
       .execute();
+
+    // Fallback: si por alguna razón con la versión configurada no hay filas pero existe la 2016 oficial
+    if (dbaRows.length === 0 && versionCurricular !== "2016") {
+      const fallbackRows = await db
+        .selectFrom("dba as d")
+        .select([
+          "d.id_dba",
+          "d.numero_dba",
+          "d.enunciado",
+          "d.area",
+          "d.grado",
+          "d.version_curricular",
+          (eb) =>
+            eb
+              .selectFrom("evidencias_dba as e")
+              .select(
+                sql<any>`COALESCE(json_agg(
+                  json_build_object(
+                    'id_evidencia_dba', e.id_evidencia_dba,
+                    'descripcion', e.descripcion,
+                    'orden', e.orden
+                  ) ORDER BY e.orden, e.id_evidencia_dba
+                ), '[]'::json)`.as("evidencias")
+              )
+              .whereRef("e.id_dba", "=", "d.id_dba")
+              .where("e.estado", "=", "ACTIVO")
+              .as("evidencias"),
+        ])
+        .where((eb) => {
+          const conds = [
+            eb(sql`UPPER(TRIM(d.area))`, "=", subjectName.trim().toUpperCase()),
+          ];
+          if (gradeName === "TRANSICION" && (subjectName === "Desarrollo Integral" || subjectName.includes("Transición"))) {
+            conds.push(eb("d.area", "in", ["Desarrollo Integral", "Transición", "Desarrollo Integral (Transición)"]));
+          }
+          return eb.or(conds);
+        })
+        .where((eb) => eb(sql`UPPER(TRIM(d.grado))`, "=", gradeName.trim().toUpperCase()))
+        .where("d.version_curricular", "=", "2016")
+        .where("d.estado", "=", "ACTIVO")
+        .orderBy("d.numero_dba", "asc")
+        .execute();
+
+      if (fallbackRows.length > 0) {
+        dbaRows = fallbackRows;
+        versionCurricular = "2016";
+      }
+    }
 
     // 4. Resolver el año lectivo objetivo de la consulta
     let targetYearId: number | null = req.query.id_anio ? Number(req.query.id_anio) : null;

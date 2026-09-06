@@ -67,7 +67,7 @@ import { useAcademicYearStore } from '../../stores/academicYear'
 const auth = useAuthStore()
 const yearStore = useAcademicYearStore()
 const notify = useNotificationStore()
-const schoolId = computed(() => Number(auth.user?.schoolId || 0))
+const schoolId = computed(() => Number(auth.user?.schoolId || auth.selectedSchoolId || auth.supervision?.id_colegio || 0))
 const isClosedYear = computed(() => Boolean(yearStore.isClosedYear))
 
 const academicYears = computed(() => yearStore.availableYears)
@@ -482,8 +482,8 @@ const onFormContextChange = async (arg?: number | Event) => {
       id_competencia: competencyId || undefined,
       id_anio: yearStore.selectedYearId || undefined
     })
-    availableFormDba.value = resData.dba || []
-    formDbaVersion.value = resData.versionCurricular
+    availableFormDba.value = Array.isArray(resData?.dba) ? resData.dba : (Array.isArray(resData) ? resData : [])
+    formDbaVersion.value = resData?.versionCurricular || null
   } catch (error) {
     console.error('Error fetching available DBA for form:', error)
     availableFormDba.value = []
@@ -727,8 +727,8 @@ const openDbaModal = async (competencia: CompetencyItem) => {
       id_competencia: competencia.id_competencia,
       id_anio: yearStore.selectedYearId || undefined
     })
-    availableDba.value = resData.dba || []
-    dbaVersion.value = resData.versionCurricular
+    availableDba.value = Array.isArray(resData?.dba) ? resData.dba : (Array.isArray(resData) ? resData : [])
+    dbaVersion.value = resData?.versionCurricular || null
   } catch (error) {
     console.error('Error fetching available DBA:', error)
     notify.addNotification('No fue posible cargar el catálogo de DBA', 'error')

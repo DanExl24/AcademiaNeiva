@@ -608,6 +608,44 @@ export const ensureCompetencySchema = async (): Promise<void> => {
       await client.query(dropUsuarioIdColegioSql);
     }
 
+    // Ejecutar migración 050 (materias reprobatorias en configuracion_colegio)
+    const materiasReprobatoriasPath = path.join(__dirname, "../migrations/050_materias_reprobatorias_promocion.sql");
+    if (fs.existsSync(materiasReprobatoriasPath)) {
+      const materiasReprobatoriasSql = fs.readFileSync(materiasReprobatoriasPath, "utf8");
+      await client.query(materiasReprobatoriasSql);
+    }
+
+    // Ejecutar migración 051 (fechas_matricula_ordinaria y extraordinaria en anio_lectivo)
+    const anioFechasPath = path.join(__dirname, "../migrations/051_add_anio_lectivo_fechas.sql");
+    if (fs.existsSync(anioFechasPath)) {
+      const anioFechasSql = fs.readFileSync(anioFechasPath, "utf8");
+      await client.query(anioFechasSql);
+    }
+
+    // Ejecutar migración 052 / Siembra asegurada del catálogo oficial de DBA y evidencias oficiales
+    const dbaSeedMigrationPath = path.join(__dirname, "../migrations/052_seed_dba_catalog.sql");
+    const dbaCountRes = await client.query("SELECT COUNT(*)::int as count FROM public.dba");
+    const isDbaEmpty = Number(dbaCountRes.rows[0]?.count || 0) === 0;
+
+    if (isDbaEmpty) {
+      const candidates = [
+        dbaSeedMigrationPath,
+        path.join(__dirname, "../seeds/dba_catalog.sql"),
+        path.join(__dirname, "../../src/seeds/dba_catalog.sql"),
+        path.join(process.cwd(), "src/seeds/dba_catalog.sql"),
+        path.join(process.cwd(), "dist/seeds/dba_catalog.sql"),
+      ];
+      const foundPath = candidates.find((p) => fs.existsSync(p));
+      if (foundPath) {
+        console.log("⚡ Sembrando catálogo oficial de DBA y evidencias desde:", foundPath);
+        const dbaCatalogSql = fs.readFileSync(foundPath, "utf8");
+        await client.query(dbaCatalogSql);
+        console.log("✅ Catálogo oficial de DBA sembrado exitosamente en la base de datos.");
+      } else {
+        console.warn("⚠️ Archivo de catálogo DBA no encontrado en ninguna de las rutas candidatas.");
+      }
+    }
+
 
 
     // Backfill sync_uuid for existing competencies
