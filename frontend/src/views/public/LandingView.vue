@@ -80,10 +80,16 @@ const roles = [
           <a href="#beneficios" class="text-sm font-medium text-gray-600 hover:text-indigo-600 transition-colors">Beneficios</a>
           <a href="#roles" class="text-sm font-medium text-gray-600 hover:text-indigo-600 transition-colors">Roles</a>
           <router-link to="/matricula" class="text-sm font-medium text-gray-600 hover:text-indigo-600 transition-colors">Matrículas</router-link>
-          <router-link to="/docs" class="text-sm font-bold text-indigo-600 hover:text-indigo-700 transition-colors flex items-center gap-1">
+          <!-- Documentación (Deshabilitada temporalmente) -->
+          <button 
+            type="button" 
+            disabled 
+            class="text-sm font-medium text-gray-400 cursor-not-allowed flex items-center gap-1 opacity-50 select-none"
+            title="Apartado de documentación temporalmente deshabilitado"
+          >
             <BookOpen :size="15" />
             <span>Documentación</span>
-          </router-link>
+          </button>
           <router-link to="/soporte" class="text-sm font-medium text-gray-600 hover:text-indigo-600 transition-colors">Soporte</router-link>
           <router-link to="/login" class="rounded-full bg-indigo-600 px-6 py-2 text-sm font-semibold text-white shadow-md hover:bg-indigo-700 transition-all hover:shadow-indigo-200">
             Ingresar
@@ -153,14 +159,19 @@ const roles = [
             <span>Consultar Estado de Matrícula</span>
           </router-link>
 
-          <router-link 
-            to="/docs" 
-            @click="closeMobileMenu"
-            class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100 transition-colors"
+          <!-- Documentación (Deshabilitada temporalmente) -->
+          <button 
+            type="button" 
+            disabled 
+            class="flex items-center justify-between w-full rounded-xl px-4 py-3 text-sm font-semibold text-gray-400 bg-gray-50/80 cursor-not-allowed opacity-60 text-left select-none"
+            title="Apartado de documentación temporalmente deshabilitado"
           >
-            <BookOpen :size="18" class="text-indigo-600" />
-            <span>Documentación del Sistema (21 Módulos)</span>
-          </router-link>
+            <div class="flex items-center gap-3">
+              <BookOpen :size="18" class="text-gray-400" />
+              <span>Documentación del Sistema (21 Módulos)</span>
+            </div>
+            <span class="text-[10px] font-semibold text-gray-400 bg-gray-200/80 px-2 py-0.5 rounded-full uppercase tracking-wider">Deshabilitado</span>
+          </button>
 
           <router-link 
             to="/soporte" 

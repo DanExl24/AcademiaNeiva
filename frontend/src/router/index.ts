@@ -33,24 +33,19 @@ const router = createRouter({
       name: 'matricula-extraordinaria',
       component: () => import('../views/public/EnrollmentView.vue')
     },
+    // Apartado de documentación (deshabilitado temporalmente - vista preservada en DocsPortalView.vue)
     {
       path: '/docs',
       name: 'docs-portal',
-      component: () => import('../views/public/DocsPortalView.vue')
+      redirect: '/'
     },
     {
-      path: '/docs/:module/:file',
-      name: 'docs-file',
-      component: () => import('../views/public/DocsPortalView.vue')
-    },
-    {
-      path: '/docs/:module/submodules/:file',
-      name: 'docs-submodule-file',
-      component: () => import('../views/public/DocsPortalView.vue')
+      path: '/docs/:pathMatch(.*)*',
+      redirect: '/'
     },
     {
       path: '/documentacion',
-      redirect: '/docs'
+      redirect: '/'
     },
     {
       path: '/forgot-password',
@@ -420,6 +415,11 @@ const router = createRouter({
 // Al hacer logout, sessionStorage._sessionVerified se limpia.
 
 router.beforeEach(async (to) => {
+  // Bloqueo estricto: Deshabilitar acceso a cualquier ruta de documentación (/docs, /documentacion)
+  if (to.path === '/docs' || to.path.startsWith('/docs/') || to.path === '/documentacion' || to.path.startsWith('/documentacion/')) {
+    return '/'
+  }
+
   const auth = useAuthStore()
 
   // Rutas públicas: si el usuario ya está autenticado y va al login, redirigir al dashboard
