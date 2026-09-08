@@ -26,7 +26,7 @@ const getStyles = (type: string) => {
 </script>
 
 <template>
-  <div class="fixed top-6 right-6 z-[200] flex flex-col gap-3 w-80">
+  <div class="fixed top-6 right-6 z-[99999] flex flex-col gap-3 w-80 pointer-events-none">
     <TransitionGroup 
       enter-active-class="transform transition ease-out duration-300"
       enter-from-class="translate-y-2 opacity-0 sm:translate-y-0 sm:translate-x-4"
@@ -38,7 +38,7 @@ const getStyles = (type: string) => {
       <div 
         v-for="notification in store.notifications" 
         :key="notification.id"
-        :class="[getStyles(notification.type), 'p-4 rounded-2xl border shadow-lg flex items-start gap-3 backdrop-blur-sm bg-opacity-90']"
+        :class="[getStyles(notification.type), 'p-4 rounded-2xl border shadow-xl flex items-start gap-3 backdrop-blur-md bg-opacity-95 pointer-events-auto']"
       >
         <component :is="getIcon(notification.type)" class="flex-shrink-0 mt-0.5" :size="20" />
         <div class="flex-1 text-sm font-semibold">

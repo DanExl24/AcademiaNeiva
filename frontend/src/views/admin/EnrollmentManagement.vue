@@ -31,6 +31,7 @@ import EnrollmentReviewDrawer from '../../components/matriculas/EnrollmentReview
 import EnrollmentCorrectionModal from '../../components/matriculas/EnrollmentCorrectionModal.vue'
 import EnrollmentCancelModal from '../../components/matriculas/EnrollmentCancelModal.vue'
 import ExtraordinaryEnrollmentModal from '../../components/matriculas/ExtraordinaryEnrollmentModal.vue'
+import { exportEnrollmentToPDF } from '../../utils/enrollmentPdfHelper'
 
 const auth = useAuthStore()
 const notify = useNotificationStore()
@@ -460,9 +461,14 @@ const handleGoToTrasladoDetail = (idSolicitud: number) => {
   })
 }
 
-const handleDownloadPDF = (fullMatricula: any) => {
-  if (!fullMatricula) return
-  notify.addNotification('Generando ficha PDF de matrícula...', 'info')
+const handleDownloadPDF = async (fullMatricula: any) => {
+  if (!fullMatricula || isExportingPDF.value) return
+  isExportingPDF.value = true
+  try {
+    await exportEnrollmentToPDF(fullMatricula, { notify })
+  } finally {
+    isExportingPDF.value = false
+  }
 }
 </script>
 

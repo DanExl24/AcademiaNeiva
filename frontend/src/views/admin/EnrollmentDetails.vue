@@ -3,8 +3,8 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { enrollmentService } from '../../services/enrollmentService'
 import { API_BASE_URL } from '../../services/api'
-import html2pdf from 'html2pdf.js'
 import { useNotificationStore } from '../../stores/notifications'
+import { exportEnrollmentToPDF } from '../../utils/enrollmentPdfHelper'
 
 import {
   ArrowLeft,
@@ -260,26 +260,13 @@ const rejectedDocumentsNames = computed(() => {
 })
 
 const isExportingPDF = ref(false)
-const printableRef = ref<HTMLElement | null>(null)
 
 const downloadEnrollmentPDF = async () => {
-  if (!matricula.value || isExportingPDF.value || !printableRef.value) return
+  if (!matricula.value || isExportingPDF.value) return
   isExportingPDF.value = true
 
   try {
-    const opt = {
-      margin:       0,
-      filename:     `ficha_matricula_${matricula.value.student_code}_${matricula.value.id_matricula}.pdf`,
-      image:        { type: 'jpeg' as const, quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true, scrollX: 0, scrollY: 0, windowWidth: 816 },
-      jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' as const },
-      pagebreak:    { mode: ['css', 'legacy'] }
-    }
-    
-    await html2pdf().set(opt).from(printableRef.value!).save()
-  } catch (err) {
-    console.error("Error al exportar ficha en PDF:", err)
-    notify.addNotification("Error al generar el PDF de la ficha", "error")
+    await exportEnrollmentToPDF(matricula.value, { notify })
   } finally {
     isExportingPDF.value = false
   }
@@ -883,7 +870,7 @@ const formatRenewalStateLabel = (state?: string) => {
 
     <!-- Hidden Printable Ficha de Matricula Template -->
     <div v-if="matricula" style="position: fixed; top: 0; left: 0; width: 816px; height: 100vh; overflow: hidden; pointer-events: none; opacity: 0.005; z-index: -99999;">
-      <div ref="printableRef" style="width: 816px; padding: 48px; background-color: #ffffff; color: #0f172a; font-family: 'Inter', system-ui, -apple-system, sans-serif; box-sizing: border-box;">
+      <div style="width: 816px; padding: 48px; background-color: #ffffff; color: #0f172a; font-family: 'Inter', system-ui, -apple-system, sans-serif; box-sizing: border-box;">
       <!-- Header -->
       <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #cbd5e1; padding-bottom: 20px; margin-bottom: 30px;">
         <!-- School Shield (Left) -->
