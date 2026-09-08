@@ -164,6 +164,22 @@ const selectNewStudent = () => {
   isNewStudent.value = true
   studentData.value = { nombre: '', apellido: '', documento: '', id_tipodocumento: 2 }
   academicWarning.value = null
+
+  // Preservar y asegurar datos del acudiente si ya los tenemos en matricula
+  if (matricula.value?.parent_firstname) {
+    parentData.value.nombre = matricula.value.parent_firstname
+    parentData.value.apellido = matricula.value.parent_lastname
+    if (matricula.value.parent_document) {
+      parentData.value.documento = matricula.value.parent_document
+      verifyDocument()
+    }
+    if (matricula.value.parent_id_tipodocumento) {
+      parentData.value.id_tipodocumento = Number(matricula.value.parent_id_tipodocumento)
+    }
+    if (matricula.value.parent_telefono) {
+      parentData.value.telefono = matricula.value.parent_telefono
+    }
+  }
 }
 
 const clearCandidateSelection = () => {
@@ -262,8 +278,6 @@ const onParentDocumentInput = () => {
   parentData.value.documento = sanitizeDocumentNumber(parentData.value.documento)
   if (docMatchInfo.value && parentData.value.documento !== lastMatchedDoc) {
     docMatchInfo.value = null
-    parentData.value.nombre = ''
-    parentData.value.apellido = ''
     lastMatchedDoc = ''
   }
 }
@@ -273,8 +287,6 @@ const verifyDocument = async () => {
   if (doc.length < 5) {
     if (docMatchInfo.value) {
       docMatchInfo.value = null
-      parentData.value.nombre = ''
-      parentData.value.apellido = ''
       lastMatchedDoc = ''
     }
     return
@@ -291,6 +303,9 @@ const verifyDocument = async () => {
       if (data.user.id_tipodocumento) {
         parentData.value.id_tipodocumento = Number(data.user.id_tipodocumento)
       }
+      if (data.user.telefono && !parentData.value.telefono) {
+        parentData.value.telefono = data.user.telefono
+      }
       const roles: string[] = data.roles || []
       const isStaff = roles.includes('docente') || roles.includes('directivo') || roles.includes('admin')
       if (isStaff) {
@@ -299,19 +314,11 @@ const verifyDocument = async () => {
         notify.addNotification(`Usuario acudiente existente detectado: ${data.user.nombre} ${data.user.apellido}. Se asociará a esta nueva matrícula.`, 'info')
       }
     } else {
-      if (docMatchInfo.value) {
-        parentData.value.nombre = ''
-        parentData.value.apellido = ''
-      }
       docMatchInfo.value = null
       lastMatchedDoc = ''
     }
 
   } catch (err) {
-    if (docMatchInfo.value) {
-      parentData.value.nombre = ''
-      parentData.value.apellido = ''
-    }
     docMatchInfo.value = null
     lastMatchedDoc = ''
   } finally {
@@ -682,6 +689,33 @@ const getStatusColor = (estado: string) => {
               </p>
               <p class="text-amber-700 text-xs mt-1.5 font-semibold">
                 ✨ En este colegio se vinculará únicamente como <strong>Padre de Familia / Acudiente</strong> (sin asignarle rol de docente en esta institución).
+              </p>
+            </div>
+          </div>
+
+          <!-- Banner: Existing Registered Parent Detected -->
+          <div
+            v-else-if="docMatchInfo || (matricula?.parent_firstname && matricula?.renovacion?.is_renovacion)"
+            class="p-4 sm:p-5 bg-sky-50 border border-sky-200 rounded-xl sm:rounded-2xl flex items-start gap-3 sm:gap-4 shadow-sm"
+          >
+            <div class="p-2 sm:p-2.5 bg-sky-600 text-white rounded-xl shrink-0">
+              <UserCheck :size="18" class="sm:w-5 sm:h-5" />
+            </div>
+            <div>
+              <p class="font-black text-sky-900 text-xs sm:text-sm">
+                Acudiente Registrado Detectado en el Sistema
+              </p>
+              <p class="text-sky-800 text-xs mt-0.5 font-medium">
+                <strong>{{ (docMatchInfo?.user?.nombre || parentData.nombre) }} {{ (docMatchInfo?.user?.apellido || parentData.apellido) }}</strong>
+                <span v-if="docMatchInfo?.user?.email || matricula?.correo_padre">
+                  · {{ docMatchInfo?.user?.email || matricula?.correo_padre }}
+                </span>
+                <span v-if="parentData.documento">
+                  · Doc: {{ parentData.documento }}
+                </span>
+              </p>
+              <p class="text-sky-700 text-xs mt-1.5 font-semibold">
+                ✨ Los datos personales han sido precargados y asegurados automáticamente. El nuevo estudiante quedará vinculado a esta cuenta familiar sin generar registros duplicados.
               </p>
             </div>
           </div>

@@ -684,14 +684,20 @@ export class MatriculaService {
 
       if (parentUserRes) {
         const idUsuarioPadre = parentUserRes.id_usuario;
-        const parentFullName = `${parentUserRes.nombre} ${parentUserRes.apellido}`.trim();
         
         const parentRes = await db
           .selectFrom('padre_familia')
-          .select('id_padrefamilia')
+          .select(['id_padrefamilia', 'nombre', 'apellido'])
           .where('id_usuario', '=', idUsuarioPadre)
           .limit(1)
           .executeTakeFirst();
+
+        let parentFullName = `${parentUserRes.nombre} ${parentUserRes.apellido}`.trim();
+        if ((parentUserRes.nombre === 'Padre' && parentUserRes.apellido === 'Familia') && parentRes?.nombre) {
+          parentFullName = `${parentRes.nombre} ${parentRes.apellido || ''}`.trim();
+        } else if (parentRes?.nombre) {
+          parentFullName = `${parentRes.nombre} ${parentRes.apellido || ''}`.trim();
+        }
 
         if (parentRes) {
           const idPadre = parentRes.id_padrefamilia;
@@ -884,8 +890,91 @@ export class MatriculaService {
       }
     }
 
+    // Resolución inteligente de los datos del acudiente registrado:
+    // Si la matrícula no tiene id_estudiante (nuevo estudiante / nuevo hijo) o los datos del padre están vacíos o con placeholder:
+    let resolvedParentFirstname = mat.parent_firstname;
+    let resolvedParentLastname = mat.parent_lastname;
+    let resolvedParentDocument = mat.parent_document;
+    let resolvedParentIdTipoDoc = mat.parent_id_tipodocumento;
+    let resolvedParentTelefono = mat.parent_telefono;
+
+    if (mat.correo_padre) {
+      const parentUserMatch = await db
+        .selectFrom('usuario as u')
+        .leftJoin('padre_familia as pf', 'pf.id_usuario', 'u.id_usuario')
+        .leftJoin('persona as p', 'p.id_persona', 'u.id_persona')
+        .select([
+          'u.id_usuario',
+          'u.nombre as u_nombre',
+          'u.apellido as u_apellido',
+          'u.documento as u_documento',
+          'u.id_tipodocumento as u_tipodoc',
+          'u.telefono as u_telefono',
+          'pf.nombre as pf_nombre',
+          'pf.apellido as pf_apellido',
+          'p.nombre as p_nombre',
+          'p.apellido as p_apellido'
+        ])
+        .where(sql<boolean>`LOWER(u.email) = LOWER(${mat.correo_padre})`)
+        .orderBy('pf.id_padrefamilia', 'desc')
+        .executeTakeFirst();
+
+      if (parentUserMatch) {
+        let bestNombre = parentUserMatch.pf_nombre || parentUserMatch.p_nombre || parentUserMatch.u_nombre;
+        let bestApellido = parentUserMatch.pf_apellido || parentUserMatch.p_apellido || parentUserMatch.u_apellido;
+
+        if ((bestNombre === 'Padre' && bestApellido === 'Familia') || !bestNombre) {
+          if (parentUserMatch.pf_nombre) {
+            bestNombre = parentUserMatch.pf_nombre;
+            bestApellido = parentUserMatch.pf_apellido || '';
+          } else if (parentUserMatch.p_nombre) {
+            bestNombre = parentUserMatch.p_nombre;
+            bestApellido = parentUserMatch.p_apellido || '';
+          }
+        }
+
+        // Si en usuario estaba como 'Padre Familia' y encontramos un nombre real, auto-reparar usuario
+        if (
+          parentUserMatch.u_nombre === 'Padre' && parentUserMatch.u_apellido === 'Familia' &&
+          bestNombre && bestNombre !== 'Padre'
+        ) {
+          await db
+            .updateTable('usuario')
+            .set({ nombre: bestNombre, apellido: bestApellido })
+            .where('id_usuario', '=', parentUserMatch.id_usuario)
+            .execute();
+        }
+
+        if (!resolvedParentFirstname || resolvedParentFirstname === 'Padre') {
+          resolvedParentFirstname = bestNombre;
+        }
+        if (!resolvedParentLastname || resolvedParentLastname === 'Familia') {
+          resolvedParentLastname = bestApellido;
+        }
+        if (!resolvedParentDocument) {
+          resolvedParentDocument = parentUserMatch.u_documento;
+        }
+        if (!resolvedParentIdTipoDoc) {
+          resolvedParentIdTipoDoc = parentUserMatch.u_tipodoc;
+        }
+        if (!resolvedParentTelefono) {
+          resolvedParentTelefono = parentUserMatch.u_telefono;
+        }
+
+        // Si renovacion no tenía parent_name limpio o tenía placeholder, asignarlo
+        if (renovacion.is_renovacion && (!renovacion.parent_name || renovacion.parent_name === 'Padre Familia')) {
+          renovacion.parent_name = `${resolvedParentFirstname || ''} ${resolvedParentLastname || ''}`.trim();
+        }
+      }
+    }
+
     return {
       ...mat,
+      parent_firstname: resolvedParentFirstname,
+      parent_lastname: resolvedParentLastname,
+      parent_document: resolvedParentDocument,
+      parent_id_tipodocumento: resolvedParentIdTipoDoc,
+      parent_telefono: resolvedParentTelefono,
       availableSections: sections || [],
       documentos: docsWithHistory || [],
       existing_parent_user: existingParentUser,
@@ -1312,13 +1401,21 @@ export class MatriculaService {
           idUsuarioPadre = existingUserRes.id_usuario;
           personalParentEmail = existingUserRes.email;
 
+          const updateObj: any = {
+            id_tipodocumento: Number(data.parent.id_tipodocumento),
+            documento: data.parent.documento,
+            telefono: data.parent.telefono || null
+          };
+
+          const isPlaceholder = (existingUserRes.nombre === 'Padre' && existingUserRes.apellido === 'Familia') || !existingUserRes.nombre;
+          if (isPlaceholder && data.parent.nombre && data.parent.apellido) {
+            updateObj.nombre = data.parent.nombre;
+            updateObj.apellido = data.parent.apellido;
+          }
+
           await trx
             .updateTable('usuario')
-            .set({
-              id_tipodocumento: Number(data.parent.id_tipodocumento),
-              documento: data.parent.documento,
-              telefono: data.parent.telefono || null
-            })
+            .set(updateObj)
             .where('id_usuario', '=', idUsuarioPadre)
             .execute();
         } else {

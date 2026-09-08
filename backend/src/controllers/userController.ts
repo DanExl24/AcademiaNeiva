@@ -10,19 +10,61 @@ export const checkDocument = async (req: Request, res: Response): Promise<void> 
       .selectFrom("usuario as u")
       .innerJoin("usuario_rol as ur", "ur.id_usuario", "u.id_usuario")
       .innerJoin("rol as r", "r.id_rol", "ur.id_rol")
+      .leftJoin("padre_familia as pf", "pf.id_usuario", "u.id_usuario")
+      .leftJoin("persona as p", "p.id_persona", "u.id_persona")
       .select([
         "u.id_usuario",
         "u.nombre",
         "u.apellido",
         "u.email",
+        "u.telefono",
         "u.id_tipodocumento",
+        "pf.nombre as pf_nombre",
+        "pf.apellido as pf_apellido",
+        "p.nombre as p_nombre",
+        "p.apellido as p_apellido",
         sql<string[]>`array_agg(r.nombre)`.as("roles")
       ])
       .where("u.documento", "=", document)
-      .groupBy(["u.id_usuario", "u.nombre", "u.apellido", "u.email", "u.id_tipodocumento"])
+      .groupBy([
+        "u.id_usuario",
+        "u.nombre",
+        "u.apellido",
+        "u.email",
+        "u.telefono",
+        "u.id_tipodocumento",
+        "pf.nombre",
+        "pf.apellido",
+        "p.nombre",
+        "p.apellido"
+      ])
       .executeTakeFirst();
 
     if (user) {
+      let finalNombre = user.nombre;
+      let finalApellido = user.apellido;
+
+      // Si en usuario está como marcador genérico 'Padre Familia', pero en padre_familia o persona está su nombre real:
+      const isPlaceholder = (finalNombre === 'Padre' && finalApellido === 'Familia') || !finalNombre || !finalApellido;
+      if (isPlaceholder) {
+        if (user.pf_nombre && user.pf_apellido) {
+          finalNombre = user.pf_nombre;
+          finalApellido = user.pf_apellido;
+        } else if (user.p_nombre && user.p_apellido) {
+          finalNombre = user.p_nombre;
+          finalApellido = user.p_apellido;
+        }
+
+        // Auto-reparar la tabla usuario para futuras consultas
+        if (finalNombre !== 'Padre' || finalApellido !== 'Familia') {
+          await db
+            .updateTable("usuario")
+            .set({ nombre: finalNombre, apellido: finalApellido })
+            .where("id_usuario", "=", user.id_usuario)
+            .execute();
+        }
+      }
+
       const roles: string[] = user.roles || [];
       let displayRole = 'usuario';
       if (roles.includes('admin_general') || roles.includes('admin')) displayRole = 'admin';
@@ -35,9 +77,10 @@ export const checkDocument = async (req: Request, res: Response): Promise<void> 
         exists: true,
         user: { 
           id_usuario: user.id_usuario,
-          nombre: user.nombre, 
-          apellido: user.apellido, 
+          nombre: finalNombre, 
+          apellido: finalApellido, 
           email: user.email,
+          telefono: user.telefono,
           id_tipodocumento: user.id_tipodocumento 
         },
         role: displayRole,
