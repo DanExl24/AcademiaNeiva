@@ -502,7 +502,7 @@ const getStatusColor = (estado: string) => {
               <div v-if="academicWarning.decision_existente" class="mt-2 p-2.5 bg-white/80 border border-amber-200 rounded-xl text-xs space-y-1">
                 <p class="font-bold text-slate-800">
                   📋 Decisión Institucional Registrada: 
-                  <span class="text-indigo-600 font-extrabold">{{ academicWarning.decision_existente.decision_tomada?.replace(/_/g, ' ') }}</span>
+                  <span class="text-indigo-600 font-extrabold">{{ academicWarning.decision_existente.decision_tomada === 'PROMOVER_SIGUIENTE_GRADO' && (academicWarning.es_ultimo_grado || academicWarning.is_final_grade) ? 'Se gradúa exitosamente' : academicWarning.decision_existente.decision_tomada?.replace(/_/g, ' ') }}</span>
                 </p>
                 <p v-if="academicWarning.decision_existente.observacion" class="text-slate-600 italic">
                   "{{ academicWarning.decision_existente.observacion }}"

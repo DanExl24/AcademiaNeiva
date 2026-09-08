@@ -1379,7 +1379,7 @@ const exportToSIMAT = () => {
                       'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400',
                       'px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider'
                     ]">
-                      {{ dec.decision_tomada.replace(/_/g, ' ') }}
+                      {{ dec.decision_tomada === 'PROMOVER_SIGUIENTE_GRADO' && (dec.es_ultimo_grado || dec.is_final_grade || studentSummary?.student?.estado === 'GRADUADO') ? 'Se gradúa exitosamente' : dec.decision_tomada.replace(/_/g, ' ') }}
                     </span>
                   </div>
                   <div class="text-xs text-slate-700 dark:text-slate-200 space-y-1">

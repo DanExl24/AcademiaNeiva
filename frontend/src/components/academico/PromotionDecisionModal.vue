@@ -96,7 +96,7 @@ const emit = defineEmits<{
             </label>
             <select v-model="decisionForm.decisionTaken" :disabled="isYearClosed" class="w-full p-2.5 border border-slate-300 dark:border-slate-700 rounded-lg text-xs bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-65 disabled:bg-slate-100 dark:disabled:bg-slate-800">
               <option value="PROMOVER_SIGUIENTE_GRADO">
-                {{ (targetStudentForDecision?.is_final_grade || targetStudentForDecision?.es_ultimo_grado) ? 'Promover y Graduar Estudiante 🎓' : 'Promover al siguiente grado (Excepción / Aprobación)' }}
+                {{ (targetStudentForDecision?.is_final_grade || targetStudentForDecision?.es_ultimo_grado) ? 'Se gradúa exitosamente 🎓' : 'Promover al siguiente grado (Excepción / Aprobación)' }}
               </option>
               <option value="MANTENER_GRADO">Mantener en el mismo grado (No promovido)</option>
               <option value="MATRICULA_CONDICIONADA">Matrícula condicionada con compromisos</option>
@@ -110,7 +110,7 @@ const emit = defineEmits<{
               Grado institucional sugerido / asignado (Opcional):
             </label>
             <select v-model="decisionForm.assignedGradeId" :disabled="isYearClosed" class="w-full p-2.5 border border-slate-300 dark:border-slate-700 rounded-lg text-xs bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-65 disabled:bg-slate-100 dark:disabled:bg-slate-800">
-              <option value="">Mantener grado por defecto</option>
+              <option value="">{{ (targetStudentForDecision?.is_final_grade || targetStudentForDecision?.es_ultimo_grado) && decisionForm.decisionTaken === 'PROMOVER_SIGUIENTE_GRADO' ? 'No aplica (Culmina ciclo escolar - Se gradúa)' : 'Mantener grado por defecto' }}</option>
               <option v-for="g in grades" :key="g.id_tipo_grado || g.id_grado" :value="g.id_tipo_grado || g.id_grado">
                 {{ g.nombre }}
               </option>

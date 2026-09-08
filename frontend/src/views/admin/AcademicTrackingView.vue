@@ -35,11 +35,11 @@ import {
 const auth = useAuthStore()
 const yearStore = useAcademicYearStore()
 
-const formatDecisionLabel = (decision: string) => {
+const formatDecisionLabel = (decision: string, isFinalGrade: boolean = false) => {
   if (!decision) return ''
   switch (decision) {
     case 'PROMOVER_SIGUIENTE_GRADO':
-      return 'Promover al siguiente grado'
+      return isFinalGrade ? 'Se gradúa exitosamente' : 'Promover al siguiente grado'
     case 'MANTENER_GRADO':
       return 'Mantener en el mismo grado'
     case 'MATRICULA_CONDICIONADA':
@@ -320,10 +320,14 @@ const searchStudentHistory = async (studentId?: number) => {
 // Abrir modal para registrar decisión institucional
 const openDecisionModal = (student: any) => {
   targetStudentForDecision.value = student
+  const isFinalGrade = Boolean(student.is_final_grade || student.es_ultimo_grado)
+  const defaultObservation = isFinalGrade
+    ? 'Estudiante del último año escolar graduado exitosamente por decisión del Consejo Académico (S.I.E.E. / Decreto 1290).'
+    : ''
   decisionForm.value = {
     decisionTaken: student.decision_directivo?.decision_tomada || (student.resultado_anual === 'NO_PROMOVIDO' ? 'MANTENER_GRADO' : 'PROMOVER_SIGUIENTE_GRADO'),
     assignedGradeId: student.decision_directivo?.id_grado_asignado || '',
-    observation: student.decision_directivo?.observacion || ''
+    observation: student.decision_directivo?.observacion || defaultObservation
   }
   showDecisionModal.value = true
 }
@@ -933,11 +937,21 @@ onMounted(async () => {
                   <span v-else class="text-slate-400 text-xs font-medium">Ninguna</span>
                 </td>
                 <td>
-                  <span v-if="student.decision_directivo" class="badge badge-info">
-                    {{ formatDecisionLabel(student.decision_directivo.decision_tomada) }}
+                  <span 
+                    v-if="student.decision_directivo" 
+                    class="badge"
+                    :class="(student.is_final_grade || student.es_ultimo_grado) && student.decision_directivo.decision_tomada === 'PROMOVER_SIGUIENTE_GRADO' ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800' : 'badge-info'"
+                  >
+                    <GraduationCap v-if="(student.is_final_grade || student.es_ultimo_grado) && student.decision_directivo.decision_tomada === 'PROMOVER_SIGUIENTE_GRADO'" class="w-3.5 h-3.5 inline mr-1 text-indigo-600 dark:text-indigo-400" />
+                    {{ formatDecisionLabel(student.decision_directivo.decision_tomada, Boolean(student.is_final_grade || student.es_ultimo_grado)) }}
                   </span>
-                  <span v-else-if="student.resultado_anual === 'APROBADO'" class="badge badge-success font-normal">
-                    Promovido automáticamente
+                  <span 
+                    v-else-if="student.resultado_anual === 'APROBADO'" 
+                    class="badge font-normal"
+                    :class="(student.is_final_grade || student.es_ultimo_grado) ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-semibold' : 'badge-success'"
+                  >
+                    <GraduationCap v-if="student.is_final_grade || student.es_ultimo_grado" class="w-3.5 h-3.5 inline mr-1 text-emerald-600 dark:text-emerald-400" />
+                    {{ (student.is_final_grade || student.es_ultimo_grado) ? 'Se gradúa exitosamente' : 'Promovido automáticamente' }}
                   </span>
                   <span v-else class="text-slate-400 text-xs italic">Sin registrar</span>
                 </td>

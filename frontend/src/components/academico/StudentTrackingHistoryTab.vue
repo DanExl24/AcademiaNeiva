@@ -7,7 +7,7 @@ defineProps<{
   historySearchQuery: string
   historyLoading: boolean
   studentHistory: any | null
-  formatDecisionLabel: (dec: string) => string
+  formatDecisionLabel: (dec: string, isFinalGrade?: boolean) => string
 }>()
 
 const emit = defineEmits<{
@@ -104,7 +104,7 @@ const emit = defineEmits<{
                 </p>
                 <p v-if="mat.decision_tomada">
                   Decisión Institucional: 
-                  <span class="text-indigo-600 dark:text-indigo-400 font-bold ml-1">{{ formatDecisionLabel(mat.decision_tomada) }}</span>
+                  <span class="text-indigo-600 dark:text-indigo-400 font-bold ml-1">{{ formatDecisionLabel(mat.decision_tomada, Boolean(mat.is_final_grade || mat.es_ultimo_grado)) }}</span>
                 </p>
                 <p v-if="mat.observacion" class="p-2.5 bg-white dark:bg-slate-900 rounded-lg text-slate-600 dark:text-slate-400 italic mt-1 border border-slate-200/50 dark:border-slate-800">
                   "{{ mat.observacion }}"

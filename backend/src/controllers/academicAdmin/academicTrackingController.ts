@@ -866,10 +866,18 @@ export const getStudentAcademicHistory = async (req: Request, res: Response): Pr
       .orderBy("al.fecha_inicio", "desc")
       .execute();
 
+    const maxGradeId = await getMaxGradeIdForSchool(schoolId);
+
+    const mappedEnrollments = enrollments.map((en: any) => ({
+      ...en,
+      is_final_grade: maxGradeId != null && en.id_grado === maxGradeId,
+      es_ultimo_grado: maxGradeId != null && en.id_grado === maxGradeId
+    }));
+
     res.json({
       estudiante: studentInfo,
       min_passing_score: minPassingScore,
-      historial_matriculas: enrollments
+      historial_matriculas: mappedEnrollments
     });
   } catch (error) {
     console.error("Error en getStudentAcademicHistory:", error);
@@ -1200,7 +1208,7 @@ export const recordDirectiveDecision = async (req: Request, res: Response): Prom
         .where("id_estudiante", "=", studentId)
         .executeTakeFirst();
 
-      const gradObs = observation || "Graduación procesada automáticamente por decisión de promoción del último año.";
+      const gradObs = observation || "Estudiante del último año escolar graduado exitosamente por decisión del Consejo Académico (S.I.E.E. / Decreto 1290).";
 
       if (existingGrad) {
         await db
