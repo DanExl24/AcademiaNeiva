@@ -5,6 +5,7 @@ import path from "path";
 import fs from "fs";
 
 import { CreateEnrollmentSchema } from "../dtos/matricula.dto";
+import { formatFriendlyErrorMessage } from "../utils/errorHelper";
 
 export const submitEnrollment = async (req: Request, res: Response) => {
   try {
@@ -114,7 +115,8 @@ export const finalizeEnrollment = async (req: Request, res: Response) => {
     const result = await MatriculaService.finalizeEnrollment(Number(id), data);
     res.json(result);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    const friendlyMessage = formatFriendlyErrorMessage(error, "No fue posible finalizar el registro de la matrícula.");
+    res.status(400).json({ error: friendlyMessage });
   }
 };
 

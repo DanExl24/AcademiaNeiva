@@ -45,11 +45,19 @@ const isStudentInputsDisabled = computed(() => {
   return false
 })
 
+const isParentDocManuallyUnlocked = ref(false)
+
 const isParentInputsDisabled = computed(() => {
-  if (docMatchInfo.value?.exists) return true
   if (matricula.value?.existing_parent_user) return true
+  if (docMatchInfo.value?.exists && !isParentDocManuallyUnlocked.value) return true
   return false
 })
+
+const unlockParentDocument = () => {
+  isParentDocManuallyUnlocked.value = true
+  docMatchInfo.value = null
+  lastMatchedDoc = ''
+}
 
 const studentData = ref({
   nombre: '',
@@ -298,6 +306,7 @@ const verifyDocument = async () => {
     if (data.exists && data.user) {
       docMatchInfo.value = data
       lastMatchedDoc = doc
+      isParentDocManuallyUnlocked.value = false
       parentData.value.nombre = data.user.nombre || ''
       parentData.value.apellido = data.user.apellido || ''
       if (data.user.id_tipodocumento) {
@@ -750,16 +759,26 @@ const getStatusColor = (estado: string) => {
               <label class="text-xs sm:text-sm font-bold text-gray-700">Número de Documento</label>
               <div class="relative">
                 <input v-model="parentData.documento" @input="onParentDocumentInput" type="text" placeholder="Ej: 1214..." @blur="verifyDocument"
-                  class="w-full rounded-xl sm:rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-3.5 sm:p-4 text-xs sm:text-sm transition-all"
+                  :disabled="isParentInputsDisabled"
+                  class="w-full rounded-xl sm:rounded-2xl border-gray-200 bg-gray-50 focus:ring-2 focus:ring-indigo-500 p-3.5 sm:p-4 text-xs sm:text-sm transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                   :class="{'border-indigo-300 bg-indigo-50': docMatchInfo}">
                 <div v-if="checkingDocument" class="absolute right-3.5 top-3.5 sm:right-4 sm:top-4">
                   <div class="animate-spin rounded-full h-5 w-5 border-2 border-indigo-600 border-t-transparent"></div>
                 </div>
                 <CheckCircle v-if="docMatchInfo" class="absolute right-3.5 top-3.5 sm:right-4 sm:top-4 text-indigo-600" :size="20" />
               </div>
-              <p v-if="docMatchInfo" class="text-xs text-indigo-600 font-bold">
-                Usuario detectado: {{ docMatchInfo.user.nombre }} {{ docMatchInfo.user.apellido }} ({{ docMatchInfo.role }})
-              </p>
+              <div v-if="docMatchInfo" class="flex items-center justify-between gap-2 mt-1">
+                <p class="text-xs text-indigo-600 font-bold">
+                  Usuario detectado: {{ docMatchInfo.user.nombre }} {{ docMatchInfo.user.apellido }} ({{ docMatchInfo.role }})
+                </p>
+                <button
+                  type="button"
+                  @click="unlockParentDocument"
+                  class="text-[11px] text-indigo-700 hover:text-indigo-900 font-bold underline cursor-pointer shrink-0"
+                >
+                  Cambiar documento
+                </button>
+              </div>
             </div>
             <div class="space-y-2 sm:col-span-2">
               <label class="text-xs sm:text-sm font-bold text-gray-700">Teléfono / Celular de Contacto del Acudiente</label>

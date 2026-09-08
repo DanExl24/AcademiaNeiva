@@ -1401,6 +1401,20 @@ export class MatriculaService {
           idUsuarioPadre = existingUserRes.id_usuario;
           personalParentEmail = existingUserRes.email;
 
+          // Si se especificó un documento y es diferente al actual, validar que no pertenezca a otra persona
+          if (data.parent.documento && data.parent.documento !== existingUserRes.documento) {
+            const conflictUser = await trx
+              .selectFrom('usuario')
+              .select(['id_usuario', 'nombre', 'apellido'])
+              .where(sql<boolean>`TRIM(documento) = TRIM(${data.parent.documento})`)
+              .where('id_usuario', '!=', idUsuarioPadre)
+              .executeTakeFirst();
+
+            if (conflictUser) {
+              throw new Error(`El número de documento ${data.parent.documento} ya se encuentra registrado a nombre de otra persona (${conflictUser.nombre} ${conflictUser.apellido}) en el sistema. Por favor verifica el documento ingresado.`);
+            }
+          }
+
           const updateObj: any = {
             id_tipodocumento: Number(data.parent.id_tipodocumento),
             documento: data.parent.documento,
@@ -1440,18 +1454,37 @@ export class MatriculaService {
           personalParentEmail = correo_padre;
         }
 
-        const parentRes = await trx
-          .insertInto('padre_familia')
-          .values({
-            nombre: data.parent.nombre,
-            apellido: data.parent.apellido,
-            id_colegio: id_colegio,
-            id_usuario: idUsuarioPadre
-          })
-          .returning('id_padrefamilia')
-          .executeTakeFirstOrThrow();
+        // Comprobar si este usuario ya cuenta con registro en padre_familia para evitar violación de unique constraint
+        const existingPfForUser = await trx
+          .selectFrom('padre_familia')
+          .select('id_padrefamilia')
+          .where('id_usuario', '=', idUsuarioPadre)
+          .executeTakeFirst();
 
-        idPadre = parentRes.id_padrefamilia;
+        if (existingPfForUser) {
+          idPadre = existingPfForUser.id_padrefamilia;
+          await trx
+            .updateTable('padre_familia')
+            .set({
+              nombre: data.parent.nombre,
+              apellido: data.parent.apellido
+            })
+            .where('id_padrefamilia', '=', idPadre)
+            .execute();
+        } else {
+          const parentRes = await trx
+            .insertInto('padre_familia')
+            .values({
+              nombre: data.parent.nombre,
+              apellido: data.parent.apellido,
+              id_colegio: id_colegio,
+              id_usuario: idUsuarioPadre
+            })
+            .returning('id_padrefamilia')
+            .executeTakeFirstOrThrow();
+
+          idPadre = parentRes.id_padrefamilia;
+        }
       }
 
       if (idUsuarioPadre) {
