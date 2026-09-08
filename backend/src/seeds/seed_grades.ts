@@ -8,7 +8,20 @@ import { sql } from "kysely";
  *  - 30% alto  (4.0 – 4.5): High performance
  *  - 20% superior (4.6 – 5.0): Superior performance
  */
-function getRealisticGrade(): number {
+function getRealisticGrade(isGraduado = false): number {
+  if (isGraduado) {
+    const rand = Math.random();
+    let nota: number;
+    if (rand < 0.4) {
+      nota = 3.2 + Math.random() * 0.7;
+    } else if (rand < 0.8) {
+      nota = 4.0 + Math.random() * 0.5;
+    } else {
+      nota = 4.6 + Math.random() * 0.3;
+    }
+    return Math.min(5.0, Math.round(nota * 10) / 10);
+  }
+
   const rand = Math.random();
   let nota: number;
 
@@ -125,12 +138,13 @@ async function runSeedGrades() {
 
       // ─── CLEAR EXISTING GRADE DATA ──────────────────────────────────────────
       console.log("🔄 Limpiando datos anteriores de calificaciones...");
+      await trx.deleteFrom("cierre_materia").execute();
       await trx.deleteFrom("resultado_academico").execute();
-      await trx.deleteFrom("notas_actividad").execute();
+      await trx.deleteFrom("actividad_evidencia_dba").execute();
       await trx.deleteFrom("nota_criterio").execute();
+      await trx.deleteFrom("notas_actividad").execute();
       await trx.deleteFrom("observacion_estudiante").execute();
       await trx.deleteFrom("actividad_materia").execute();
-      await trx.deleteFrom("cierre_materia").execute();
       console.log("✅ Datos anteriores eliminados.");
 
       // ─── FETCH BASE DATA (Only Year 2025) ────────────────────────────────────
@@ -148,13 +162,13 @@ async function runSeedGrades() {
         return;
       }
 
-      // Only ACTIVO and SANCIONADO students (not EXPULSADO or RETIRADO)
+      // Only ACTIVO, SANCIONADO and GRADUADO students (not EXPULSADO or RETIRADO)
       const students = await trx
         .selectFrom("estudiante as e")
         .innerJoin("matricula as m", "m.id_estudiante", "e.id_estudiante")
         .select(["e.id_estudiante", "e.id_colegio", "m.id_grupo", "e.estado as estado_estudiante"])
-        .where("m.estado", "=", "ACTIVA")
-        .where("e.estado", "in", ["ACTIVO", "SANCIONADO"])
+        .where("m.estado", "in", ["ACTIVA", "CULMINADA", "APROBADA"])
+        .where("e.estado", "in", ["ACTIVO", "SANCIONADO", "GRADUADO"])
         .execute();
 
       const detalleGrados = await trx
@@ -303,7 +317,8 @@ async function runSeedGrades() {
           }
 
           for (const student of studentsToGrade) {
-            const nota = getRealisticGrade();
+            const isGrad = student.estado_estudiante === "GRADUADO";
+            const nota = getRealisticGrade(isGrad);
             const escalaId = getEscalaId(nota, dg.id_colegio);
             const obsAcad = getAcademicObservation(nota);
 
