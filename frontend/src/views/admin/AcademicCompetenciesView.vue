@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { 
   ArrowLeft, Plus, Search, BookOpenCheck, Sparkles, RefreshCw, 
-  PenSquare, Trash2, Check, X, AlertTriangle, Lock, Calendar 
+  PenSquare, Trash2, Check, X, AlertTriangle, Lock 
 } from 'lucide-vue-next'
 import { academicService } from '../../services/academicService'
 import { useAuthStore } from '../../stores/auth'
@@ -71,12 +71,7 @@ const schoolId = computed(() => Number(auth.user?.schoolId || auth.selectedSchoo
 const isClosedYear = computed(() => Boolean(yearStore.isClosedYear))
 
 const academicYears = computed(() => yearStore.availableYears)
-const selectedYearId = computed({
-  get: () => yearStore.selectedYearId,
-  set: (val: number | null) => {
-    if (val) yearStore.setSelectedYearId(val)
-  }
-})
+const selectedYearId = computed(() => yearStore.selectedYearId)
 
 const loading = ref(true)
 const saving = ref(false)
@@ -900,20 +895,6 @@ watch(schoolId, async (newSchoolId) => {
         </div>
 
         <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3">
-          <!-- Selector de Año Lectivo directo en cabecera -->
-          <div v-if="academicYears.length > 0" class="flex items-center gap-2 bg-white/10 border border-white/20 rounded-xl sm:rounded-2xl px-3 py-2 sm:py-2.5 backdrop-blur-sm">
-            <Calendar class="h-4 w-4 text-emerald-200 shrink-0" />
-            <span class="text-xs font-black uppercase tracking-wider text-emerald-100 hidden sm:inline">Año:</span>
-            <select
-              v-model="selectedYearId"
-              class="bg-transparent text-white font-black text-xs sm:text-sm outline-none cursor-pointer pr-1"
-            >
-              <option v-for="y in academicYears" :key="y.id_anio" :value="y.id_anio" class="bg-slate-900 text-white font-bold">
-                Año {{ y.calendario }} {{ y.estado === 'CERRADO' ? '🔒 (Cerrado)' : '✨ (Abierto)' }}
-              </option>
-            </select>
-          </div>
-
           <button
             type="button"
             @click="harmonizeCompetencies"
@@ -985,15 +966,7 @@ watch(schoolId, async (newSchoolId) => {
             <h2 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white">Explorar asignaciones</h2>
             <p class="mt-1 sm:mt-2 text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-400">Filtra por periodo o contexto para revisar y actualizar competencias.</p>
           </div>
-          <div class="grid w-full max-w-5xl grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
-            <label class="space-y-1.5 sm:space-y-2">
-              <span class="text-[11px] sm:text-xs font-black text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-widest">Año Lectivo</span>
-              <select v-model="selectedYearId" class="w-full rounded-xl sm:rounded-2xl border border-slate-200 bg-slate-50 p-2.5 sm:p-3 text-xs sm:text-sm font-semibold text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-white outline-none cursor-pointer">
-                <option v-for="y in academicYears" :key="y.id_anio" :value="y.id_anio">
-                  {{ y.calendario }} {{ y.estado === 'CERRADO' ? '🔒' : '✨' }}
-                </option>
-              </select>
-            </label>
+          <div class="grid w-full max-w-5xl grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
             <label class="space-y-1.5 sm:space-y-2">
               <span class="text-[11px] sm:text-xs font-black text-slate-700 dark:text-slate-300 ml-1 uppercase tracking-widest">Buscar</span>
               <div class="flex items-center gap-2.5 sm:gap-3 rounded-xl sm:rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 sm:px-4 sm:py-3 dark:bg-slate-800 dark:border-slate-700">
