@@ -335,7 +335,7 @@ const openDrawer = async (id: number) => {
 
     if (data.tipo === 'REINGRESO' && data.id_estudiante) {
       try {
-        studentSummary.value = await enrollmentService.getStudentSummary(data.id_estudiante)
+        studentSummary.value = await enrollmentService.getStudentSummary(data.id_estudiante, data.id_anio || yearStore.selectedYearId)
       } catch (err) {
         console.error("Error loading student summary:", err)
       }

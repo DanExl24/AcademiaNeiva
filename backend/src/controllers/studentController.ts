@@ -779,24 +779,12 @@ export const getStudentSummary = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const numId = Number(id);
+    const targetAnioId = req.query.id_anio ? Number(req.query.id_anio) : null;
 
-    // 1. Basic Student and Group Info
+    // 1. Basic Student Info
     const student = await db
       .selectFrom("estudiante as e")
       .leftJoin("usuario as u", "e.id_usuario", "u.id_usuario")
-      .leftJoin("matricula as m", (join) =>
-        join
-          .onRef("e.id_estudiante", "=", "m.id_estudiante")
-          .onRef("m.id_colegio", "=", "e.id_colegio")
-          .on("m.estado", "in", ["ACTIVA", "APROBADA", "CULMINADA"])
-      )
-      .leftJoin("grupos as g", "m.id_grupo", "g.id_grupo")
-      .leftJoin("tipo_grado as tg", "g.id_tipo_grado", "tg.id_tipo_grado")
-      .leftJoin("secciones as s", "g.id_seccion", "s.id_seccion")
-      .leftJoin("jornada as j", "g.id_jornada", "j.id_jornada")
-      .leftJoin("nivel_escolar as n", (join) =>
-        join.onRef("n.id_nivel", "=", sql<number>`COALESCE(m.id_nivel, g.id_nivel)`)
-      )
       .select([
         "e.id_estudiante",
         "e.nombre",
@@ -808,11 +796,6 @@ export const getStudentSummary = async (req: Request, res: Response) => {
         "e.id_usuario",
         "e.id_colegio",
         "e.motivo_estado",
-        "tg.nombre as grado_nombre",
-        "s.nombre as seccion_nombre",
-        "n.nombre as nivel_nombre",
-        "j.nombre as jornada",
-        "m.id_grupo",
         "u.email as student_email",
         "u.fecha_creacion as user_created_at"
       ])
@@ -823,7 +806,72 @@ export const getStudentSummary = async (req: Request, res: Response) => {
       return res.status(404).json({ error: "Estudiante no encontrado" });
     }
 
-    const { id_colegio, id_grupo } = student;
+    const { id_colegio } = student;
+
+    // 1.1 Find student enrollment for target year or fallback to latest active/completed
+    let enrollmentQuery = db
+      .selectFrom("matricula as m")
+      .leftJoin("grupos as g", "m.id_grupo", "g.id_grupo")
+      .leftJoin("tipo_grado as tg", "g.id_tipo_grado", "tg.id_tipo_grado")
+      .leftJoin("secciones as s", "g.id_seccion", "s.id_seccion")
+      .leftJoin("jornada as j", "g.id_jornada", "j.id_jornada")
+      .leftJoin("nivel_escolar as n", (join) =>
+        join.onRef("n.id_nivel", "=", sql<number>`COALESCE(m.id_nivel, g.id_nivel)`)
+      )
+      .select([
+        "m.id_matricula",
+        "m.id_anio",
+        "m.id_grupo",
+        "m.estado as matricula_estado",
+        "tg.nombre as grado_nombre",
+        "s.nombre as seccion_nombre",
+        "n.nombre as nivel_nombre",
+        "j.nombre as jornada"
+      ])
+      .where("m.id_estudiante", "=", numId)
+      .where("m.id_colegio", "=", Number(id_colegio))
+      .where("m.estado", "in", ["ACTIVA", "APROBADA", "CULMINADA"]);
+
+    if (targetAnioId) {
+      enrollmentQuery = enrollmentQuery.where("m.id_anio", "=", targetAnioId);
+    } else {
+      enrollmentQuery = enrollmentQuery.orderBy("m.id_anio", "desc").orderBy("m.id_matricula", "desc");
+    }
+
+    let enrollment = await enrollmentQuery.limit(1).executeTakeFirst();
+
+    // If targetAnioId was requested but no matricula in that year, fallback to most recent enrollment
+    if (!enrollment && targetAnioId) {
+      enrollment = await db
+        .selectFrom("matricula as m")
+        .leftJoin("grupos as g", "m.id_grupo", "g.id_grupo")
+        .leftJoin("tipo_grado as tg", "g.id_tipo_grado", "tg.id_tipo_grado")
+        .leftJoin("secciones as s", "g.id_seccion", "s.id_seccion")
+        .leftJoin("jornada as j", "g.id_jornada", "j.id_jornada")
+        .leftJoin("nivel_escolar as n", (join) =>
+          join.onRef("n.id_nivel", "=", sql<number>`COALESCE(m.id_nivel, g.id_nivel)`)
+        )
+        .select([
+          "m.id_matricula",
+          "m.id_anio",
+          "m.id_grupo",
+          "m.estado as matricula_estado",
+          "tg.nombre as grado_nombre",
+          "s.nombre as seccion_nombre",
+          "n.nombre as nivel_nombre",
+          "j.nombre as jornada"
+        ])
+        .where("m.id_estudiante", "=", numId)
+        .where("m.id_colegio", "=", Number(id_colegio))
+        .where("m.estado", "in", ["ACTIVA", "APROBADA", "CULMINADA"])
+        .orderBy("m.id_anio", "desc")
+        .orderBy("m.id_matricula", "desc")
+        .limit(1)
+        .executeTakeFirst();
+    }
+
+    const effectiveAnioId = targetAnioId || enrollment?.id_anio || null;
+    const id_grupo = enrollment?.id_grupo || null;
 
     // 2. Parent Contact Details
     const parent = await db
@@ -835,20 +883,32 @@ export const getStudentSummary = async (req: Request, res: Response) => {
       .limit(1)
       .executeTakeFirst();
 
-    // 3. Find active period (state = 'ABIERTO') or fallback to latest period
-    let periodRes = await db
+    // 3. Find active period (state = 'ABIERTO') or latest period for effective year
+    let periodQuery = db
       .selectFrom("periodo_academico")
-      .select(["id_periodo", "nombre"])
-      .where("id_colegio", "=", Number(id_colegio))
+      .select(["id_periodo", "nombre", "estado"])
+      .where("id_colegio", "=", Number(id_colegio));
+
+    if (effectiveAnioId) {
+      periodQuery = periodQuery.where("id_anio", "=", effectiveAnioId);
+    }
+
+    let periodRes = await periodQuery
       .where("estado", "=", "ABIERTO")
       .limit(1)
       .executeTakeFirst();
 
     if (!periodRes) {
-      periodRes = await db
+      let fallbackPeriodQuery = db
         .selectFrom("periodo_academico")
-        .select(["id_periodo", "nombre"])
-        .where("id_colegio", "=", Number(id_colegio))
+        .select(["id_periodo", "nombre", "estado"])
+        .where("id_colegio", "=", Number(id_colegio));
+
+      if (effectiveAnioId) {
+        fallbackPeriodQuery = fallbackPeriodQuery.where("id_anio", "=", effectiveAnioId);
+      }
+
+      periodRes = await fallbackPeriodQuery
         .orderBy("id_periodo", "desc")
         .limit(1)
         .executeTakeFirst();
@@ -857,12 +917,12 @@ export const getStudentSummary = async (req: Request, res: Response) => {
     const periodId = periodRes?.id_periodo || null;
     const periodName = periodRes?.nombre || "Sin Periodo Activo";
 
-    // 4. Failed subjects and overall average
+    // 4. Failed subjects and overall average for effective year
     let grades: any[] = [];
     let promedioGeneral: number | null = null;
     let materiasReprobadas: any[] = [];
 
-    if (id_grupo && periodId) {
+    if (id_grupo && effectiveAnioId) {
       const calcSubquery = db
         .selectFrom("notas_actividad as na")
         .innerJoin("actividad_materia as am", "am.id_actividadmateria", "na.id_actividadmateria")
@@ -875,20 +935,12 @@ export const getStudentSummary = async (req: Request, res: Response) => {
         .groupBy(["am.id_detallegrado", "am.id_periodo"])
         .as("calc");
 
-      const latestAnioSubquery = db
-        .selectFrom("periodo_academico")
-        .select("id_anio")
-        .where("id_colegio", "=", Number(id_colegio))
-        .where("estado", "in", ["ABIERTO", "CERRADO"])
-        .orderBy("id_periodo", "desc")
-        .limit(1);
-
       const periodGradesCte = db
         .selectFrom("detalle_grados as dg")
         .innerJoin("periodo_academico as p", (join) =>
           join
             .on("p.id_colegio", "=", Number(id_colegio))
-            .on("p.id_anio", "=", latestAnioSubquery)
+            .on("p.id_anio", "=", effectiveAnioId)
         )
         .leftJoin("resultado_academico as ra", (join) =>
           join
@@ -906,7 +958,8 @@ export const getStudentSummary = async (req: Request, res: Response) => {
           "p.id_periodo",
           sql<number>`COALESCE(ra.promedio, calc.promedio_calculado)`.as("nota_periodo")
         ])
-        .where("dg.id_grupo", "=", Number(id_grupo));
+        .where("dg.id_grupo", "=", Number(id_grupo))
+        .where("dg.id_anio", "=", effectiveAnioId);
 
       const gradesRes = await db
         .with("period_grades", () => periodGradesCte)
@@ -939,22 +992,32 @@ export const getStudentSummary = async (req: Request, res: Response) => {
       materiasReprobadas = gradedList.filter(g => g.calificacion < 3.0);
     }
 
-    // 5. Total Absences
-    const absencesRes = await db
-      .selectFrom("registro_asistencia")
+    // 5. Total Absences (filtered by effective academic year if available)
+    let absencesQuery = db
+      .selectFrom("registro_asistencia as ra")
+      .innerJoin("detalle_grados as dg", "ra.id_detallegrado", "dg.id_detallegrado")
       .select(sql<number>`COUNT(*)::int`.as("count"))
-      .where("id_estudiante", "=", numId)
-      .where("estado", "=", "AUSENTE")
-      .executeTakeFirst();
+      .where("ra.id_estudiante", "=", numId)
+      .where("ra.estado", "=", "AUSENTE");
+
+    if (effectiveAnioId) {
+      absencesQuery = absencesQuery.where("dg.id_anio", "=", effectiveAnioId);
+    }
+    const absencesRes = await absencesQuery.executeTakeFirst();
     const totalInasistencias = absencesRes?.count || 0;
 
-    // 6. Disciplinary observations count
-    const observationsRes = await db
-      .selectFrom("observacion_estudiante")
+    // 6. Disciplinary observations count (filtered by effective academic year if available)
+    let observationsQuery = db
+      .selectFrom("observacion_estudiante as oe")
+      .innerJoin("periodo_academico as pa", "oe.id_periodo", "pa.id_periodo")
       .select(sql<number>`COUNT(*)::int`.as("count"))
-      .where("id_estudiante", "=", numId)
-      .where("tipo", "=", "DISCIPLINARIA")
-      .executeTakeFirst();
+      .where("oe.id_estudiante", "=", numId)
+      .where("oe.tipo", "=", "DISCIPLINARIA");
+
+    if (effectiveAnioId) {
+      observationsQuery = observationsQuery.where("pa.id_anio", "=", effectiveAnioId);
+    }
+    const observationsRes = await observationsQuery.executeTakeFirst();
     const totalObservacionesDisciplinarias = observationsRes?.count || 0;
 
     // 7. Last system activity logic
@@ -1045,9 +1108,9 @@ export const getStudentSummary = async (req: Request, res: Response) => {
       id_usuario: student.id_usuario,
       documento: student.documento,
       codigo: student.codigo,
-      curso: student.grado_nombre && student.seccion_nombre ? `${student.grado_nombre}-${student.seccion_nombre}` : "Sin Grupo",
-      nivel: student.nivel_nombre || "Sin Nivel",
-      jornada: student.jornada || "Sin Jornada",
+      curso: enrollment?.grado_nombre && enrollment?.seccion_nombre ? `${enrollment.grado_nombre}-${enrollment.seccion_nombre}` : "Sin Grupo",
+      nivel: enrollment?.nivel_nombre || "Sin Nivel",
+      jornada: enrollment?.jornada || "Sin Jornada",
       estado_estudiante: student.estado, 
       motivo_estado: student.motivo_estado,
       estado_academico: estadoAcademico, 

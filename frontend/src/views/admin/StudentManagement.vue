@@ -112,7 +112,7 @@ const openDrawer = async (studentId: number) => {
   loadingSummary.value = true
   studentSummary.value = null
   try {
-    studentSummary.value = await studentService.getStudentSummary(studentId)
+    studentSummary.value = await studentService.getStudentSummary(studentId, yearStore.selectedYearId)
   } catch (error) {
     console.error('Error fetching student summary:', error)
     notify.addNotification('Error al cargar el resumen del estudiante', 'error')
@@ -165,7 +165,7 @@ const openGraduationModal = async (student: any) => {
   loadingEligibility.value = true
   eligibilityInfo.value = null
   try {
-    const summary = await studentService.getStudentSummary(student.id_estudiante)
+    const summary = await studentService.getStudentSummary(student.id_estudiante, yearStore.selectedYearId)
     const gpa = summary.gpa || 0.0
     const failedCount = summary.failed_subjects_count || 0
     const failedSubjects = summary.failed_subjects || []

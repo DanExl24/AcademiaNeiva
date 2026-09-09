@@ -17,8 +17,9 @@ export const studentService = {
     return res.data?.data || res.data
   },
 
-  async getStudentSummary(studentId: number | string): Promise<any> {
-    const res = await api.get(`/student/${studentId}/summary`)
+  async getStudentSummary(studentId: number | string, yearId?: number | string | null): Promise<any> {
+    const params = yearId ? { id_anio: yearId } : undefined
+    const res = await api.get(`/student/${studentId}/summary`, { params })
     return res.data
   },
 
