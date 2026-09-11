@@ -109,39 +109,6 @@ const studentLastNames = [
   "Medina", "Castro", "Herrera", "Guzmán", "Rojas", "Ruiz",
 ];
 
-// ─── HELPER: CANONICAL PERSONA INSERTION ────────────────────────────────────────
-
-async function insertPersona(
-  client: PoolClient,
-  data: {
-    tipoDoc: number;
-    documento: string;
-    nombre: string;
-    apellido: string;
-    telefono?: string | null;
-    fechaNacimiento?: string | null;
-    genero?: string | null;
-    direccion?: string | null;
-  }
-): Promise<number> {
-  const res = await client.query<{ id_persona: number }>(
-    `INSERT INTO persona (id_tipodocumento, documento, nombre, apellido, telefono, fecha_nacimiento, genero, direccion, estado)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'ACTIVO')
-     RETURNING id_persona`,
-    [
-      data.tipoDoc,
-      data.documento,
-      data.nombre,
-      data.apellido,
-      data.telefono || null,
-      data.fechaNacimiento || null,
-      data.genero || null,
-      data.direccion || null,
-    ]
-  );
-  return res.rows[0].id_persona;
-}
-
 // ─── HELPER: ENROLLMENT CONFIG SEEDING ─────────────────────────────────────────
 
 async function seedEnrollmentConfigs(client: PoolClient): Promise<void> {
@@ -260,23 +227,16 @@ async function insertSchool(
   // --- Rector ---
   const rectorEmail = `rector@${school.domain}`;
   const rectorDoc = `10010000${school.id}`;
-  const rectorPersonaId = await insertPersona(client, {
-    tipoDoc: DOCUMENT_TYPE_CC,
-    documento: rectorDoc,
-    nombre: "Rector",
-    apellido: school.nombre,
-    telefono: String(school.contacto),
-  });
 
   const rectorRes = await client.query<{ id_usuario: number }>(
-    `INSERT INTO usuario (email, password, nombre, apellido, activo, id_tipodocumento, documento, telefono, id_persona, fecha_creacion)
-     VALUES ($1, $2, $3, $4, true, $5, $6, $7, $8, '2025-01-15 08:00:00-05') RETURNING id_usuario`,
-    [rectorEmail, directivoHash, "Rector", school.nombre, DOCUMENT_TYPE_CC, rectorDoc, String(school.contacto), rectorPersonaId]
+    `INSERT INTO usuario (email, password, nombre, apellido, activo, id_tipodocumento, documento, telefono, fecha_creacion)
+     VALUES ($1, $2, $3, $4, true, $5, $6, $7, '2025-01-15 08:00:00-05') RETURNING id_usuario`,
+    [rectorEmail, directivoHash, "Rector", school.nombre, DOCUMENT_TYPE_CC, rectorDoc, String(school.contacto)]
   );
   const rectorUserId = rectorRes.rows[0].id_usuario;
   await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [rectorUserId, roleIds.directivo]);
   await client.query(`INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio) VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`, [rectorUserId, school.id, roleIds.directivo]);
-  await client.query(`INSERT INTO directivo (id_colegio, id_usuario, cargo, id_persona) VALUES ($1, $2, $3, $4)`, [school.id, rectorUserId, "RECTOR", rectorPersonaId]);
+  await client.query(`INSERT INTO directivo (id_colegio, id_usuario, cargo) VALUES ($1, $2, $3)`, [school.id, rectorUserId, "RECTOR"]);
   await client.query(`INSERT INTO usuario_colegio_email (id_usuario, id_colegio, email_institucional) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`, [rectorUserId, school.id, rectorEmail]);
 
   credentials.push({
@@ -287,23 +247,16 @@ async function insertSchool(
   // --- Coordinador ---
   const directivoEmail = `directivo@${school.domain}`;
   const directivoDoc = `10020000${school.id}`;
-  const coordPersonaId = await insertPersona(client, {
-    tipoDoc: DOCUMENT_TYPE_CC,
-    documento: directivoDoc,
-    nombre: "Directivo",
-    apellido: school.nombre,
-    telefono: String(school.contacto),
-  });
 
   const directivoResult = await client.query<{ id_usuario: number }>(
-    `INSERT INTO usuario (email, password, nombre, apellido, activo, id_tipodocumento, documento, telefono, id_persona, fecha_creacion)
-     VALUES ($1, $2, $3, $4, true, $5, $6, $7, $8, '2025-01-15 08:00:00-05') RETURNING id_usuario`,
-    [directivoEmail, directivoHash, "Directivo", school.nombre, DOCUMENT_TYPE_CC, directivoDoc, String(school.contacto), coordPersonaId]
+    `INSERT INTO usuario (email, password, nombre, apellido, activo, id_tipodocumento, documento, telefono, fecha_creacion)
+     VALUES ($1, $2, $3, $4, true, $5, $6, $7, '2025-01-15 08:00:00-05') RETURNING id_usuario`,
+    [directivoEmail, directivoHash, "Directivo", school.nombre, DOCUMENT_TYPE_CC, directivoDoc, String(school.contacto)]
   );
   const directivoUserId = directivoResult.rows[0].id_usuario;
   await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [directivoUserId, roleIds.directivo]);
   await client.query(`INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio) VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`, [directivoUserId, school.id, roleIds.directivo]);
-  await client.query(`INSERT INTO directivo (id_colegio, id_usuario, cargo, id_persona) VALUES ($1, $2, $3, $4)`, [school.id, directivoUserId, "COORDINADOR", coordPersonaId]);
+  await client.query(`INSERT INTO directivo (id_colegio, id_usuario, cargo) VALUES ($1, $2, $3)`, [school.id, directivoUserId, "COORDINADOR"]);
   await client.query(`INSERT INTO usuario_colegio_email (id_usuario, id_colegio, email_institucional) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`, [directivoUserId, school.id, directivoEmail]);
 
   credentials.push({
@@ -321,26 +274,18 @@ async function insertSchool(
     const teacherDoc = `1003${school.id}${String(index + 1).padStart(4, "0")}`;
     const teacherPhone = `310${school.id}${String(index + 1).padStart(6, "0")}`;
 
-    const teacherPersonaId = await insertPersona(client, {
-      tipoDoc: DOCUMENT_TYPE_CC,
-      documento: teacherDoc,
-      nombre: teacher.firstName,
-      apellido: fullLastName,
-      telefono: teacherPhone,
-    });
-
     const userResult = await client.query<{ id_usuario: number }>(
-      `INSERT INTO usuario (email, password, nombre, apellido, activo, id_tipodocumento, documento, telefono, id_persona, fecha_creacion)
-       VALUES ($1, $2, $3, $4, true, $5, $6, $7, $8, '2025-01-15 08:00:00-05') RETURNING id_usuario`,
-      [email, docenteHash, teacher.firstName, fullLastName, DOCUMENT_TYPE_CC, teacherDoc, teacherPhone, teacherPersonaId]
+      `INSERT INTO usuario (email, password, nombre, apellido, activo, id_tipodocumento, documento, telefono, fecha_creacion)
+       VALUES ($1, $2, $3, $4, true, $5, $6, $7, '2025-01-15 08:00:00-05') RETURNING id_usuario`,
+      [email, docenteHash, teacher.firstName, fullLastName, DOCUMENT_TYPE_CC, teacherDoc, teacherPhone]
     );
     const teacherUserId = userResult.rows[0].id_usuario;
     await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [teacherUserId, roleIds.docente]);
     await client.query(`INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio) VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`, [teacherUserId, school.id, roleIds.docente]);
     await client.query(
-      `INSERT INTO docente (nombre, apellido, id_colegio, id_usuario, id_persona)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [teacher.firstName, fullLastName, school.id, teacherUserId, teacherPersonaId]
+      `INSERT INTO docente (nombre, apellido, id_colegio, id_usuario)
+       VALUES ($1, $2, $3, $4)`,
+      [teacher.firstName, fullLastName, school.id, teacherUserId]
     );
     await client.query(`INSERT INTO usuario_colegio_email (id_usuario, id_colegio, email_institucional) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`, [teacherUserId, school.id, email]);
 
@@ -677,12 +622,6 @@ async function insertStudentsAndParents(
           currentParentEmail = teacherUser.email;
           pName = teacherUser.nombre;
           pLastName = teacherUser.apellido;
-
-          const tPersonaRes = await client.query<{ id_persona: number }>(
-            "SELECT id_persona FROM usuario WHERE id_usuario = $1",
-            [parentUserId]
-          );
-          parentPersonaId = tPersonaRes.rows[0]?.id_persona;
           docentesPadresIndex++;
 
           // Asignar el rol de padre a este docente (si no lo tiene ya)
@@ -705,18 +644,10 @@ async function insertStudentsAndParents(
           pDoc = `1004${school.id}${String(parentIdx).padStart(5, "0")}`;
           const parentPhone = `320${school.id}${String(parentIdx).padStart(6, "0")}`;
 
-          parentPersonaId = await insertPersona(client, {
-            tipoDoc: DOCUMENT_TYPE_CC,
-            documento: pDoc,
-            nombre: pName,
-            apellido: pLastName,
-            telefono: parentPhone,
-          });
-
           const pUserRes = await client.query<{ id_usuario: number }>(
-            `INSERT INTO usuario (email, password, nombre, apellido, activo, id_tipodocumento, documento, telefono, id_persona, fecha_creacion)
-             VALUES ($1, $2, $3, $4, true, $5, $6, $7, $8, '2025-01-15 08:00:00-05') RETURNING id_usuario`,
-            [currentParentEmail, parentHash, pName, pLastName, DOCUMENT_TYPE_CC, pDoc, parentPhone, parentPersonaId]
+            `INSERT INTO usuario (email, password, nombre, apellido, activo, id_tipodocumento, documento, telefono, fecha_creacion)
+             VALUES ($1, $2, $3, $4, true, $5, $6, $7, '2025-01-15 08:00:00-05') RETURNING id_usuario`,
+            [currentParentEmail, parentHash, pName, pLastName, DOCUMENT_TYPE_CC, pDoc, parentPhone]
           );
           parentUserId = pUserRes.rows[0].id_usuario;
           await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [parentUserId, roleIds.padre]);
@@ -725,9 +656,9 @@ async function insertStudentsAndParents(
         }
 
         const pFamRes = await client.query<{ id_padrefamilia: number }>(
-          `INSERT INTO padre_familia (nombre, apellido, id_colegio, id_usuario, id_persona)
-           VALUES ($1, $2, $3, $4, $5) RETURNING id_padrefamilia`,
-          [pName, pLastName, school.id, parentUserId, parentPersonaId]
+          `INSERT INTO padre_familia (nombre, apellido, id_colegio, id_usuario)
+           VALUES ($1, $2, $3, $4) RETURNING id_padrefamilia`,
+          [pName, pLastName, school.id, parentUserId]
         );
         currentParentId = pFamRes.rows[0].id_padrefamilia;
       }
@@ -744,29 +675,22 @@ async function insertStudentsAndParents(
       const studentCode = `EST-${school.id}-${globalStudentIdx}`;
       const studentDoc = `1005${school.id}${String(globalStudentIdx).padStart(5, "0")}`;
 
-      const studentPersonaId = await insertPersona(client, {
-        tipoDoc: 1, // Registro civil o TI
-        documento: studentDoc,
-        nombre: firstName,
-        apellido: lastName,
-      });
-
       // Create student user
       const sUserRes = await client.query<{ id_usuario: number }>(
-        `INSERT INTO usuario (email, password, nombre, apellido, activo, id_tipodocumento, documento, telefono, id_persona, fecha_creacion)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, $8, '2025-01-15 08:00:00-05') RETURNING id_usuario`,
-        [studentEmail, studentHash, firstName, lastName, userActive, 1, studentDoc, studentPersonaId]
+        `INSERT INTO usuario (email, password, nombre, apellido, activo, id_tipodocumento, documento, telefono, fecha_creacion)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, '2025-01-15 08:00:00-05') RETURNING id_usuario`,
+        [studentEmail, studentHash, firstName, lastName, userActive, 1, studentDoc]
       );
       const studentUserId = sUserRes.rows[0].id_usuario;
       await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [studentUserId, roleIds.estudiante]);
       await client.query(`INSERT INTO usuario_colegio (id_usuario, id_colegio, id_rol, estado, fecha_inicio) VALUES ($1, $2, $3, 'ACTIVO', NOW()) ON CONFLICT DO NOTHING`, [studentUserId, school.id, roleIds.estudiante]);
       await client.query(`INSERT INTO usuario_colegio_email (id_usuario, id_colegio, email_institucional) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`, [studentUserId, school.id, studentEmail]);
 
-      // Create student record with estado and id_persona
+      // Create student record with estado
       const estRes = await client.query<{ id_estudiante: number }>(
-        `INSERT INTO estudiante (nombre, apellido, codigo, id_colegio, id_usuario, estado, motivo_estado, id_persona)
-         VALUES ($1, $2, $3, $4, $5, $6::estado_estudiante, $7, $8) RETURNING id_estudiante`,
-        [firstName, lastName, studentCode, school.id, studentUserId, studentState, motivoEstado, studentPersonaId]
+        `INSERT INTO estudiante (nombre, apellido, codigo, id_colegio, id_usuario, estado, motivo_estado)
+         VALUES ($1, $2, $3, $4, $5, $6::estado_estudiante, $7) RETURNING id_estudiante`,
+        [firstName, lastName, studentCode, school.id, studentUserId, studentState, motivoEstado]
       );
       const idEstudiante = estRes.rows[0].id_estudiante;
 
@@ -1122,7 +1046,6 @@ async function run(): Promise<void> {
       "estudiante",
       "padre_familia",
       "usuario",
-      "persona",
       "rol",
       "tipo_documento",
       "secciones",
@@ -1148,18 +1071,10 @@ async function run(): Promise<void> {
     const adminGeneralHash = await bcrypt.hash(adminGeneralPassword, 10);
     const adminGeneralEmail = "admin.general@academianeiva.edu.co";
 
-    const adminPersonaId = await insertPersona(client, {
-      tipoDoc: DOCUMENT_TYPE_CC,
-      documento: "1000000000",
-      nombre: "Admin",
-      apellido: "General",
-      telefono: "3000000000",
-    });
-
     const adminGeneralResult = await client.query<{ id_usuario: number }>(
-      `INSERT INTO usuario (email, password, nombre, apellido, activo, estado, id_tipodocumento, documento, telefono, id_persona)
-       VALUES ($1, $2, $3, $4, true, 'ACTIVO', $5, $6, $7, $8) RETURNING id_usuario`,
-      [adminGeneralEmail, adminGeneralHash, "Admin", "General", DOCUMENT_TYPE_CC, "1000000000", "3000000000", adminPersonaId]
+      `INSERT INTO usuario (email, password, nombre, apellido, activo, estado, id_tipodocumento, documento, telefono)
+       VALUES ($1, $2, $3, $4, true, 'ACTIVO', $5, $6, $7) RETURNING id_usuario`,
+      [adminGeneralEmail, adminGeneralHash, "Admin", "General", DOCUMENT_TYPE_CC, "1000000000", "3000000000"]
     );
     await client.query(`INSERT INTO usuario_rol (id_usuario, id_rol) VALUES ($1, $2)`, [
       adminGeneralResult.rows[0].id_usuario,
@@ -1228,7 +1143,6 @@ async function run(): Promise<void> {
     await client.query(`
       SELECT setval(pg_get_serial_sequence('colegio', 'id_colegio'), COALESCE(MAX(id_colegio), 1)) FROM colegio;
       SELECT setval(pg_get_serial_sequence('tipo_documento', 'id_tipodocumento'), COALESCE(MAX(id_tipodocumento), 1)) FROM tipo_documento;
-      SELECT setval(pg_get_serial_sequence('persona', 'id_persona'), COALESCE(MAX(id_persona), 1)) FROM persona;
       SELECT setval(pg_get_serial_sequence('usuario', 'id_usuario'), COALESCE(MAX(id_usuario), 1)) FROM usuario;
       SELECT setval(pg_get_serial_sequence('directivo', 'id'), COALESCE(MAX(id), 1)) FROM directivo;
       SELECT setval(pg_get_serial_sequence('docente', 'id_docente'), COALESCE(MAX(id_docente), 1)) FROM docente;

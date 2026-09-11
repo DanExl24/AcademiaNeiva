@@ -334,7 +334,6 @@ export interface Directivo {
   fecha_vinculacion: Generated<Timestamp>;
   id: Generated<number>;
   id_colegio: number;
-  id_persona: number | null;
   id_usuario: number | null;
 }
 
@@ -344,7 +343,6 @@ export interface Docente {
   id_colegio: number;
   id_contratodocente: number | null;
   id_docente: Generated<number>;
-  id_persona: number | null;
   id_usuario: number | null;
   nombre: string;
 }
@@ -381,7 +379,6 @@ export interface Estudiante {
   id_colegio: number;
   id_estudiante: Generated<number>;
   id_nivel: number | null;
-  id_persona: number | null;
   id_usuario: number | null;
   motivo_estado: string | null;
   nombre: string;
@@ -546,7 +543,6 @@ export interface PadreFamilia {
   apellido: string;
   id_colegio: number | null;
   id_padrefamilia: Generated<number>;
-  id_persona: number | null;
   id_usuario: number | null;
   nombre: string;
 }
@@ -581,21 +577,6 @@ export interface PeriodoAcademico {
   nombre: string;
   porcentaje: Numeric;
   trimestre: number | null;
-}
-
-export interface Persona {
-  apellido: string;
-  direccion: string | null;
-  documento: string | null;
-  estado: Generated<string>;
-  fecha_actualizacion: Generated<Timestamp>;
-  fecha_creacion: Generated<Timestamp>;
-  fecha_nacimiento: Timestamp | null;
-  genero: string | null;
-  id_persona: Generated<number>;
-  id_tipodocumento: number | null;
-  nombre: string;
-  telefono: string | null;
 }
 
 export interface RegistroAsistencia {
@@ -760,7 +741,6 @@ export interface Usuario {
   estado: Generated<EstadoUsuarioSistema>;
   fecha_baneo: Timestamp | null;
   fecha_creacion: Generated<Timestamp | null>;
-  id_persona: number | null;
   id_tipodocumento: number | null;
   id_usuario: Generated<number>;
   logged_out_at: Timestamp | null;
@@ -902,7 +882,6 @@ export interface DB {
   papelera_materias: PapeleraMaterias;
   password_reset_tokens: PasswordResetTokens;
   periodo_academico: PeriodoAcademico;
-  persona: Persona;
   registro_asistencia: RegistroAsistencia;
   registro_asistencia_detalle: RegistroAsistenciaDetalle;
   registro_graduados: RegistroGraduados;

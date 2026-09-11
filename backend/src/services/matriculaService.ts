@@ -902,7 +902,6 @@ export class MatriculaService {
       const parentUserMatch = await db
         .selectFrom('usuario as u')
         .leftJoin('padre_familia as pf', 'pf.id_usuario', 'u.id_usuario')
-        .leftJoin('persona as p', 'p.id_persona', 'u.id_persona')
         .select([
           'u.id_usuario',
           'u.nombre as u_nombre',
@@ -911,25 +910,20 @@ export class MatriculaService {
           'u.id_tipodocumento as u_tipodoc',
           'u.telefono as u_telefono',
           'pf.nombre as pf_nombre',
-          'pf.apellido as pf_apellido',
-          'p.nombre as p_nombre',
-          'p.apellido as p_apellido'
+          'pf.apellido as pf_apellido'
         ])
         .where(sql<boolean>`LOWER(u.email) = LOWER(${mat.correo_padre})`)
         .orderBy('pf.id_padrefamilia', 'desc')
         .executeTakeFirst();
 
       if (parentUserMatch) {
-        let bestNombre = parentUserMatch.pf_nombre || parentUserMatch.p_nombre || parentUserMatch.u_nombre;
-        let bestApellido = parentUserMatch.pf_apellido || parentUserMatch.p_apellido || parentUserMatch.u_apellido;
+        let bestNombre = parentUserMatch.pf_nombre || parentUserMatch.u_nombre;
+        let bestApellido = parentUserMatch.pf_apellido || parentUserMatch.u_apellido;
 
         if ((bestNombre === 'Padre' && bestApellido === 'Familia') || !bestNombre) {
           if (parentUserMatch.pf_nombre) {
             bestNombre = parentUserMatch.pf_nombre;
             bestApellido = parentUserMatch.pf_apellido || '';
-          } else if (parentUserMatch.p_nombre) {
-            bestNombre = parentUserMatch.p_nombre;
-            bestApellido = parentUserMatch.p_apellido || '';
           }
         }
 

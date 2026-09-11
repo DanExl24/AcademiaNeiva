@@ -646,6 +646,12 @@ export const ensureCompetencySchema = async (): Promise<void> => {
       }
     }
 
+    // Ejecutar migración 053 (Eliminar tabla persona y columnas id_persona obsoletas)
+    const dropPersonaMigrationPath = path.join(__dirname, "../migrations/053_drop_persona_and_cleanup_orphans.sql");
+    if (fs.existsSync(dropPersonaMigrationPath)) {
+      const dropPersonaSql = fs.readFileSync(dropPersonaMigrationPath, "utf8");
+      await client.query(dropPersonaSql);
+    }
 
 
     // Backfill sync_uuid for existing competencies
