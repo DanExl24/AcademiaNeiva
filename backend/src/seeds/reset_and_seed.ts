@@ -1006,7 +1006,6 @@ async function run(): Promise<void> {
       // Notifications
       "notificacion_colegio",
       "notificacion_supervision",
-      "notificaciones",
       // Audits
       "auditoria_acciones_realizadas",
       "auditoria_supervision",
@@ -1015,7 +1014,6 @@ async function run(): Promise<void> {
       "traslado_aprobacion",
       // Academic structure
       "detalle_grados",
-      "grados",
       "grupos",
       "tipo_grado",
       "jornada",

@@ -703,6 +703,13 @@ export const ensureCompetencySchema = async (): Promise<void> => {
       await client.query(refactorModule9Sql);
     }
 
+    // Ejecutar migración 063 (Refactorización Módulo 10: drop tabla muerta notificaciones, FKs en seguridad y unicidad en tipos de documento)
+    const refactorModule10Path = path.join(__dirname, "../migrations/063_refactor_notifications_audit_and_security_module.sql");
+    if (fs.existsSync(refactorModule10Path)) {
+      const refactorModule10Sql = fs.readFileSync(refactorModule10Path, "utf8");
+      await client.query(refactorModule10Sql);
+    }
+
 
     // Backfill sync_uuid for existing competencies
     const unmigratedRes = await client.query(`

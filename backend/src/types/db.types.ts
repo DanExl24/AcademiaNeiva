@@ -459,18 +459,6 @@ export interface NotificacionColegio {
   tipo: string;
 }
 
-export interface Notificaciones {
-  fecha_creacion: Generated<Timestamp>;
-  id_colegio: number | null;
-  id_notificacion: Generated<number>;
-  id_usuario_destinatario: number | null;
-  leida: Generated<boolean>;
-  mensaje: string;
-  metadata: Json | null;
-  tipo_contexto: string;
-  titulo: string | null;
-}
-
 export interface NotificacionSupervision {
   fecha_notificacion: Generated<Timestamp>;
   id_auditoria: number;
@@ -812,7 +800,6 @@ export interface DB {
   notas_actividad: NotasActividad;
   notificacion_colegio: NotificacionColegio;
   notificacion_supervision: NotificacionSupervision;
-  notificaciones: Notificaciones;
   observacion_estudiante: ObservacionEstudiante;
   padre_familia: PadreFamilia;
   papelera_materias: PapeleraMaterias;

@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict zHJRchUfcR0RgxSZsQGO9MutPGFVAOHpYx4t4oggZtduYn6vSfSebmbAcgVXuzc
+\restrict M0SemduDmecUekBRsw1Bsd9qV577aSPEKY44RZQLH8S9BXYEaE3pWr76XQsMHVb
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -2124,47 +2124,6 @@ ALTER TABLE public.notificacion_supervision ALTER COLUMN id_notificacion ADD GEN
 
 
 --
--- Name: notificaciones; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.notificaciones (
-    id_notificacion integer NOT NULL,
-    id_usuario_destinatario integer,
-    id_colegio integer,
-    tipo_contexto character varying(50) NOT NULL,
-    titulo character varying(150),
-    mensaje text NOT NULL,
-    leida boolean DEFAULT false NOT NULL,
-    metadata jsonb,
-    fecha_creacion timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
-);
-
-
-ALTER TABLE public.notificaciones OWNER TO postgres;
-
---
--- Name: notificaciones_id_notificacion_seq; Type: SEQUENCE; Schema: public; Owner: postgres
---
-
-CREATE SEQUENCE public.notificaciones_id_notificacion_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER SEQUENCE public.notificaciones_id_notificacion_seq OWNER TO postgres;
-
---
--- Name: notificaciones_id_notificacion_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
---
-
-ALTER SEQUENCE public.notificaciones_id_notificacion_seq OWNED BY public.notificaciones.id_notificacion;
-
-
---
 -- Name: observacion_estudiante; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -3411,13 +3370,6 @@ ALTER TABLE ONLY public.notas_actividad ALTER COLUMN id_notaactividad SET DEFAUL
 
 
 --
--- Name: notificaciones id_notificacion; Type: DEFAULT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.notificaciones ALTER COLUMN id_notificacion SET DEFAULT nextval('public.notificaciones_id_notificacion_seq'::regclass);
-
-
---
 -- Name: observacion_estudiante id_observacion; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -3914,14 +3866,6 @@ ALTER TABLE ONLY public.notificacion_supervision
 
 
 --
--- Name: notificaciones notificaciones_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.notificaciones
-    ADD CONSTRAINT notificaciones_pkey PRIMARY KEY (id_notificacion);
-
-
---
 -- Name: observacion_estudiante observacion_estudiante_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -4303,6 +4247,14 @@ ALTER TABLE ONLY public.periodo_academico
 
 ALTER TABLE ONLY public.resultado_academico
     ADD CONSTRAINT uq_resultado_estudiante_detalle_periodo UNIQUE (id_estudiante, id_detallegrado, id_periodo);
+
+
+--
+-- Name: tipo_documento uq_tipo_documento_tipo; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.tipo_documento
+    ADD CONSTRAINT uq_tipo_documento_tipo UNIQUE (tipo);
 
 
 --
@@ -4766,20 +4718,6 @@ CREATE INDEX idx_notif_sup_directivo ON public.notificacion_supervision USING bt
 --
 
 CREATE INDEX idx_notif_sup_leida ON public.notificacion_supervision USING btree (leida) WHERE (leida = false);
-
-
---
--- Name: idx_notificaciones_colegio; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX idx_notificaciones_colegio ON public.notificaciones USING btree (id_colegio);
-
-
---
--- Name: idx_notificaciones_destinatario; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX idx_notificaciones_destinatario ON public.notificaciones USING btree (id_usuario_destinatario, leida);
 
 
 --
@@ -5533,6 +5471,14 @@ ALTER TABLE ONLY public.registro_asistencia_detalle
 
 
 --
+-- Name: auditoria_supervision fk_auditoria_supervision_admin; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.auditoria_supervision
+    ADD CONSTRAINT fk_auditoria_supervision_admin FOREIGN KEY (id_admin_general) REFERENCES public.usuario(id_usuario) ON DELETE CASCADE;
+
+
+--
 -- Name: configuracion_inscripcion fk_configuracion_inscripcion_anio; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -5661,6 +5607,14 @@ ALTER TABLE ONLY public.notas_actividad
 
 
 --
+-- Name: password_reset_tokens fk_password_reset_tokens_usuario; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.password_reset_tokens
+    ADD CONSTRAINT fk_password_reset_tokens_usuario FOREIGN KEY (id_usuario) REFERENCES public.usuario(id_usuario) ON DELETE CASCADE;
+
+
+--
 -- Name: registro_graduados fk_registro_graduados_anio; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -5706,6 +5660,14 @@ ALTER TABLE ONLY public.ticket_observaciones
 
 ALTER TABLE ONLY public.ticket_observaciones
     ADD CONSTRAINT fk_ticket_obs_usuario FOREIGN KEY (id_usuario) REFERENCES public.usuario(id_usuario) ON DELETE SET NULL;
+
+
+--
+-- Name: tickets_soporte fk_tickets_soporte_usuario; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.tickets_soporte
+    ADD CONSTRAINT fk_tickets_soporte_usuario FOREIGN KEY (id_usuario) REFERENCES public.usuario(id_usuario) ON DELETE SET NULL;
 
 
 --
@@ -5842,22 +5804,6 @@ ALTER TABLE ONLY public.notificacion_supervision
 
 ALTER TABLE ONLY public.notificacion_supervision
     ADD CONSTRAINT notificacion_supervision_id_directivo_fkey FOREIGN KEY (id_directivo) REFERENCES public.directivo(id);
-
-
---
--- Name: notificaciones notificaciones_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.notificaciones
-    ADD CONSTRAINT notificaciones_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
-
-
---
--- Name: notificaciones notificaciones_id_usuario_destinatario_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.notificaciones
-    ADD CONSTRAINT notificaciones_id_usuario_destinatario_fkey FOREIGN KEY (id_usuario_destinatario) REFERENCES public.usuario(id_usuario) ON DELETE CASCADE;
 
 
 --
@@ -6143,5 +6089,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict zHJRchUfcR0RgxSZsQGO9MutPGFVAOHpYx4t4oggZtduYn6vSfSebmbAcgVXuzc
+\unrestrict M0SemduDmecUekBRsw1Bsd9qV577aSPEKY44RZQLH8S9BXYEaE3pWr76XQsMHVb
 
