@@ -410,12 +410,6 @@ async function insertSchoolAcademicStructure(
     );
   }
 
-  // --- Config Colegio (con materias_reprobatorias_promocion) ---
-  await client.query(
-    `INSERT INTO configuracion_colegio (id_colegio, nota_minima, nota_maxima, nota_aprobacion, escala_modo, materias_reprobatorias_promocion)
-     VALUES ($1, 0, 5, 3, 'AUTOMATICO', 3)`,
-    [school.id]
-  );
 
   // --- Get docentes for subject assignment ---
   const teachersRes = await client.query<{ id_docente: number }>(
@@ -1029,7 +1023,6 @@ async function run(): Promise<void> {
       "periodo_academico",
       "anio_lectivo",
       "escala_valoracion",
-      "configuracion_colegio",
       "configuracion_inscripcion",
       "configuracion_plataforma",
       // Tokens & Auth

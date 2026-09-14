@@ -1171,12 +1171,25 @@ export const getStudentDashboardStats = async (req: Request, res: Response) => {
 
     const { id_colegio, id_grupo } = studentCheck;
 
-    // Get school grading approval limit
-    const configRes = await db
-      .selectFrom("configuracion_colegio")
-      .select("nota_aprobacion")
-      .where("id_colegio", "=", id_colegio)
-      .executeTakeFirst();
+    // Get school grading approval limit from the academic year of the period
+    let configRes = periodIdInt
+      ? await db
+          .selectFrom("periodo_academico as pa")
+          .innerJoin("anio_lectivo as al", "al.id_anio", "pa.id_anio")
+          .where("pa.id_periodo", "=", periodIdInt)
+          .select("al.nota_aprobacion")
+          .executeTakeFirst()
+      : null;
+
+    if (!configRes) {
+      configRes = await db
+        .selectFrom("anio_lectivo")
+        .select("nota_aprobacion")
+        .where("id_colegio", "=", id_colegio)
+        .orderBy(sql`CASE WHEN estado = 'ABIERTO' THEN 1 ELSE 2 END`, "asc")
+        .orderBy("id_anio", "desc")
+        .executeTakeFirst();
+    }
 
     const nota_aprobacion = configRes ? parseFloat(String(configRes.nota_aprobacion)) : 3.0;
 

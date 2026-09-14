@@ -9,6 +9,8 @@ export type AccionAprobacionTraslado = "APROBAR" | "CANCELAR" | "RECHAZAR";
 
 export type DecisionPromocionTipo = "MANTENER_GRADO" | "MATRICULA_CONDICIONADA" | "OTRA_DECISION" | "PROMOVER_SIGUIENTE_GRADO";
 
+export type EscalaModoEvaluacion = "AUTOMATICO" | "MANUAL";
+
 export type EstadoAsistencia = "AUSENTE" | "JUSTIFICADA" | "PRESENTE" | "TARDE";
 
 export type EstadoCierreMateria = "ABIERTO" | "CERRADO";
@@ -101,11 +103,16 @@ export interface ActividadMateria {
 
 export interface AnioLectivo {
   calendario: string | null;
+  escala_modo: Generated<EscalaModoEvaluacion>;
   estado: Generated<EstadoPeriodo | null>;
   fecha_fin: Timestamp | null;
   fecha_inicio: Timestamp | null;
   id_anio: Generated<number>;
   id_colegio: number;
+  materias_reprobatorias_promocion: Generated<number>;
+  nota_aprobacion: Generated<Numeric>;
+  nota_maxima: Generated<Numeric>;
+  nota_minima: Generated<Numeric>;
   tipo_calendario: Generated<string | null>;
 }
 
@@ -207,23 +214,6 @@ export interface Competencias {
   sync_uuid: string | null;
 }
 
-export interface ConfiguracionBase {
-  clave: string;
-  descripcion: string | null;
-  id_config_base: Generated<number>;
-  tipo: string;
-  valor_default: string;
-}
-
-export interface ConfiguracionColegio {
-  escala_modo: Generated<string>;
-  id_colegio: number;
-  materias_reprobatorias_promocion: Generated<number>;
-  nota_aprobacion: Generated<Numeric>;
-  nota_maxima: Generated<Numeric>;
-  nota_minima: Generated<Numeric>;
-}
-
 export interface ConfiguracionInscripcion {
   fecha_cierre: Timestamp;
   fecha_inicio: Timestamp;
@@ -238,14 +228,6 @@ export interface ConfiguracionPlataforma {
   clave: string;
   descripcion: string | null;
   fecha_actualizacion: Generated<Timestamp>;
-  valor: string;
-}
-
-export interface ConfiguracionSistema {
-  clave: string;
-  id_colegio: number;
-  id_config_base: number | null;
-  id_configuracion: Generated<number>;
   valor: string;
 }
 
@@ -782,14 +764,6 @@ export interface VwAsistenciaEstudiante {
   tardes: Int8 | null;
 }
 
-export interface VwDesempenoEstudiante {
-  "desempeño": string | null;
-  id_colegio: number | null;
-  id_estudiante: number | null;
-  id_periodo: number | null;
-  promedio_normalizado: Numeric | null;
-}
-
 export interface VwNotasEnriquecidas {
   actividad: string | null;
   apellido: string | null;
@@ -826,13 +800,6 @@ export interface VwPromedioMateria {
   promedio_materia: Numeric | null;
 }
 
-export interface VwPromedioNormalizado {
-  id_colegio: number | null;
-  id_estudiante: number | null;
-  id_periodo: number | null;
-  promedio_normalizado: Numeric | null;
-}
-
 export interface DB {
   actividad_evidencia_dba: ActividadEvidenciaDba;
   actividad_materia: ActividadMateria;
@@ -844,11 +811,8 @@ export interface DB {
   colegio: Colegio;
   colegio_version_curricular: ColegioVersionCurricular;
   competencias: Competencias;
-  configuracion_base: ConfiguracionBase;
-  configuracion_colegio: ConfiguracionColegio;
   configuracion_inscripcion: ConfiguracionInscripcion;
   configuracion_plataforma: ConfiguracionPlataforma;
-  configuracion_sistema: ConfiguracionSistema;
   contrato_docente: ContratoDocente;
   criterio_evaluacion: CriterioEvaluacion;
   dba: Dba;
@@ -903,10 +867,8 @@ export interface DB {
   usuario_colegio_email: UsuarioColegioEmail;
   usuario_rol: UsuarioRol;
   vw_asistencia_estudiante: VwAsistenciaEstudiante;
-  vw_desempeno_estudiante: VwDesempenoEstudiante;
   vw_notas_enriquecidas: VwNotasEnriquecidas;
   vw_observaciones_estudiante: VwObservacionesEstudiante;
   vw_promedio_estudiante_periodo: VwPromedioEstudiantePeriodo;
   vw_promedio_materia: VwPromedioMateria;
-  vw_promedio_normalizado: VwPromedioNormalizado;
 }

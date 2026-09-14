@@ -45,15 +45,23 @@ const recordDecisionSchema = z.object({
 /**
  * Auxiliar para obtener el valor mínimo aprobatorio según la escala del colegio.
  */
-async function getMinPassingScore(schoolId: number): Promise<number> {
+async function getMinPassingScore(schoolId: number, yearId?: number): Promise<number> {
   try {
-    // 1. Consultar nota_aprobacion en configuracion_colegio
-    const config = await db
-      .selectFrom("configuracion_colegio")
+    // 1. Consultar nota_aprobacion en anio_lectivo
+    let query = db
+      .selectFrom("anio_lectivo")
       .select(["nota_aprobacion"])
-      .where("id_colegio", "=", schoolId)
-      .executeTakeFirst();
+      .where("id_colegio", "=", schoolId);
 
+    if (yearId) {
+      query = query.where("id_anio", "=", yearId);
+    } else {
+      query = query
+        .orderBy(sql`CASE WHEN estado = 'ABIERTO' THEN 1 ELSE 2 END`, "asc")
+        .orderBy("id_anio", "desc");
+    }
+
+    const config = await query.limit(1).executeTakeFirst();
     if (config && config.nota_aprobacion != null) {
       const val = parseFloat(String(config.nota_aprobacion));
       if (!isNaN(val) && val > 0) return val;
@@ -81,15 +89,22 @@ async function getMinPassingScore(schoolId: number): Promise<number> {
 /**
  * Auxiliar para obtener el número de materias reprobatorias para no promoción según la configuración del colegio (o 3 por defecto).
  */
-async function getMinFailingSubjectsCount(schoolId: number): Promise<number> {
+async function getMinFailingSubjectsCount(schoolId: number, yearId?: number): Promise<number> {
   try {
-    await ensureSchoolSettingsTable();
-    const config = await db
-      .selectFrom("configuracion_colegio")
+    let query = db
+      .selectFrom("anio_lectivo")
       .select(["materias_reprobatorias_promocion"])
-      .where("id_colegio", "=", schoolId)
-      .executeTakeFirst();
+      .where("id_colegio", "=", schoolId);
 
+    if (yearId) {
+      query = query.where("id_anio", "=", yearId);
+    } else {
+      query = query
+        .orderBy(sql`CASE WHEN estado = 'ABIERTO' THEN 1 ELSE 2 END`, "asc")
+        .orderBy("id_anio", "desc");
+    }
+
+    const config = await query.limit(1).executeTakeFirst();
     if (config && config.materias_reprobatorias_promocion != null) {
       const val = Number(config.materias_reprobatorias_promocion);
       if (!isNaN(val) && val > 0) return val;

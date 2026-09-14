@@ -237,6 +237,14 @@ export const ensureAcademicYearForSchool = async (schoolId: number): Promise<num
     return Number(fallback.id_anio);
   }
 
+  const previousYear = await db
+    .selectFrom("anio_lectivo")
+    .select(["nota_minima", "nota_maxima", "nota_aprobacion", "escala_modo", "materias_reprobatorias_promocion"])
+    .where("id_colegio", "=", schoolId)
+    .orderBy("id_anio", "desc")
+    .limit(1)
+    .executeTakeFirst();
+
   const currentYear = new Date().getFullYear();
   const created = await db
     .insertInto("anio_lectivo")
@@ -245,6 +253,11 @@ export const ensureAcademicYearForSchool = async (schoolId: number): Promise<num
       id_colegio: schoolId,
       tipo_calendario: "A",
       estado: "ABIERTO",
+      nota_minima: previousYear ? previousYear.nota_minima : 0,
+      nota_maxima: previousYear ? previousYear.nota_maxima : 5,
+      nota_aprobacion: previousYear ? previousYear.nota_aprobacion : 3,
+      escala_modo: previousYear ? previousYear.escala_modo : "AUTOMATICO",
+      materias_reprobatorias_promocion: previousYear ? previousYear.materias_reprobatorias_promocion : 3,
     })
     .returning("id_anio")
     .executeTakeFirstOrThrow();
@@ -252,25 +265,17 @@ export const ensureAcademicYearForSchool = async (schoolId: number): Promise<num
   return Number(created.id_anio);
 };
 
-export const ensureSchoolSettingsTable = async () => {
-  try {
-    await sql`ALTER TABLE public.configuracion_colegio 
-       ADD COLUMN IF NOT EXISTS materias_reprobatorias_promocion INTEGER NOT NULL DEFAULT 3`.execute(db);
-  } catch (err) {
-    console.error("Error al asegurar columna materias_reprobatorias_promocion:", err);
-  }
-};
+export const ensureSchoolSettingsTable = async () => {};
 export const ensureAcademicPeriodTrimesterColumn = async () => {};
 export const ensureAcademicPeriodDayColumns = async () => {};
 export const ensureAcademicPeriodMonthColumns = async () => {};
 export const ensureAcademicPeriodPendingStatus = async () => {};
 
-export const ensureSchoolDefaultSettings = async (schoolId: number) => {
-  await ensureSchoolSettingsTable();
-
-  const existing = await db
-    .selectFrom("configuracion_colegio")
+export const ensureSchoolDefaultSettings = async (schoolId: number, yearId?: number) => {
+  let query = db
+    .selectFrom("anio_lectivo")
     .select([
+      "id_anio",
       "id_colegio",
       "nota_minima",
       "nota_maxima",
@@ -278,47 +283,35 @@ export const ensureSchoolDefaultSettings = async (schoolId: number) => {
       "escala_modo",
       sql<number>`COALESCE(materias_reprobatorias_promocion, 3)`.as("materias_reprobatorias_promocion"),
     ])
-    .where("id_colegio", "=", schoolId)
-    .executeTakeFirst();
+    .where("id_colegio", "=", schoolId);
 
+  if (yearId) {
+    query = query.where("id_anio", "=", yearId);
+  } else {
+    query = query
+      .orderBy(sql`CASE WHEN estado = 'ABIERTO' THEN 1 ELSE 2 END`, "asc")
+      .orderBy("id_anio", "desc");
+  }
+
+  const existing = await query.limit(1).executeTakeFirst();
   if (existing) {
     return existing;
   }
 
-  const scaleBoundsRes = await db
-    .selectFrom("escala_valoracion")
+  const createdYearId = await ensureAcademicYearForSchool(schoolId);
+  return await db
+    .selectFrom("anio_lectivo")
     .select([
-      sql<string | number>`MIN(valor_minimo)::numeric`.as("nota_minima"),
-      sql<string | number>`MAX(valor_maximo)::numeric`.as("nota_maxima"),
-    ])
-    .where("id_colegio", "=", schoolId)
-    .executeTakeFirst();
-
-  const inferredMin = scaleBoundsRes?.nota_minima !== null && scaleBoundsRes?.nota_minima !== undefined ? Number(scaleBoundsRes.nota_minima) : 0;
-  const inferredMax = scaleBoundsRes?.nota_maxima !== null && scaleBoundsRes?.nota_maxima !== undefined ? Number(scaleBoundsRes.nota_maxima) : 5;
-  const inferredApproval = inferredMin <= 3 && 3 <= inferredMax ? 3 : Number(((inferredMin + inferredMax) / 2).toFixed(1));
-
-  const created = await db
-    .insertInto("configuracion_colegio")
-    .values({
-      id_colegio: schoolId,
-      nota_minima: inferredMin,
-      nota_maxima: inferredMax,
-      nota_aprobacion: inferredApproval,
-      escala_modo: "AUTOMATICO",
-      materias_reprobatorias_promocion: 3,
-    })
-    .returning([
+      "id_anio",
       "id_colegio",
       "nota_minima",
       "nota_maxima",
       "nota_aprobacion",
       "escala_modo",
-      "materias_reprobatorias_promocion",
+      sql<number>`COALESCE(materias_reprobatorias_promocion, 3)`.as("materias_reprobatorias_promocion"),
     ])
+    .where("id_anio", "=", createdYearId)
     .executeTakeFirstOrThrow();
-
-  return created;
 };
 
 export const roundToOne = (value: number): number => Number(value.toFixed(1));

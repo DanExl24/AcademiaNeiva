@@ -1011,24 +1011,10 @@ export const updateSchoolDefaultSettings = async (req: Request, res: Response): 
   }
 
   try {
+    const targetYearId = yearId || (await ensureAcademicYearForSchool(schoolId));
+
     const result = await db.transaction().execute(async (trx) => {
-      await ensureSchoolSettingsTable();
-
-      const existingSettingsRes = await trx
-        .selectFrom("configuracion_colegio")
-        .select([
-          "nota_minima",
-          "nota_maxima",
-          "nota_aprobacion",
-          "escala_modo",
-          sql<number>`COALESCE(materias_reprobatorias_promocion, 3)`.as("materias_reprobatorias_promocion")
-        ])
-        .where("id_colegio", "=", schoolId)
-        .executeTakeFirst();
-
-      const previous =
-        existingSettingsRes ??
-        (await ensureSchoolDefaultSettings(schoolId));
+      const previous = await ensureSchoolDefaultSettings(schoolId, targetYearId);
       const nextScaleMode = (requestedScaleMode || previous.escala_modo || "AUTOMATICO") as "AUTOMATICO" | "MANUAL";
       const nextMateriasReprobatorias = req.body.materias_reprobatorias_promocion !== undefined && !Number.isNaN(Number(req.body.materias_reprobatorias_promocion))
         ? Math.max(1, Math.min(10, Math.round(Number(req.body.materias_reprobatorias_promocion))))
@@ -1044,25 +1030,17 @@ export const updateSchoolDefaultSettings = async (req: Request, res: Response): 
       const currentHigh = currentScalesRes.find((row) => row.nivel === "ALTO");
 
       const updated = await trx
-        .insertInto("configuracion_colegio")
-        .values({
-          id_colegio: schoolId,
+        .updateTable("anio_lectivo")
+        .set({
           nota_minima: notaMinima,
           nota_maxima: notaMaxima,
           nota_aprobacion: notaAprobacion,
           escala_modo: nextScaleMode,
           materias_reprobatorias_promocion: nextMateriasReprobatorias,
         })
-        .onConflict((oc) =>
-          oc.column("id_colegio").doUpdateSet({
-            nota_minima: notaMinima,
-            nota_maxima: notaMaxima,
-            nota_aprobacion: notaAprobacion,
-            escala_modo: nextScaleMode,
-            materias_reprobatorias_promocion: nextMateriasReprobatorias,
-          })
-        )
+        .where("id_anio", "=", targetYearId)
         .returning([
+          "id_anio",
           "id_colegio",
           "nota_minima",
           "nota_maxima",
@@ -1148,14 +1126,15 @@ export const updatePromotionPolicy = async (req: Request, res: Response): Promis
   }
 
   try {
-    await ensureSchoolSettingsTable();
-    await ensureSchoolDefaultSettings(schoolId);
+    const targetYearId = yearId || (await ensureAcademicYearForSchool(schoolId));
+    await ensureSchoolDefaultSettings(schoolId, targetYearId);
 
     const updated = await db
-      .updateTable("configuracion_colegio")
+      .updateTable("anio_lectivo")
       .set({ materias_reprobatorias_promocion: materiasReprobatorias })
-      .where("id_colegio", "=", schoolId)
+      .where("id_anio", "=", targetYearId)
       .returning([
+        "id_anio",
         "id_colegio",
         "nota_minima",
         "nota_maxima",

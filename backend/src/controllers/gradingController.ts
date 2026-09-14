@@ -1072,11 +1072,25 @@ export const saveGrades = async (req: Request, res: Response): Promise<void> => 
       .select(["id_escalavaloracion", "valor_minimo", "valor_maximo"])
       .execute();
 
-    const settingsRes = await db
-      .selectFrom("configuracion_colegio")
-      .where("id_colegio", "=", Number(schoolId))
-      .select(["nota_minima", "nota_maxima"])
-      .executeTakeFirst();
+    const firstPeriodId = Array.from(periodIds)[0];
+    let settingsRes = firstPeriodId
+      ? await db
+          .selectFrom("periodo_academico as pa")
+          .innerJoin("anio_lectivo as al", "al.id_anio", "pa.id_anio")
+          .where("pa.id_periodo", "=", Number(firstPeriodId))
+          .select(["al.nota_minima", "al.nota_maxima"])
+          .executeTakeFirst()
+      : null;
+
+    if (!settingsRes) {
+      settingsRes = await db
+        .selectFrom("anio_lectivo")
+        .where("id_colegio", "=", Number(schoolId))
+        .orderBy(sql`CASE WHEN estado = 'ABIERTO' THEN 1 ELSE 2 END`, "asc")
+        .orderBy("id_anio", "desc")
+        .select(["nota_minima", "nota_maxima"])
+        .executeTakeFirst();
+    }
 
     const notaMinima = settingsRes ? Number(settingsRes.nota_minima) : 0;
     const notaMaxima = settingsRes ? Number(settingsRes.nota_maxima) : 5;

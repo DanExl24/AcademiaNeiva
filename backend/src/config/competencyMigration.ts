@@ -430,20 +430,7 @@ export const ensureCompetencySchema = async (): Promise<void> => {
         AND (d.estado IS NULL OR d.estado NOT IN ('ACTIVO', 'INACTIVO', 'DESVINCULADO'))
     `);
 
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS configuracion_colegio (
-        id_colegio integer PRIMARY KEY REFERENCES colegio(id_colegio) ON DELETE CASCADE,
-        nota_minima numeric(5,2) NOT NULL DEFAULT 0,
-        nota_maxima numeric(5,2) NOT NULL DEFAULT 5,
-        nota_aprobacion numeric(5,2) NOT NULL DEFAULT 3,
-        escala_modo varchar(20) NOT NULL DEFAULT 'AUTOMATICO'
-      )
-    `);
 
-    await client.query(`
-      ALTER TABLE configuracion_colegio
-      ADD COLUMN IF NOT EXISTS escala_modo varchar(20) NOT NULL DEFAULT 'AUTOMATICO'
-    `);
 
     await client.query(`
       ALTER TABLE periodo_academico
@@ -651,6 +638,13 @@ export const ensureCompetencySchema = async (): Promise<void> => {
     if (fs.existsSync(dropPersonaMigrationPath)) {
       const dropPersonaSql = fs.readFileSync(dropPersonaMigrationPath, "utf8");
       await client.query(dropPersonaSql);
+    }
+
+    // Ejecutar migración 054 (Configuración académica en anio_lectivo y drop de configuraciones obsoletas)
+    const configAnioMigrationPath = path.join(__dirname, "../migrations/054_anio_lectivo_configuracion_academica.sql");
+    if (fs.existsSync(configAnioMigrationPath)) {
+      const configAnioSql = fs.readFileSync(configAnioMigrationPath, "utf8");
+      await client.query(configAnioSql);
     }
 
 

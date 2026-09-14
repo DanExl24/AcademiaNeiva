@@ -10,6 +10,7 @@ import {
 import {
   AuthRequest,
   parseSchoolId,
+  ensureAcademicYearForSchool,
   ensureSchoolSettingsTable,
   ensureSchoolDefaultSettings,
   roundToOne,
@@ -816,17 +817,10 @@ export const updateManualScaleConfiguration = async (req: Request, res: Response
   }
 
   try {
+    const targetYearId = yearId || (await ensureAcademicYearForSchool(schoolId));
+
     const syncedScales = await db.transaction().execute(async (trx) => {
-      await ensureSchoolSettingsTable();
-
-      const settingsRes = await trx
-        .selectFrom("configuracion_colegio")
-        .select(["nota_minima", "nota_maxima", "nota_aprobacion"])
-        .where("id_colegio", "=", schoolId)
-        .forUpdate()
-        .executeTakeFirst();
-
-      const settings = settingsRes ?? (await ensureSchoolDefaultSettings(schoolId));
+      const settings = await ensureSchoolDefaultSettings(schoolId, targetYearId);
       const notaMinima = Number(settings.nota_minima);
       const notaMaxima = Number(settings.nota_maxima);
       const notaAprobacion = Number(settings.nota_aprobacion);
@@ -840,9 +834,9 @@ export const updateManualScaleConfiguration = async (req: Request, res: Response
       }
 
       await trx
-        .updateTable("configuracion_colegio")
+        .updateTable("anio_lectivo")
         .set({ escala_modo: "MANUAL" })
-        .where("id_colegio", "=", schoolId)
+        .where("id_anio", "=", targetYearId)
         .execute();
 
       return await syncSchoolScalesAndGrades(

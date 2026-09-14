@@ -95,12 +95,6 @@ async function run() {
         [school.id, school.nombre, school.tipo, school.sede, school.contacto, school.correo, school.dane, school.tipo_calendario]
       );
 
-      // --- Configuracion Colegio ---
-      await client.query(
-        `INSERT INTO configuracion_colegio (id_colegio, nota_minima, nota_maxima, nota_aprobacion, escala_modo)
-         VALUES ($1, 0, 5, 3, 'AUTOMATICO')`,
-        [school.id]
-      );
 
       // --- Rector ---
       const rectorEmail = `rector@${school.domain}`;
