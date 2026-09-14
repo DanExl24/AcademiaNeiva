@@ -689,6 +689,13 @@ export const ensureCompetencySchema = async (): Promise<void> => {
       await client.query(refactorModule7Sql);
     }
 
+    // Ejecutar migración 061 (Refactorización Módulo 8: unicidad e índices en asistencia y observaciones de estudiantes)
+    const refactorModule8Path = path.join(__dirname, "../migrations/061_optimize_attendance_and_behavior_module.sql");
+    if (fs.existsSync(refactorModule8Path)) {
+      const refactorModule8Sql = fs.readFileSync(refactorModule8Path, "utf8");
+      await client.query(refactorModule8Sql);
+    }
+
 
     // Backfill sync_uuid for existing competencies
     const unmigratedRes = await client.query(`

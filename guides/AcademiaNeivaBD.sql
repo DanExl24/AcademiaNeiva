@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict KLOeswPbt5uwkXUKohM28j3GhfiZInITbKRFhSohkWd08klSPfPxYMhB99faHcN
+\restrict 5NgrKdZhlgZvUeh8bOHN6dxRh3cRzzyXEQGbUf05Dd37W88jXpR7JTLKIBiydlJ
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -4274,6 +4274,14 @@ ALTER TABLE ONLY public.matricula
 
 
 --
+-- Name: observacion_estudiante uq_observacion_estudiante_periodo_tipo; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.observacion_estudiante
+    ADD CONSTRAINT uq_observacion_estudiante_periodo_tipo UNIQUE (id_estudiante, id_detallegrado, id_periodo, tipo);
+
+
+--
 -- Name: periodo_academico uq_periodo_anio_trimestre; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -4760,10 +4768,24 @@ CREATE INDEX idx_notificaciones_destinatario ON public.notificaciones USING btre
 
 
 --
+-- Name: idx_observacion_detallegrado_periodo; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_observacion_detallegrado_periodo ON public.observacion_estudiante USING btree (id_detallegrado, id_periodo);
+
+
+--
 -- Name: idx_observacion_estudiante; Type: INDEX; Schema: public; Owner: postgres
 --
 
 CREATE INDEX idx_observacion_estudiante ON public.observacion_estudiante USING btree (id_estudiante);
+
+
+--
+-- Name: idx_observacion_estudiante_periodo; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_observacion_estudiante_periodo ON public.observacion_estudiante USING btree (id_estudiante, id_periodo);
 
 
 --
@@ -4778,6 +4800,20 @@ CREATE INDEX idx_password_reset_token ON public.password_reset_tokens USING btre
 --
 
 CREATE INDEX idx_registro_asistencia_detallegrado ON public.registro_asistencia USING btree (id_detallegrado);
+
+
+--
+-- Name: idx_registro_asistencia_detallegrado_fecha; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_registro_asistencia_detallegrado_fecha ON public.registro_asistencia USING btree (id_detallegrado, (((fecha AT TIME ZONE 'UTC'::text))::date));
+
+
+--
+-- Name: idx_registro_asistencia_dia_unique; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX idx_registro_asistencia_dia_unique ON public.registro_asistencia USING btree (id_estudiante, id_detallegrado, (((fecha AT TIME ZONE 'UTC'::text))::date));
 
 
 --
@@ -6084,5 +6120,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict KLOeswPbt5uwkXUKohM28j3GhfiZInITbKRFhSohkWd08klSPfPxYMhB99faHcN
+\unrestrict 5NgrKdZhlgZvUeh8bOHN6dxRh3cRzzyXEQGbUf05Dd37W88jXpR7JTLKIBiydlJ
 
