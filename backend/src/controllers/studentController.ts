@@ -1162,7 +1162,8 @@ export const graduateStudent = async (req: Request, res: Response): Promise<void
           "e.id_usuario",
           "tg.nombre as grado_nombre",
           "m.id_matricula",
-          "m.id_grupo"
+          "m.id_grupo",
+          "m.id_anio"
         ])
         .where("e.id_estudiante", "=", numId)
         .executeTakeFirst();
@@ -1302,6 +1303,18 @@ export const graduateStudent = async (req: Request, res: Response): Promise<void
       }
 
       // 5. Insert record to registro_graduados
+      let anioId = student.id_anio ? Number(student.id_anio) : null;
+      if (!anioId) {
+        const latestAnio = await trx
+          .selectFrom("anio_lectivo")
+          .select("id_anio")
+          .where("id_colegio", "=", Number(student.id_colegio))
+          .where("estado", "=", "ABIERTO")
+          .orderBy("id_anio", "desc")
+          .executeTakeFirst();
+        anioId = latestAnio?.id_anio || 1;
+      }
+
       const gradDate = fecha_graduacion ? new Date(fecha_graduacion) : new Date();
       await trx
         .insertInto("registro_graduados")
@@ -1309,13 +1322,15 @@ export const graduateStudent = async (req: Request, res: Response): Promise<void
           id_estudiante: numId,
           fecha_graduacion: gradDate,
           observaciones: observaciones || null,
-          id_usuario_registro: registrar_por ? Number(registrar_por) : null
+          id_usuario_registro: registrar_por ? Number(registrar_por) : null,
+          id_anio: anioId
         })
         .onConflict((oc) =>
           oc.column("id_estudiante").doUpdateSet({
             fecha_graduacion: gradDate,
             observaciones: observaciones || null,
-            id_usuario_registro: registrar_por ? Number(registrar_por) : null
+            id_usuario_registro: registrar_por ? Number(registrar_por) : null,
+            id_anio: anioId
           })
         )
         .execute();

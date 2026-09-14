@@ -559,7 +559,7 @@ export interface RegistroAsistenciaDetalle {
 export interface RegistroGraduados {
   creado_en: Generated<Timestamp>;
   fecha_graduacion: Generated<Timestamp>;
-  id_anio: number | null;
+  id_anio: number;
   id_estudiante: number;
   id_graduado: Generated<number>;
   id_usuario_registro: number | null;

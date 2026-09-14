@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict DXZA4mEo6ArErd1DlnXNIib9PHevdTzsZQbX8Vl9bv9Uh8DiPkSUpW8olWsMedg
+\restrict KLOeswPbt5uwkXUKohM28j3GhfiZInITbKRFhSohkWd08klSPfPxYMhB99faHcN
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -2456,7 +2456,7 @@ CREATE TABLE public.registro_graduados (
     observaciones text,
     id_usuario_registro integer,
     creado_en timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    id_anio integer
+    id_anio integer NOT NULL
 );
 
 
@@ -4592,6 +4592,20 @@ CREATE INDEX idx_documento_matriculas_colegio ON public.documento_matriculas USI
 
 
 --
+-- Name: idx_documento_matriculas_estado; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_documento_matriculas_estado ON public.documento_matriculas USING btree (id_matricula, estado);
+
+
+--
+-- Name: idx_documento_matriculas_lookup; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_documento_matriculas_lookup ON public.documento_matriculas USING btree (id_matricula, tipo_documento, version DESC);
+
+
+--
 -- Name: idx_documento_matriculas_matricula; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -4764,6 +4778,13 @@ CREATE INDEX idx_password_reset_token ON public.password_reset_tokens USING btre
 --
 
 CREATE INDEX idx_registro_asistencia_detallegrado ON public.registro_asistencia USING btree (id_detallegrado);
+
+
+--
+-- Name: idx_registro_graduados_anio; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_registro_graduados_anio ON public.registro_graduados USING btree (id_anio);
 
 
 --
@@ -5245,14 +5266,6 @@ ALTER TABLE ONLY public.competencias
 
 
 --
--- Name: configuracion_inscripcion configuracion_inscripcion_id_año_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.configuracion_inscripcion
-    ADD CONSTRAINT "configuracion_inscripcion_id_año_fkey" FOREIGN KEY (id_anio) REFERENCES public.anio_lectivo(id_anio) ON DELETE CASCADE;
-
-
---
 -- Name: configuracion_inscripcion configuracion_inscripcion_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -5469,6 +5482,14 @@ ALTER TABLE ONLY public.registro_asistencia_detalle
 
 
 --
+-- Name: configuracion_inscripcion fk_configuracion_inscripcion_anio; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.configuracion_inscripcion
+    ADD CONSTRAINT fk_configuracion_inscripcion_anio FOREIGN KEY (id_anio) REFERENCES public.anio_lectivo(id_anio) ON DELETE CASCADE;
+
+
+--
 -- Name: criterio_evaluacion fk_criterio_evaluacion_tenant; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -5581,6 +5602,38 @@ ALTER TABLE ONLY public.notas_actividad
 
 
 --
+-- Name: registro_graduados fk_registro_graduados_anio; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.registro_graduados
+    ADD CONSTRAINT fk_registro_graduados_anio FOREIGN KEY (id_anio) REFERENCES public.anio_lectivo(id_anio);
+
+
+--
+-- Name: registro_graduados fk_registro_graduados_usuario; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.registro_graduados
+    ADD CONSTRAINT fk_registro_graduados_usuario FOREIGN KEY (id_usuario_registro) REFERENCES public.usuario(id_usuario) ON DELETE SET NULL;
+
+
+--
+-- Name: solicitud_traslado fk_solicitud_traslado_creador; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.solicitud_traslado
+    ADD CONSTRAINT fk_solicitud_traslado_creador FOREIGN KEY (creado_por) REFERENCES public.usuario(id_usuario) ON DELETE CASCADE;
+
+
+--
+-- Name: solicitud_traslado fk_solicitud_traslado_usuario; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.solicitud_traslado
+    ADD CONSTRAINT fk_solicitud_traslado_usuario FOREIGN KEY (id_usuario) REFERENCES public.usuario(id_usuario) ON DELETE CASCADE;
+
+
+--
 -- Name: ticket_observaciones fk_ticket_obs_ticket; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -5602,6 +5655,14 @@ ALTER TABLE ONLY public.ticket_observaciones
 
 ALTER TABLE ONLY public.tipo_grado
     ADD CONSTRAINT fk_tipo_grado_nivel FOREIGN KEY (id_nivel) REFERENCES public.nivel_escolar(id_nivel);
+
+
+--
+-- Name: traslado_aprobacion fk_traslado_aprobacion_usuario; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.traslado_aprobacion
+    ADD CONSTRAINT fk_traslado_aprobacion_usuario FOREIGN KEY (id_usuario) REFERENCES public.usuario(id_usuario) ON DELETE CASCADE;
 
 
 --
@@ -5821,14 +5882,6 @@ ALTER TABLE ONLY public.registro_asistencia
 
 
 --
--- Name: registro_graduados registro_graduados_id_año_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.registro_graduados
-    ADD CONSTRAINT "registro_graduados_id_año_fkey" FOREIGN KEY (id_anio) REFERENCES public.anio_lectivo(id_anio);
-
-
---
 -- Name: registro_graduados registro_graduados_id_estudiante_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -6031,5 +6084,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict DXZA4mEo6ArErd1DlnXNIib9PHevdTzsZQbX8Vl9bv9Uh8DiPkSUpW8olWsMedg
+\unrestrict KLOeswPbt5uwkXUKohM28j3GhfiZInITbKRFhSohkWd08klSPfPxYMhB99faHcN
 
