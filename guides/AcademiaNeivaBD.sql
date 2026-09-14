@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict YB7tRQTwwvcOBfkzitSDtNXQNFh8Ls0G0W2rl0CaRzXUr3qpI51gjUHvgoPs5yQ
+\restrict 2fx8rtJaGpnCqqcxnIJSCmw3s2jSIrD6imzx1twupbD6BezbClYjUB78WC0PVFJ
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -1682,7 +1682,8 @@ CREATE TABLE public.escala_valoracion (
     nivel character varying(20) NOT NULL,
     valor_minimo numeric(5,2) NOT NULL,
     valor_maximo numeric(5,2) NOT NULL,
-    id_colegio integer NOT NULL
+    id_colegio integer NOT NULL,
+    id_anio integer NOT NULL
 );
 
 
@@ -2395,13 +2396,17 @@ CREATE TABLE public.periodo_academico (
     nombre character varying(100) NOT NULL,
     estado public.estado_periodo NOT NULL,
     porcentaje numeric(5,2) NOT NULL,
-    id_anio integer,
+    id_anio integer NOT NULL,
     id_colegio integer NOT NULL,
     trimestre integer,
     dia_inicio integer,
     dia_fin integer,
     mes_inicio integer,
-    mes_fin integer
+    mes_fin integer,
+    fecha_inicio date NOT NULL,
+    fecha_fin date NOT NULL,
+    CONSTRAINT chk_periodo_fechas CHECK ((fecha_fin >= fecha_inicio)),
+    CONSTRAINT chk_periodo_porcentaje CHECK (((porcentaje > (0)::numeric) AND (porcentaje <= (100)::numeric)))
 );
 
 
@@ -4262,6 +4267,14 @@ ALTER TABLE ONLY public.actividad_materia
 
 
 --
+-- Name: anio_lectivo uq_anio_colegio_calendario; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.anio_lectivo
+    ADD CONSTRAINT uq_anio_colegio_calendario UNIQUE (id_colegio, calendario, tipo_calendario);
+
+
+--
 -- Name: registro_asistencia_detalle uq_asistencia_bloque; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -4310,6 +4323,14 @@ ALTER TABLE ONLY public.dba
 
 
 --
+-- Name: escala_valoracion uq_escala_colegio_anio_nivel; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.escala_valoracion
+    ADD CONSTRAINT uq_escala_colegio_anio_nivel UNIQUE (id_colegio, id_anio, nivel);
+
+
+--
 -- Name: matricula uq_matricula_estudiante_anio_colegio; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -4323,6 +4344,14 @@ ALTER TABLE ONLY public.matricula
 
 ALTER TABLE ONLY public.matricula
     ADD CONSTRAINT uq_matricula_tenant UNIQUE (id_matricula, id_colegio);
+
+
+--
+-- Name: periodo_academico uq_periodo_anio_trimestre; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.periodo_academico
+    ADD CONSTRAINT uq_periodo_anio_trimestre UNIQUE (id_anio, trimestre);
 
 
 --
@@ -5444,6 +5473,14 @@ ALTER TABLE ONLY public.documento_matriculas
 
 
 --
+-- Name: escala_valoracion escala_valoracion_id_anio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.escala_valoracion
+    ADD CONSTRAINT escala_valoracion_id_anio_fkey FOREIGN KEY (id_anio) REFERENCES public.anio_lectivo(id_anio) ON DELETE CASCADE;
+
+
+--
 -- Name: estudiante estudiante_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -6070,5 +6107,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict YB7tRQTwwvcOBfkzitSDtNXQNFh8Ls0G0W2rl0CaRzXUr3qpI51gjUHvgoPs5yQ
+\unrestrict 2fx8rtJaGpnCqqcxnIJSCmw3s2jSIrD6imzx1twupbD6BezbClYjUB78WC0PVFJ
 

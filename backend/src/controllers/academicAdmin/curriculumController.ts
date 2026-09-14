@@ -848,7 +848,8 @@ export const updateManualScaleConfiguration = async (req: Request, res: Response
         notaMaxima,
         notaAprobacion,
         "MANUAL",
-        { basicMax: basicoMax, altoMax }
+        { basicMax: basicoMax, altoMax },
+        targetYearId
       );
     });
 

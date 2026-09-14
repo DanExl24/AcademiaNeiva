@@ -1072,13 +1072,15 @@ export const updateSchoolDefaultSettings = async (req: Request, res: Response): 
                 basicMax: currentBasic ? Number(currentBasic.valor_maximo) : undefined,
                 altoMax: currentHigh ? Number(currentHigh.valor_maximo) : undefined,
               }
-            : undefined
+            : undefined,
+          targetYearId
         );
       } else {
         syncedScales = await trx
           .selectFrom("escala_valoracion")
           .select(["id_escalavaloracion", "nivel", "valor_minimo", "valor_maximo"])
           .where("id_colegio", "=", schoolId)
+          .where("id_anio", "=", targetYearId)
           .orderBy("valor_minimo", "asc")
           .execute();
       }

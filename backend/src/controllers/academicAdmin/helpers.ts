@@ -392,17 +392,34 @@ export const syncSchoolScalesAndGrades = async (
   nextMax: number,
   nextApproval: number,
   scaleMode: "AUTOMATICO" | "MANUAL" = "AUTOMATICO",
-  manualBreaks?: { basicMax?: number | null; altoMax?: number | null }
+  manualBreaks?: { basicMax?: number | null; altoMax?: number | null },
+  targetYearId?: number | null
 ) => {
   // Permitir bypass administrativo de triggers para sincronización global de escalas
   await sql`SET LOCAL my.app.bypass_triggers = 'true'`.execute(client);
 
-  const previousScales = await client
+  let yearId = targetYearId ? Number(targetYearId) : undefined;
+  if (!yearId) {
+    const activeYear = await client
+      .selectFrom("anio_lectivo")
+      .select("id_anio")
+      .where("id_colegio", "=", schoolId)
+      .where("estado", "=", "ABIERTO")
+      .limit(1)
+      .executeTakeFirst();
+    yearId = activeYear?.id_anio ? Number(activeYear.id_anio) : undefined;
+  }
+
+  let prevQuery = client
     .selectFrom("escala_valoracion")
     .select(["id_escalavaloracion", "nivel"])
-    .where("id_colegio", "=", schoolId)
-    .orderBy("valor_minimo", "asc")
-    .execute();
+    .where("id_colegio", "=", schoolId);
+
+  if (yearId) {
+    prevQuery = prevQuery.where("id_anio", "=", yearId);
+  }
+
+  const previousScales = await prevQuery.orderBy("valor_minimo", "asc").execute();
 
   const nextScalesDraft =
     scaleMode === "MANUAL"
@@ -421,6 +438,7 @@ export const syncSchoolScalesAndGrades = async (
           nivel: draft.nivel as any,
           valor_minimo: draft.valor_minimo,
           valor_maximo: draft.valor_maximo,
+          ...(yearId ? { id_anio: yearId } : {})
         })
         .where("id_escalavaloracion", "=", existingId)
         .execute();
@@ -441,6 +459,16 @@ export const syncSchoolScalesAndGrades = async (
         .execute();
     }
 
+    if (!yearId) {
+      const anyYear = await client
+        .selectFrom("anio_lectivo")
+        .select("id_anio")
+        .where("id_colegio", "=", schoolId)
+        .limit(1)
+        .executeTakeFirst();
+      yearId = anyYear?.id_anio ? Number(anyYear.id_anio) : 1;
+    }
+
     const createdRes = await client
       .insertInto("escala_valoracion")
       .values(
@@ -449,6 +477,7 @@ export const syncSchoolScalesAndGrades = async (
           valor_minimo: d.valor_minimo,
           valor_maximo: d.valor_maximo,
           id_colegio: schoolId,
+          id_anio: yearId!,
         }))
       )
       .returning(["id_escalavaloracion", "nivel", "valor_minimo", "valor_maximo"])

@@ -167,6 +167,8 @@ export const createAcademicYear = async (req: Request, res: Response): Promise<v
             nombre: periodNames[i],
             estado: estadoP as any,
             porcentaje: "25.00",
+            fecha_inicio: qStart as any,
+            fecha_fin: qEnd as any,
             mes_inicio,
             dia_inicio,
             mes_fin,
@@ -175,6 +177,33 @@ export const createAcademicYear = async (req: Request, res: Response): Promise<v
             id_colegio: schoolId,
             trimestre: i + 1
           })
+          .execute();
+      }
+
+      // Replicar o inicializar escalas de valoración para el nuevo año escolar
+      const existingScales = await trx
+        .selectFrom("escala_valoracion")
+        .select(["nivel", "valor_minimo", "valor_maximo"])
+        .where("id_colegio", "=", schoolId)
+        .orderBy("valor_minimo", "asc")
+        .execute();
+
+      if (existingScales.length > 0) {
+        const uniqueNiveles = new Map<string, { nivel: string; valor_minimo: any; valor_maximo: any }>();
+        for (const s of existingScales) {
+          if (!uniqueNiveles.has(s.nivel)) uniqueNiveles.set(s.nivel, s);
+        }
+        await trx
+          .insertInto("escala_valoracion")
+          .values(
+            Array.from(uniqueNiveles.values()).map(s => ({
+              id_colegio: schoolId,
+              id_anio: newYearId,
+              nivel: s.nivel,
+              valor_minimo: s.valor_minimo,
+              valor_maximo: s.valor_maximo
+            }))
+          )
           .execute();
       }
 
@@ -660,12 +689,29 @@ export const createAcademicPeriod = async (req: Request, res: Response): Promise
 
       const nextTrimestre = Number(maxTrimestreRes?.max_trim || 0) + 1;
 
+      const yearStart = yearRow?.fecha_inicio ? new Date(yearRow.fecha_inicio) : new Date(Date.UTC(Number(yearRow?.calendario) || new Date().getUTCFullYear(), 0, 15));
+      const yearEnd = yearRow?.fecha_fin ? new Date(yearRow.fecha_fin) : new Date(Date.UTC(Number(yearRow?.calendario) || new Date().getUTCFullYear(), 10, 30));
+
+      let pStartYear = yearStart.getUTCFullYear();
+      if (calendarType === "B" && mesInicio < (yearStart.getUTCMonth() + 1)) {
+        pStartYear = yearEnd.getUTCFullYear();
+      }
+      const calculatedStartDate = new Date(Date.UTC(pStartYear, mesInicio - 1, diaInicio));
+
+      let pEndYear = yearStart.getUTCFullYear();
+      if (calendarType === "B" && mesFin < (yearStart.getUTCMonth() + 1)) {
+        pEndYear = yearEnd.getUTCFullYear();
+      }
+      const calculatedEndDate = new Date(Date.UTC(pEndYear, mesFin - 1, diaFin));
+
       const created = await trx
         .insertInto("periodo_academico")
         .values({
           nombre,
           estado: estado as any,
           porcentaje: String(porcentaje),
+          fecha_inicio: calculatedStartDate as any,
+          fecha_fin: calculatedEndDate as any,
           mes_inicio: mesInicio,
           dia_inicio: diaInicio,
           mes_fin: mesFin,
@@ -674,7 +720,7 @@ export const createAcademicPeriod = async (req: Request, res: Response): Promise
           id_colegio: schoolId,
           trimestre: nextTrimestre
         })
-        .returning(["id_periodo", "nombre", "estado", "porcentaje", "mes_inicio", "dia_inicio", "mes_fin", "dia_fin", "id_anio", "trimestre"])
+        .returning(["id_periodo", "nombre", "estado", "porcentaje", "mes_inicio", "dia_inicio", "mes_fin", "dia_fin", "fecha_inicio", "fecha_fin", "id_anio", "trimestre"])
         .executeTakeFirstOrThrow();
 
       // Audit check (if in supervision mode)
@@ -1340,21 +1386,21 @@ export const updateAcademicPeriodPercentage = async (req: Request, res: Response
         throw new Error(`PERIOD_CLOSED: El periodo académico "${period.nombre}" se encuentra CERRADO institucionalmente. No es posible modificar su porcentaje ni fechas de vigencia sin antes reabrirlo formalmente.`);
       }
 
+      // Get school year info for calendar type, dates and status
+      const yearRow = await trx
+        .selectFrom("anio_lectivo")
+        .select(["tipo_calendario", "estado", "fecha_inicio", "fecha_fin", "calendario"])
+        .where("id_anio", "=", period.id_anio)
+        .where("id_colegio", "=", schoolId)
+        .executeTakeFirst();
+
+      if (yearRow?.estado === "CERRADO") {
+        throw new Error("YEAR_CLOSED: El año lectivo se encuentra CERRADO. No es posible modificar la configuración de periodos en un ciclo escolar cerrado.");
+      }
+
+      const calendarType = yearRow?.tipo_calendario || "A";
+
       if (period.id_anio) {
-        // Get school year info for calendar type and status
-        const yearRow = await trx
-          .selectFrom("anio_lectivo")
-          .select(["tipo_calendario", "estado"])
-          .where("id_anio", "=", period.id_anio)
-          .where("id_colegio", "=", schoolId)
-          .executeTakeFirst();
-
-        if (yearRow?.estado === "CERRADO") {
-          throw new Error("YEAR_CLOSED: El año lectivo se encuentra CERRADO. No es posible modificar la configuración de periodos en un ciclo escolar cerrado.");
-        }
-
-        const calendarType = yearRow?.tipo_calendario || "A";
-
         // Validate ranges don't overlap with other periods
         const otherPeriods = await trx
           .selectFrom("periodo_academico")
@@ -1447,6 +1493,24 @@ export const updateAcademicPeriodPercentage = async (req: Request, res: Response
         }
       }
 
+      let updatedFechaInicio: Date | undefined;
+      let updatedFechaFin: Date | undefined;
+      if (yearRow && yearRow.fecha_inicio && yearRow.fecha_fin) {
+        const yearStart = new Date(yearRow.fecha_inicio);
+        const yearEnd = new Date(yearRow.fecha_fin);
+        let pStartYear = yearStart.getUTCFullYear();
+        if (calendarType === "B" && mesInicio < (yearStart.getUTCMonth() + 1)) {
+          pStartYear = yearEnd.getUTCFullYear();
+        }
+        updatedFechaInicio = new Date(Date.UTC(pStartYear, mesInicio - 1, diaInicio));
+
+        let pEndYear = yearStart.getUTCFullYear();
+        if (calendarType === "B" && mesFin < (yearStart.getUTCMonth() + 1)) {
+          pEndYear = yearEnd.getUTCFullYear();
+        }
+        updatedFechaFin = new Date(Date.UTC(pEndYear, mesFin - 1, diaFin));
+      }
+
       // Perform UPDATE
       const updatedPeriod = await trx
         .updateTable("periodo_academico")
@@ -1455,11 +1519,13 @@ export const updateAcademicPeriodPercentage = async (req: Request, res: Response
           mes_inicio: mesInicio,
           dia_inicio: diaInicio,
           mes_fin: mesFin,
-          dia_fin: diaFin
+          dia_fin: diaFin,
+          ...(updatedFechaInicio ? { fecha_inicio: updatedFechaInicio as any } : {}),
+          ...(updatedFechaFin ? { fecha_fin: updatedFechaFin as any } : {})
         })
         .where("id_periodo", "=", periodId)
         .where("id_colegio", "=", schoolId)
-        .returning(["id_periodo", "nombre", "estado", "porcentaje", "mes_inicio", "dia_inicio", "mes_fin", "dia_fin", "id_anio"])
+        .returning(["id_periodo", "nombre", "estado", "porcentaje", "mes_inicio", "dia_inicio", "mes_fin", "dia_fin", "fecha_inicio", "fecha_fin", "id_anio"])
         .executeTakeFirstOrThrow();
 
       // Record in audit

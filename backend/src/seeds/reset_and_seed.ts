@@ -355,6 +355,8 @@ async function insertSchoolAcademicStructure(
       periods.push({
         nombre: periodNames[i],
         trimestre: i + 1,
+        fecha_inicio: qStart.toISOString().split("T")[0],
+        fecha_fin: qEnd.toISOString().split("T")[0],
         mes_inicio: qStart.getUTCMonth() + 1,
         dia_inicio: qStart.getUTCDate(),
         mes_fin: qEnd.getUTCMonth() + 1,
@@ -368,9 +370,9 @@ async function insertSchoolAcademicStructure(
   const qPeriods2025 = computeQuarterPeriodsForDates(fInicio2025, fFin2025);
   for (const qp of qPeriods2025) {
     await client.query(
-      `INSERT INTO periodo_academico (nombre, estado, porcentaje, trimestre, id_anio, id_colegio, mes_inicio, mes_fin, dia_inicio, dia_fin)
-       VALUES ($1, 'CERRADO', 25.00, $2, $3, $4, $5, $6, $7, $8)`,
-      [qp.nombre, qp.trimestre, academicYearId, school.id, qp.mes_inicio, qp.mes_fin, qp.dia_inicio, qp.dia_fin]
+      `INSERT INTO periodo_academico (nombre, estado, porcentaje, trimestre, id_anio, id_colegio, fecha_inicio, fecha_fin, mes_inicio, mes_fin, dia_inicio, dia_fin)
+       VALUES ($1, 'CERRADO', 25.00, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [qp.nombre, qp.trimestre, academicYearId, school.id, qp.fecha_inicio, qp.fecha_fin, qp.mes_inicio, qp.mes_fin, qp.dia_inicio, qp.dia_fin]
     );
   }
 
@@ -396,18 +398,20 @@ async function insertSchoolAcademicStructure(
       estado2026 = "PENDIENTE";
     }
     await client.query(
-      `INSERT INTO periodo_academico (nombre, estado, porcentaje, trimestre, id_anio, id_colegio, mes_inicio, mes_fin, dia_inicio, dia_fin)
-       VALUES ($1, $2, 25.00, $3, $4, $5, $6, $7, $8, $9)`,
-      [qp.nombre, estado2026, qp.trimestre, academicYearId2026, school.id, qp.mes_inicio, qp.mes_fin, qp.dia_inicio, qp.dia_fin]
+      `INSERT INTO periodo_academico (nombre, estado, porcentaje, trimestre, id_anio, id_colegio, fecha_inicio, fecha_fin, mes_inicio, mes_fin, dia_inicio, dia_fin)
+       VALUES ($1, $2, 25.00, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [qp.nombre, estado2026, qp.trimestre, academicYearId2026, school.id, qp.fecha_inicio, qp.fecha_fin, qp.mes_inicio, qp.mes_fin, qp.dia_inicio, qp.dia_fin]
     );
   }
 
-  // --- Escala de Valoración ---
-  for (const scaleSeed of scaleSeeds) {
-    await client.query(
-      `INSERT INTO escala_valoracion (nivel, valor_minimo, valor_maximo, id_colegio) VALUES ($1, $2, $3, $4)`,
-      [scaleSeed.nivel, scaleSeed.min, scaleSeed.max, school.id]
-    );
+  // --- Escala de Valoración (por cada año escolar) ---
+  for (const yearId of [academicYearId, academicYearId2026]) {
+    for (const scaleSeed of scaleSeeds) {
+      await client.query(
+        `INSERT INTO escala_valoracion (nivel, valor_minimo, valor_maximo, id_colegio, id_anio) VALUES ($1, $2, $3, $4, $5)`,
+        [scaleSeed.nivel, scaleSeed.min, scaleSeed.max, school.id, yearId]
+      );
+    }
   }
 
 

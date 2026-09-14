@@ -654,6 +654,13 @@ export const ensureCompetencySchema = async (): Promise<void> => {
       await client.query(dropGradosSql);
     }
 
+    // Ejecutar migración 056 (Normalización Módulo 3: fechas nativas en periodos, id_anio NOT NULL, escalas por anio)
+    const normalizeModule3Path = path.join(__dirname, "../migrations/056_normalize_calendar_and_evaluation_module.sql");
+    if (fs.existsSync(normalizeModule3Path)) {
+      const normalizeModule3Sql = fs.readFileSync(normalizeModule3Path, "utf8");
+      await client.query(normalizeModule3Sql);
+    }
+
 
     // Backfill sync_uuid for existing competencies
     const unmigratedRes = await client.query(`

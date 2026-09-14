@@ -345,6 +345,7 @@ export interface DocumentoMatriculas {
 }
 
 export interface EscalaValoracion {
+  id_anio: number;
   id_colegio: number;
   id_escalavaloracion: Generated<number>;
   nivel: string;
@@ -538,7 +539,9 @@ export interface PeriodoAcademico {
   dia_fin: number | null;
   dia_inicio: number | null;
   estado: EstadoPeriodo;
-  id_anio: number | null;
+  fecha_fin: Timestamp;
+  fecha_inicio: Timestamp;
+  id_anio: number;
   id_colegio: number;
   id_periodo: Generated<number>;
   mes_fin: number | null;
