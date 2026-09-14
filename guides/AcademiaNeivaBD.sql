@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 2fx8rtJaGpnCqqcxnIJSCmw3s2jSIrD6imzx1twupbD6BezbClYjUB78WC0PVFJ
+\restrict sOvJGehyoxNtyzRjBswXdycn1Fj0CRc2CLWK5E4EY8uofVlmzZUosmE4SeqcML5
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -1762,7 +1762,8 @@ CREATE TABLE public.evidencia_aprendizaje (
     descripcion text NOT NULL,
     orden integer DEFAULT 0 NOT NULL,
     id_colegio integer NOT NULL,
-    id_evidencia_dba integer
+    id_evidencia_dba integer,
+    CONSTRAINT chk_evidencia_orden CHECK ((orden >= 1))
 );
 
 
@@ -1800,7 +1801,8 @@ CREATE TABLE public.evidencias_dba (
     descripcion text NOT NULL,
     orden integer DEFAULT 1 NOT NULL,
     estado public.estado_dba DEFAULT 'ACTIVO'::public.estado_dba NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_evidencias_dba_orden CHECK ((orden >= 1))
 );
 
 
@@ -4331,6 +4333,14 @@ ALTER TABLE ONLY public.escala_valoracion
 
 
 --
+-- Name: evidencia_aprendizaje uq_evidencia_competencia_orden; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.evidencia_aprendizaje
+    ADD CONSTRAINT uq_evidencia_competencia_orden UNIQUE (id_competencia, orden);
+
+
+--
 -- Name: matricula uq_matricula_estudiante_anio_colegio; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -4531,6 +4541,20 @@ CREATE INDEX idx_colegio_version_colegio ON public.colegio_version_curricular US
 
 
 --
+-- Name: idx_competencias_context; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_competencias_context ON public.competencias USING btree (id_colegio, id_anio, id_periodo, id_grupo, id_materia);
+
+
+--
+-- Name: idx_competencias_dimension; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_competencias_dimension ON public.competencias USING btree (id_dimension) WHERE (id_dimension IS NOT NULL);
+
+
+--
 -- Name: idx_competencias_sync_uuid; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -4647,6 +4671,13 @@ CREATE INDEX idx_documento_matriculas_colegio ON public.documento_matriculas USI
 --
 
 CREATE INDEX idx_documento_matriculas_matricula ON public.documento_matriculas USING btree (id_matricula);
+
+
+--
+-- Name: idx_evidencia_aprendizaje_colegio; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_evidencia_aprendizaje_colegio ON public.evidencia_aprendizaje USING btree (id_colegio);
 
 
 --
@@ -6107,5 +6138,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 2fx8rtJaGpnCqqcxnIJSCmw3s2jSIrD6imzx1twupbD6BezbClYjUB78WC0PVFJ
+\unrestrict sOvJGehyoxNtyzRjBswXdycn1Fj0CRc2CLWK5E4EY8uofVlmzZUosmE4SeqcML5
 

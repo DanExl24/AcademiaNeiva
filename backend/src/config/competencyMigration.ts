@@ -661,6 +661,13 @@ export const ensureCompetencySchema = async (): Promise<void> => {
       await client.query(normalizeModule3Sql);
     }
 
+    // Ejecutar migración 057 (Optimización Módulo 4: índices de contexto en competencias e integridad en evidencias)
+    const optimizeModule4Path = path.join(__dirname, "../migrations/057_optimize_curriculum_and_competencies_module.sql");
+    if (fs.existsSync(optimizeModule4Path)) {
+      const optimizeModule4Sql = fs.readFileSync(optimizeModule4Path, "utf8");
+      await client.query(optimizeModule4Sql);
+    }
+
 
     // Backfill sync_uuid for existing competencies
     const unmigratedRes = await client.query(`
