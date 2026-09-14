@@ -2,10 +2,10 @@ import { PoolClient } from "pg";
 import { pool } from "./db";
 import { db } from "./kysely";
 import { sql } from "kysely";
-import fs from "fs";
-import path from "path";
+
 import { randomUUID } from "crypto";
 
+export const DEFAULT_COMPETENCY_DESCRIPTION = "Competencia pendiente por definir.";
 
 const evidenciaMigrationSql = `
 CREATE TABLE IF NOT EXISTS public.evidencia_aprendizaje (
@@ -47,8 +47,6 @@ CREATE TABLE IF NOT EXISTS public.nota_criterio (
   UNIQUE(id_criterio, id_estudiante)
 );
 `;
-
-const DEFAULT_COMPETENCY_DESCRIPTION = "Competencia pendiente por definir.";
 
 const migrationSql = `
 DO $$
@@ -325,393 +323,24 @@ const extraordinaryMigrationSql = `
   ALTER TABLE public.matricula ADD COLUMN IF NOT EXISTS fecha_creacion TIMESTAMP DEFAULT NOW();
 `;
 
+
+/**
+ * ensureCompetencySchema
+ * 
+ * NOTA DE ARQUITECTURA:
+ * Las migraciones SQL son estrictamente de solo lectura histórica y NO deben ser ejecutadas
+ * dinámicamente en tiempo de ejecución ni alterar el esquema existente.
+ * Esta función únicamente asegura conectividad inicial con la base de datos y ejecuta
+ * backfills a nivel de datos (p. ej., UUIDs de sincronización de competencias) si es requerido.
+ */
 export const ensureCompetencySchema = async (): Promise<void> => {
   const client = await pool.connect();
   try {
-    // 1. Check/create enum values safely (must be outside transaction)
-    try {
-      const hasEstadoMatricula = await client.query(`
-        SELECT 1 FROM pg_type WHERE typname = 'estado_matricula'
-      `);
-      if (hasEstadoMatricula.rows.length === 0) {
-        await client.query(`
-          CREATE TYPE public.estado_matricula AS ENUM (
-            'PENDIENTE',
-            'APROBADA',
-            'RECHAZADA',
-            'CANCELADA',
-            'PENDIENTE_RENOVACION',
-            'CORREGIDA'
-          );
-        `);
-      } else {
-        const checkEnum = await client.query(`
-          SELECT 1 FROM pg_type t 
-          JOIN pg_enum e ON t.oid = e.enumtypid 
-          WHERE t.typname = 'estado_matricula' AND e.enumlabel = 'APROBADA'
-        `);
-        if (checkEnum.rows.length === 0) {
-          console.log("Adding 'APROBADA' to estado_matricula enum...");
-          await client.query("ALTER TYPE estado_matricula ADD VALUE IF NOT EXISTS 'APROBADA'");
-        }
+    // 1. Verificar conexión activa con PostgreSQL
+    await client.query("SELECT 1;");
+    console.log("ℹ️ Conexión con PostgreSQL verificada. Las migraciones SQL son de solo lectura histórica.");
 
-        const checkCorregidaEnum = await client.query(`
-          SELECT 1 FROM pg_type t 
-          JOIN pg_enum e ON t.oid = e.enumtypid 
-          WHERE t.typname = 'estado_matricula' AND e.enumlabel = 'CORREGIDA'
-        `);
-        if (checkCorregidaEnum.rows.length === 0) {
-          console.log("Adding 'CORREGIDA' to estado_matricula enum...");
-          await client.query("ALTER TYPE estado_matricula ADD VALUE IF NOT EXISTS 'CORREGIDA'");
-        }
-      }
-    } catch (e: any) {
-      console.warn("Notice checking estado_matricula enum:", e.message);
-    }
-
-    // Cleanup redundant table if it was created
-    await client.query(`DROP TABLE IF EXISTS public.historial_documento_matricula CASCADE;`);
-
-    try {
-      const hasEstadoPeriodo = await client.query(`
-        SELECT 1 FROM pg_type WHERE typname = 'estado_periodo'
-      `);
-      if (hasEstadoPeriodo.rows.length === 0) {
-        await client.query(`
-          CREATE TYPE public.estado_periodo AS ENUM (
-            'PENDIENTE',
-            'EN_CURSO',
-            'CERRADO'
-          );
-        `);
-      } else {
-        const checkPeriodEnum = await client.query(`
-          SELECT 1 FROM pg_type t 
-          JOIN pg_enum e ON t.oid = e.enumtypid 
-          WHERE t.typname = 'estado_periodo' AND e.enumlabel = 'PENDIENTE'
-        `);
-        if (checkPeriodEnum.rows.length === 0) {
-          console.log("Adding 'PENDIENTE' to estado_periodo enum...");
-          await client.query("ALTER TYPE estado_periodo ADD VALUE IF NOT EXISTS 'PENDIENTE'");
-        }
-      }
-    } catch (e: any) {
-      console.warn("Notice checking estado_periodo enum:", e.message);
-    }
-
-
-    // 2. Perform table definitions and modifications within a transaction
-    await client.query("BEGIN");
-    
-    await client.query(migrationSql);
-    await client.query(evidenciaMigrationSql);
-    await client.query(enrollmentConfigMigrationSql);
-    await client.query(extraordinaryMigrationSql);
-
-    // Dynamic database modifications moved from controllers to server startup
-    await client.query(`
-      ALTER TABLE anio_lectivo
-      ADD COLUMN IF NOT EXISTS estado VARCHAR(20) DEFAULT 'ABIERTO'
-    `);
-
-    await client.query(`
-      ALTER TABLE docente
-      ADD COLUMN IF NOT EXISTS estado VARCHAR(20) NOT NULL DEFAULT 'ACTIVO'
-    `);
-
-    await client.query(`
-      UPDATE docente d
-      SET estado = CASE
-        WHEN u.activo = FALSE THEN 'INACTIVO'
-        ELSE 'ACTIVO'
-      END
-      FROM usuario u
-      WHERE d.id_usuario = u.id_usuario
-        AND (d.estado IS NULL OR d.estado NOT IN ('ACTIVO', 'INACTIVO', 'DESVINCULADO'))
-    `);
-
-
-
-    await client.query(`
-      ALTER TABLE periodo_academico
-      ADD COLUMN IF NOT EXISTS trimestre integer,
-      ADD COLUMN IF NOT EXISTS dia_inicio integer,
-      ADD COLUMN IF NOT EXISTS dia_fin integer,
-      ADD COLUMN IF NOT EXISTS mes_inicio integer,
-      ADD COLUMN IF NOT EXISTS mes_fin integer
-    `);
-
-    // Ejecutar migración del catálogo global de DBA
-    const dbaMigrationPath = path.join(__dirname, "../migrations/007_dba_catalogo_global.sql");
-    if (fs.existsSync(dbaMigrationPath)) {
-      const dbaMigrationSql = fs.readFileSync(dbaMigrationPath, "utf8");
-      await client.query(dbaMigrationSql);
-    }
-
-    // Ejecutar migración de planeación y ejecución institucional de DBA
-    const instMigrationPath = path.join(__dirname, "../migrations/008_dba_planeacion_institucional.sql");
-    if (fs.existsSync(instMigrationPath)) {
-      const instMigrationSql = fs.readFileSync(instMigrationPath, "utf8");
-      await client.query(instMigrationSql);
-    }
-
-    // Ejecutar migración de reingreso y versionamiento de documentos (019)
-    const reingresoMigrationPath = path.join(__dirname, "../migrations/019_reingreso_and_document_versioning.sql");
-    if (fs.existsSync(reingresoMigrationPath)) {
-      const reingresoMigrationSql = fs.readFileSync(reingresoMigrationPath, "utf8");
-      await client.query(reingresoMigrationSql);
-    }
-
-    // Ejecutar migración de normalización de tipo y estado de matrícula (020 - Idempotente)
-    const normalizeMatriculaPath = path.join(__dirname, "../migrations/020_normalize_matricula_estado_and_tipo.sql");
-    if (fs.existsSync(normalizeMatriculaPath)) {
-      const normalizeMatriculaSql = fs.readFileSync(normalizeMatriculaPath, "utf8");
-      await client.query(normalizeMatriculaSql);
-    }
-
-    // Ejecutar migración 021 (MATRICULA_EXTRAORDINARIA en tipo_incidencia_soporte)
-    const extraMatriculaIncidenciaPath = path.join(__dirname, "../migrations/021_add_matricula_extraordinaria_to_tipo_incidencia.sql");
-    if (fs.existsSync(extraMatriculaIncidenciaPath)) {
-      const extraMatriculaIncidenciaSql = fs.readFileSync(extraMatriculaIncidenciaPath, "utf8");
-      await client.query(extraMatriculaIncidenciaSql);
-    }
-
-    // Ejecutar migración 022 (id_tipodocumento, documento, telefono en usuario)
-    const addUsuarioDocTelPath = path.join(__dirname, "../migrations/022_add_usuario_documento_telefono.sql");
-    if (fs.existsSync(addUsuarioDocTelPath)) {
-      const addUsuarioDocTelSql = fs.readFileSync(addUsuarioDocTelPath, "utf8");
-      await client.query(addUsuarioDocTelSql);
-    }
-
-    // Ejecutar migración 023 (email_change_tokens)
-    const emailChangeTokensPath = path.join(__dirname, "../migrations/023_email_change_tokens.sql");
-    if (fs.existsSync(emailChangeTokensPath)) {
-      const emailChangeTokensSql = fs.readFileSync(emailChangeTokensPath, "utf8");
-      await client.query(emailChangeTokensSql);
-    }
-
-    // Ejecutar migración 029 (remoción de documento e id_tipodocumento de docente, estudiante y padre_familia)
-    const removeDocFromRolesPath = path.join(__dirname, "../migrations/029_remove_documento_from_role_tables.sql");
-    if (fs.existsSync(removeDocFromRolesPath)) {
-      const removeDocFromRolesSql = fs.readFileSync(removeDocFromRolesPath, "utf8");
-      await client.query(removeDocFromRolesSql);
-    }
-
-    // Ejecutar migración 030 (CHECK constraint en usuario.documento)
-    const checkDocNumericPath = path.join(__dirname, "../migrations/030_add_usuario_documento_numeric_check.sql");
-    if (fs.existsSync(checkDocNumericPath)) {
-      const checkDocNumericSql = fs.readFileSync(checkDocNumericPath, "utf8");
-      await client.query(checkDocNumericSql);
-    }
-
-    // Ejecutar migración 031 (actualización de CHECK constraint para Pasaportes)
-    const checkDocPasaportePath = path.join(__dirname, "../migrations/031_update_documento_check_for_pasaporte.sql");
-    if (fs.existsSync(checkDocPasaportePath)) {
-      const checkDocPasaporteSql = fs.readFileSync(checkDocPasaportePath, "utf8");
-      await client.query(checkDocPasaporteSql);
-    }
-
-    // Ejecutar migración 032 (permitir email NULL en usuario)
-    const makeEmailNullablePath = path.join(__dirname, "../migrations/032_make_usuario_email_nullable.sql");
-    if (fs.existsSync(makeEmailNullablePath)) {
-      const makeEmailNullableSql = fs.readFileSync(makeEmailNullablePath, "utf8");
-      await client.query(makeEmailNullableSql);
-    }
-
-    // Ejecutar migración 033 (limpieza de asignaciones duplicadas en detalle_grados y actividades sin notas)
-    const cleanupDuplicatesPath = path.join(__dirname, "../migrations/033_cleanup_duplicate_assignments_and_activities.sql");
-    if (fs.existsSync(cleanupDuplicatesPath)) {
-      const cleanupDuplicatesSql = fs.readFileSync(cleanupDuplicatesPath, "utf8");
-      await client.query(cleanupDuplicatesSql);
-    }
-
-    // Ejecutar migración 034 (justificación de evidencias pendientes en cierre_materia)
-    const addJustificacionCierrePath = path.join(__dirname, "../migrations/034_add_justificacion_cierre_materia.sql");
-    if (fs.existsSync(addJustificacionCierrePath)) {
-      const addJustificacionCierreSql = fs.readFileSync(addJustificacionCierrePath, "utf8");
-      await client.query(addJustificacionCierreSql);
-    }
-
-    // Ejecutar migración 035 (id_docente_creador en actividad_materia para trazabilidad histórica)
-    const addDocenteCreadorPath = path.join(__dirname, "../migrations/035_add_id_docente_creador_to_actividad_materia.sql");
-    if (fs.existsSync(addDocenteCreadorPath)) {
-      const addDocenteCreadorSql = fs.readFileSync(addDocenteCreadorPath, "utf8");
-      await client.query(addDocenteCreadorSql);
-    }
-
-    // Ejecutar migración 036 (id_docente_cierre en cierre_materia para trazabilidad del cierre)
-    const addDocenteCierrePath = path.join(__dirname, "../migrations/036_add_id_docente_cierre_to_cierre_materia.sql");
-    if (fs.existsSync(addDocenteCierrePath)) {
-      const addDocenteCierreSql = fs.readFileSync(addDocenteCierrePath, "utf8");
-      await client.query(addDocenteCierreSql);
-    }
-
-    // Ejecutar migración 037 (triggers para prevenir escrituras en tablas académicas con materia cerrada)
-    const preventClosedWritesPath = path.join(__dirname, "../migrations/037_prevent_academic_writes_on_closed_subject.sql");
-    if (fs.existsSync(preventClosedWritesPath)) {
-      const preventClosedWritesSql = fs.readFileSync(preventClosedWritesPath, "utf8");
-      await client.query(preventClosedWritesSql);
-    }
-
-    // Ejecutar migración 041 (tabla decision_promocion_directivo para registro de decisiones)
-    const decisionPromocionPath = path.join(__dirname, "../migrations/041_decision_promocion_directivo.sql");
-    if (fs.existsSync(decisionPromocionPath)) {
-      const decisionPromocionSql = fs.readFileSync(decisionPromocionPath, "utf8");
-      await client.query(decisionPromocionSql);
-    }
-
-    // Ejecutar migración 046 (tabla usuario_colegio_email — correo institucional unificado por usuario × colegio)
-    const usuarioColegioEmailPath = path.join(__dirname, "../migrations/046_create_usuario_colegio_email.sql");
-    if (fs.existsSync(usuarioColegioEmailPath)) {
-      const usuarioColegioEmailSql = fs.readFileSync(usuarioColegioEmailPath, "utf8");
-      await client.query(usuarioColegioEmailSql);
-    }
-
-    // Ejecutar migración 047 (restricción UNIQUE en decision_promocion_directivo por estudiante, colegio y año)
-    const uniqueDecisionPath = path.join(__dirname, "../migrations/047_unique_decision_promocion.sql");
-    if (fs.existsSync(uniqueDecisionPath)) {
-      const uniqueDecisionSql = fs.readFileSync(uniqueDecisionPath, "utf8");
-      await client.query(uniqueDecisionSql);
-    }
-
-    // Ejecutar migración 048 (tabla centralizada codigo_verificacion_email para verificación OTP de correos)
-    const emailVerificationPath = path.join(__dirname, "../migrations/048_codigo_verificacion_email.sql");
-    if (fs.existsSync(emailVerificationPath)) {
-      const emailVerificationSql = fs.readFileSync(emailVerificationPath, "utf8");
-      await client.query(emailVerificationSql);
-    }
-
-    // Ejecutar migración 049 (id_grupo_destino en solicitud_traslado y traslado_aprobacion)
-    const addGrupoDestinoPath = path.join(__dirname, "../migrations/049_add_id_grupo_destino_to_traslados.sql");
-    if (fs.existsSync(addGrupoDestinoPath)) {
-      const addGrupoDestinoSql = fs.readFileSync(addGrupoDestinoPath, "utf8");
-      await client.query(addGrupoDestinoSql);
-    }
-
-    // Ejecutar migración 050 (eliminar columna obsoleta id_colegio de la tabla usuario)
-    const dropUsuarioIdColegioPath = path.join(__dirname, "../migrations/050_drop_usuario_id_colegio.sql");
-    if (fs.existsSync(dropUsuarioIdColegioPath)) {
-      const dropUsuarioIdColegioSql = fs.readFileSync(dropUsuarioIdColegioPath, "utf8");
-      await client.query(dropUsuarioIdColegioSql);
-    }
-
-    // Ejecutar migración 050 (materias reprobatorias en configuracion_colegio)
-    const materiasReprobatoriasPath = path.join(__dirname, "../migrations/050_materias_reprobatorias_promocion.sql");
-    if (fs.existsSync(materiasReprobatoriasPath)) {
-      const materiasReprobatoriasSql = fs.readFileSync(materiasReprobatoriasPath, "utf8");
-      await client.query(materiasReprobatoriasSql);
-    }
-
-    // Ejecutar migración 051 (fechas_matricula_ordinaria y extraordinaria en anio_lectivo)
-    const anioFechasPath = path.join(__dirname, "../migrations/051_add_anio_lectivo_fechas.sql");
-    if (fs.existsSync(anioFechasPath)) {
-      const anioFechasSql = fs.readFileSync(anioFechasPath, "utf8");
-      await client.query(anioFechasSql);
-    }
-
-    // Ejecutar migración 052 / Siembra asegurada del catálogo oficial de DBA y evidencias oficiales
-    const dbaSeedMigrationPath = path.join(__dirname, "../migrations/052_seed_dba_catalog.sql");
-    const dbaCountRes = await client.query("SELECT COUNT(*)::int as count FROM public.dba");
-    const isDbaEmpty = Number(dbaCountRes.rows[0]?.count || 0) === 0;
-
-    if (isDbaEmpty) {
-      const candidates = [
-        dbaSeedMigrationPath,
-        path.join(__dirname, "../seeds/dba_catalog.sql"),
-        path.join(__dirname, "../../src/seeds/dba_catalog.sql"),
-        path.join(process.cwd(), "src/seeds/dba_catalog.sql"),
-        path.join(process.cwd(), "dist/seeds/dba_catalog.sql"),
-      ];
-      const foundPath = candidates.find((p) => fs.existsSync(p));
-      if (foundPath) {
-        console.log("⚡ Sembrando catálogo oficial de DBA y evidencias desde:", foundPath);
-        const dbaCatalogSql = fs.readFileSync(foundPath, "utf8");
-        await client.query(dbaCatalogSql);
-        console.log("✅ Catálogo oficial de DBA sembrado exitosamente en la base de datos.");
-      } else {
-        console.warn("⚠️ Archivo de catálogo DBA no encontrado en ninguna de las rutas candidatas.");
-      }
-    }
-
-    // Ejecutar migración 053 (Eliminar tabla persona y columnas id_persona obsoletas)
-    const dropPersonaMigrationPath = path.join(__dirname, "../migrations/053_drop_persona_and_cleanup_orphans.sql");
-    if (fs.existsSync(dropPersonaMigrationPath)) {
-      const dropPersonaSql = fs.readFileSync(dropPersonaMigrationPath, "utf8");
-      await client.query(dropPersonaSql);
-    }
-
-    // Ejecutar migración 054 (Configuración académica en anio_lectivo y drop de configuraciones obsoletas)
-    const configAnioMigrationPath = path.join(__dirname, "../migrations/054_anio_lectivo_configuracion_academica.sql");
-    if (fs.existsSync(configAnioMigrationPath)) {
-      const configAnioSql = fs.readFileSync(configAnioMigrationPath, "utf8");
-      await client.query(configAnioSql);
-    }
-
-    // Ejecutar migración 055 (Drop tabla grados y normalización 3NF en grupos eliminando id_nivel)
-    const dropGradosMigrationPath = path.join(__dirname, "../migrations/055_drop_grados_and_normalize_grupos_3nf.sql");
-    if (fs.existsSync(dropGradosMigrationPath)) {
-      const dropGradosSql = fs.readFileSync(dropGradosMigrationPath, "utf8");
-      await client.query(dropGradosSql);
-    }
-
-    // Ejecutar migración 056 (Normalización Módulo 3: fechas nativas en periodos, id_anio NOT NULL, escalas por anio)
-    const normalizeModule3Path = path.join(__dirname, "../migrations/056_normalize_calendar_and_evaluation_module.sql");
-    if (fs.existsSync(normalizeModule3Path)) {
-      const normalizeModule3Sql = fs.readFileSync(normalizeModule3Path, "utf8");
-      await client.query(normalizeModule3Sql);
-    }
-
-    // Ejecutar migración 057 (Optimización Módulo 4: índices de contexto en competencias e integridad en evidencias)
-    const optimizeModule4Path = path.join(__dirname, "../migrations/057_optimize_curriculum_and_competencies_module.sql");
-    if (fs.existsSync(optimizeModule4Path)) {
-      const optimizeModule4Sql = fs.readFileSync(optimizeModule4Path, "utf8");
-      await client.query(optimizeModule4Sql);
-    }
-
-    // Ejecutar migración 058 (Refactorización Módulo 5: drop tabla obsoleta desempeno, blindaje de resultado_academico y actividad_materia)
-    const refactorModule5Path = path.join(__dirname, "../migrations/058_refactor_evaluation_and_grades_module.sql");
-    if (fs.existsSync(refactorModule5Path)) {
-      const refactorModule5Sql = fs.readFileSync(refactorModule5Path, "utf8");
-      await client.query(refactorModule5Sql);
-    }
-
-    // Ejecutar migración 059 (Refactorización Módulo 6: drop tabla obsoleta contrato_docente, normalización estudiante e integridad en actores)
-    const refactorModule6Path = path.join(__dirname, "../migrations/059_refactor_school_actors_module.sql");
-    if (fs.existsSync(refactorModule6Path)) {
-      const refactorModule6Sql = fs.readFileSync(refactorModule6Path, "utf8");
-      await client.query(refactorModule6Sql);
-    }
-
-    // Ejecutar migración 060 (Refactorización Módulo 7: normalización de graduados, FKs en traslados e índices en documentos)
-    const refactorModule7Path = path.join(__dirname, "../migrations/060_refactor_enrollment_and_transfers_module.sql");
-    if (fs.existsSync(refactorModule7Path)) {
-      const refactorModule7Sql = fs.readFileSync(refactorModule7Path, "utf8");
-      await client.query(refactorModule7Sql);
-    }
-
-    // Ejecutar migración 061 (Refactorización Módulo 8: unicidad e índices en asistencia y observaciones de estudiantes)
-    const refactorModule8Path = path.join(__dirname, "../migrations/061_optimize_attendance_and_behavior_module.sql");
-    if (fs.existsSync(refactorModule8Path)) {
-      const refactorModule8Sql = fs.readFileSync(refactorModule8Path, "utf8");
-      await client.query(refactorModule8Sql);
-    }
-
-    // Ejecutar migración 062 (Refactorización Módulo 9: unicidad, FK e índices en decision_promocion_directivo)
-    const refactorModule9Path = path.join(__dirname, "../migrations/062_refactor_promotion_and_year_closure_module.sql");
-    if (fs.existsSync(refactorModule9Path)) {
-      const refactorModule9Sql = fs.readFileSync(refactorModule9Path, "utf8");
-      await client.query(refactorModule9Sql);
-    }
-
-    // Ejecutar migración 063 (Refactorización Módulo 10: drop tabla muerta notificaciones, FKs en seguridad y unicidad en tipos de documento)
-    const refactorModule10Path = path.join(__dirname, "../migrations/063_refactor_notifications_audit_and_security_module.sql");
-    if (fs.existsSync(refactorModule10Path)) {
-      const refactorModule10Sql = fs.readFileSync(refactorModule10Path, "utf8");
-      await client.query(refactorModule10Sql);
-    }
-
-
-    // Backfill sync_uuid for existing competencies
+    // 2. Backfill seguro de sync_uuid para competencias existentes sin UUID asignado
     const unmigratedRes = await client.query(`
       SELECT id_colegio, id_anio, id_materia, id_periodo, descripcion, ARRAY_AGG(id_competencia) AS ids
       FROM public.competencias
@@ -725,10 +354,8 @@ export const ensureCompetencySchema = async (): Promise<void> => {
         [uuid, group.ids]
       );
     }
-
-    await client.query("COMMIT");
   } catch (error) {
-    await client.query("ROLLBACK");
+    console.error("Error en ensureCompetencySchema:", error);
     throw error;
   } finally {
     client.release();
@@ -764,7 +391,7 @@ export const getGradePeerGroups = async (
   if (client && typeof client.selectFrom === "function") {
     const group = await client
       .selectFrom("grupos")
-      .select(["id_nivel", "id_tipo_grado"])
+      .select(["id_tipo_grado"])
       .where("id_grupo", "=", groupId)
       .where("id_colegio", "=", schoolId)
       .executeTakeFirst();
@@ -775,7 +402,6 @@ export const getGradePeerGroups = async (
       .selectFrom("grupos")
       .select("id_grupo")
       .where("id_colegio", "=", schoolId)
-      .where("id_nivel", "=", group.id_nivel)
       .where("id_tipo_grado", "=", group.id_tipo_grado)
       .orderBy("id_grupo", "asc")
       .execute();
@@ -784,10 +410,9 @@ export const getGradePeerGroups = async (
   }
 
   const groupRes = await (client as PoolClient).query<{
-    id_nivel: number;
     id_tipo_grado: number;
   }>(
-    `SELECT id_nivel, id_tipo_grado
+    `SELECT id_tipo_grado
      FROM grupos
      WHERE id_grupo = $1 AND id_colegio = $2`,
     [groupId, schoolId]
@@ -797,15 +422,14 @@ export const getGradePeerGroups = async (
     return [];
   }
 
-  const { id_nivel, id_tipo_grado } = groupRes.rows[0];
+  const { id_tipo_grado } = groupRes.rows[0];
   const peersRes = await (client as PoolClient).query<{ id_grupo: number }>(
     `SELECT id_grupo
      FROM grupos
      WHERE id_colegio = $1
-       AND id_nivel = $2
-       AND id_tipo_grado = $3
+       AND id_tipo_grado = $2
      ORDER BY id_grupo`,
-    [schoolId, id_nivel, id_tipo_grado]
+    [schoolId, id_tipo_grado]
   );
 
   return peersRes.rows.map((row: any) => Number(row.id_grupo));
