@@ -1014,7 +1014,6 @@ async function run(): Promise<void> {
       "solicitud_traslado",
       "traslado_aprobacion",
       // Academic structure
-      "contrato_docente",
       "detalle_grados",
       "grados",
       "grupos",

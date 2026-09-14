@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict EuHmSy5TYwnmGZDvQg4qLZvMTIQnZxYdpcVHNWd3RXtjGcFEqudTgNk1GK9c2eS
+\restrict DXZA4mEo6ArErd1DlnXNIib9PHevdTzsZQbX8Vl9bv9Uh8DiPkSUpW8olWsMedg
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -1235,41 +1235,6 @@ CREATE TABLE public.configuracion_plataforma (
 ALTER TABLE public.configuracion_plataforma OWNER TO postgres;
 
 --
--- Name: contrato_docente; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.contrato_docente (
-    id_contratodocente integer NOT NULL,
-    estado character varying(50) NOT NULL,
-    id_colegio integer NOT NULL
-);
-
-
-ALTER TABLE public.contrato_docente OWNER TO postgres;
-
---
--- Name: contrato_docente_id_contratodocente_seq; Type: SEQUENCE; Schema: public; Owner: postgres
---
-
-CREATE SEQUENCE public.contrato_docente_id_contratodocente_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER SEQUENCE public.contrato_docente_id_contratodocente_seq OWNER TO postgres;
-
---
--- Name: contrato_docente_id_contratodocente_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
---
-
-ALTER SEQUENCE public.contrato_docente_id_contratodocente_seq OWNED BY public.contrato_docente.id_contratodocente;
-
-
---
 -- Name: criterio_evaluacion; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -1562,7 +1527,6 @@ CREATE TABLE public.docente (
     id_docente integer NOT NULL,
     nombre character varying(255) NOT NULL,
     apellido character varying(255) NOT NULL,
-    id_contratodocente integer,
     id_colegio integer NOT NULL,
     id_usuario integer,
     estado character varying(20) DEFAULT 'ACTIVO'::character varying NOT NULL
@@ -1686,7 +1650,6 @@ CREATE TABLE public.estudiante (
     nombre character varying(100) NOT NULL,
     apellido character varying(100) NOT NULL,
     codigo character varying(20) NOT NULL,
-    id_nivel integer,
     id_colegio integer NOT NULL,
     id_usuario integer,
     estado public.estado_estudiante DEFAULT 'ACTIVO'::public.estado_estudiante,
@@ -3308,13 +3271,6 @@ ALTER TABLE ONLY public.configuracion_inscripcion ALTER COLUMN id_configuracion 
 
 
 --
--- Name: contrato_docente id_contratodocente; Type: DEFAULT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.contrato_docente ALTER COLUMN id_contratodocente SET DEFAULT nextval('public.contrato_docente_id_contratodocente_seq'::regclass);
-
-
---
 -- Name: criterio_evaluacion id_criterio; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -3723,14 +3679,6 @@ ALTER TABLE ONLY public.configuracion_inscripcion
 
 ALTER TABLE ONLY public.configuracion_plataforma
     ADD CONSTRAINT configuracion_plataforma_pkey PRIMARY KEY (clave);
-
-
---
--- Name: contrato_docente contrato_docente_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.contrato_docente
-    ADD CONSTRAINT contrato_docente_pkey PRIMARY KEY (id_contratodocente);
 
 
 --
@@ -4278,11 +4226,27 @@ ALTER TABLE ONLY public.dba
 
 
 --
+-- Name: detalle_padrefamilia uq_detalle_padrefamilia_padre_estudiante; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.detalle_padrefamilia
+    ADD CONSTRAINT uq_detalle_padrefamilia_padre_estudiante UNIQUE (id_padrefamilia, id_estudiante);
+
+
+--
 -- Name: escala_valoracion uq_escala_colegio_anio_nivel; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.escala_valoracion
     ADD CONSTRAINT uq_escala_colegio_anio_nivel UNIQUE (id_colegio, id_anio, nivel);
+
+
+--
+-- Name: estudiante uq_estudiante_colegio_codigo; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.estudiante
+    ADD CONSTRAINT uq_estudiante_colegio_codigo UNIQUE (id_colegio, codigo);
 
 
 --
@@ -4534,13 +4498,6 @@ CREATE INDEX idx_competencias_sync_uuid ON public.competencias USING btree (sync
 --
 
 CREATE INDEX idx_config_inscripcion_colegio ON public.configuracion_inscripcion USING btree (id_colegio);
-
-
---
--- Name: idx_contrato_docente_colegio; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX idx_contrato_docente_colegio ON public.contrato_docente USING btree (id_colegio);
 
 
 --
@@ -5304,14 +5261,6 @@ ALTER TABLE ONLY public.configuracion_inscripcion
 
 
 --
--- Name: contrato_docente contrato_docente_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.contrato_docente
-    ADD CONSTRAINT contrato_docente_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
-
-
---
 -- Name: criterio_evaluacion criterio_evaluacion_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -5437,14 +5386,6 @@ ALTER TABLE ONLY public.directivo
 
 ALTER TABLE ONLY public.docente
     ADD CONSTRAINT docente_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
-
-
---
--- Name: docente docente_id_contratodocente_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.docente
-    ADD CONSTRAINT docente_id_contratodocente_fkey FOREIGN KEY (id_contratodocente) REFERENCES public.contrato_docente(id_contratodocente);
 
 
 --
@@ -6090,5 +6031,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict EuHmSy5TYwnmGZDvQg4qLZvMTIQnZxYdpcVHNWd3RXtjGcFEqudTgNk1GK9c2eS
+\unrestrict DXZA4mEo6ArErd1DlnXNIib9PHevdTzsZQbX8Vl9bv9Uh8DiPkSUpW8olWsMedg
 

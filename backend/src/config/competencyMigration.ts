@@ -675,6 +675,13 @@ export const ensureCompetencySchema = async (): Promise<void> => {
       await client.query(refactorModule5Sql);
     }
 
+    // Ejecutar migración 059 (Refactorización Módulo 6: drop tabla obsoleta contrato_docente, normalización estudiante e integridad en actores)
+    const refactorModule6Path = path.join(__dirname, "../migrations/059_refactor_school_actors_module.sql");
+    if (fs.existsSync(refactorModule6Path)) {
+      const refactorModule6Sql = fs.readFileSync(refactorModule6Path, "utf8");
+      await client.query(refactorModule6Sql);
+    }
+
 
     // Backfill sync_uuid for existing competencies
     const unmigratedRes = await client.query(`

@@ -231,12 +231,6 @@ export interface ConfiguracionPlataforma {
   valor: string;
 }
 
-export interface ContratoDocente {
-  estado: string;
-  id_colegio: number;
-  id_contratodocente: Generated<number>;
-}
-
 export interface CriterioEvaluacion {
   descripcion: string;
   id_actividadmateria: number;
@@ -314,7 +308,6 @@ export interface Docente {
   apellido: string;
   estado: Generated<string>;
   id_colegio: number;
-  id_contratodocente: number | null;
   id_docente: Generated<number>;
   id_usuario: number | null;
   nombre: string;
@@ -352,7 +345,6 @@ export interface Estudiante {
   estado: Generated<EstadoEstudiante | null>;
   id_colegio: number;
   id_estudiante: Generated<number>;
-  id_nivel: number | null;
   id_usuario: number | null;
   motivo_estado: string | null;
   nombre: string;
@@ -796,7 +788,6 @@ export interface DB {
   competencias: Competencias;
   configuracion_inscripcion: ConfiguracionInscripcion;
   configuracion_plataforma: ConfiguracionPlataforma;
-  contrato_docente: ContratoDocente;
   criterio_evaluacion: CriterioEvaluacion;
   dba: Dba;
   dba_dimensiones_preescolar: DbaDimensionesPreescolar;
