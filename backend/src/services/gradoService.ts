@@ -5,8 +5,8 @@ export class GradoService {
   static async getAvailable(idColegio: number) {
     const rows = await db
       .selectFrom("grupos as g")
-      .leftJoin("nivel_escolar as ne", "ne.id_nivel", "g.id_nivel")
       .leftJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
+      .leftJoin("nivel_escolar as ne", "ne.id_nivel", "tg.id_nivel")
       .leftJoin("secciones as s", "s.id_seccion", "g.id_seccion")
       .leftJoin("jornada as j", "j.id_jornada", "g.id_jornada")
       .select([

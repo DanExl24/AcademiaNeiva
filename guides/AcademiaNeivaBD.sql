@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict lNTLD04WVF7TWmUR0fYowmAqNuCnUwTM7KMjHKYrHj6OgPchovfywzOhdrQKShT
+\restrict YB7tRQTwwvcOBfkzitSDtNXQNFh8Ls0G0W2rl0CaRzXUr3qpI51gjUHvgoPs5yQ
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -1371,8 +1371,6 @@ CREATE TABLE public.decision_promocion_directivo (
     id_anio_anterior integer NOT NULL,
     resultado_calculado public.resultado_consolidado_anual NOT NULL,
     decision_tomada public.decision_promocion_tipo NOT NULL,
-    id_grado_anterior integer,
-    id_grado_asignado integer,
     id_usuario_decision integer NOT NULL,
     fecha_decision timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
     observacion text,
@@ -1830,51 +1828,11 @@ ALTER SEQUENCE public.evidencias_dba_id_evidencia_dba_seq OWNED BY public.eviden
 
 
 --
--- Name: grados; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.grados (
-    id_grado integer NOT NULL,
-    nivel character varying(50) NOT NULL,
-    tipo_grado character varying(50) NOT NULL,
-    id_jornada integer NOT NULL,
-    id_colegio integer NOT NULL,
-    cupos_totales integer DEFAULT 30 NOT NULL,
-    seccion character varying(10) DEFAULT 'A'::character varying
-);
-
-
-ALTER TABLE public.grados OWNER TO postgres;
-
---
--- Name: grados_id_grado_seq; Type: SEQUENCE; Schema: public; Owner: postgres
---
-
-CREATE SEQUENCE public.grados_id_grado_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER SEQUENCE public.grados_id_grado_seq OWNER TO postgres;
-
---
--- Name: grados_id_grado_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
---
-
-ALTER SEQUENCE public.grados_id_grado_seq OWNED BY public.grados.id_grado;
-
-
---
 -- Name: grupos; Type: TABLE; Schema: public; Owner: postgres
 --
 
 CREATE TABLE public.grupos (
     id_grupo integer NOT NULL,
-    id_nivel integer NOT NULL,
     id_jornada integer NOT NULL,
     id_colegio integer NOT NULL,
     id_seccion integer NOT NULL,
@@ -3480,13 +3438,6 @@ ALTER TABLE ONLY public.evidencias_dba ALTER COLUMN id_evidencia_dba SET DEFAULT
 
 
 --
--- Name: grados id_grado; Type: DEFAULT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.grados ALTER COLUMN id_grado SET DEFAULT nextval('public.grados_id_grado_seq'::regclass);
-
-
---
 -- Name: grupos id_grupo; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -3964,14 +3915,6 @@ ALTER TABLE ONLY public.evidencia_aprendizaje
 
 ALTER TABLE ONLY public.evidencias_dba
     ADD CONSTRAINT evidencias_dba_pkey PRIMARY KEY (id_evidencia_dba);
-
-
---
--- Name: grados grados_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.grados
-    ADD CONSTRAINT grados_pkey PRIMARY KEY (id_grado);
 
 
 --
@@ -5397,22 +5340,6 @@ ALTER TABLE ONLY public.decision_promocion_directivo
 
 
 --
--- Name: decision_promocion_directivo decision_promocion_directivo_id_grado_anterior_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.decision_promocion_directivo
-    ADD CONSTRAINT decision_promocion_directivo_id_grado_anterior_fkey FOREIGN KEY (id_grado_anterior) REFERENCES public.grados(id_grado) ON DELETE SET NULL;
-
-
---
--- Name: decision_promocion_directivo decision_promocion_directivo_id_grado_asignado_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.decision_promocion_directivo
-    ADD CONSTRAINT decision_promocion_directivo_id_grado_asignado_fkey FOREIGN KEY (id_grado_asignado) REFERENCES public.grados(id_grado) ON DELETE SET NULL;
-
-
---
 -- Name: desempeno desempeno_id_actividadmateria_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -5634,14 +5561,6 @@ ALTER TABLE ONLY public.grupos
 
 ALTER TABLE ONLY public.grupos
     ADD CONSTRAINT fk_grupo_jornada FOREIGN KEY (id_jornada) REFERENCES public.jornada(id_jornada);
-
-
---
--- Name: grupos fk_grupo_nivel; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.grupos
-    ADD CONSTRAINT fk_grupo_nivel FOREIGN KEY (id_nivel) REFERENCES public.nivel_escolar(id_nivel);
 
 
 --
@@ -6151,5 +6070,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict lNTLD04WVF7TWmUR0fYowmAqNuCnUwTM7KMjHKYrHj6OgPchovfywzOhdrQKShT
+\unrestrict YB7tRQTwwvcOBfkzitSDtNXQNFh8Ls0G0W2rl0CaRzXUr3qpI51gjUHvgoPs5yQ
 

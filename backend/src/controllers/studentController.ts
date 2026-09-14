@@ -1082,8 +1082,8 @@ export const getStudentSummary = async (req: Request, res: Response) => {
     const decisionsRes = await db
       .selectFrom("decision_promocion_directivo as dpd")
       .innerJoin("anio_lectivo as al", "dpd.id_anio_anterior", "al.id_anio")
-      .leftJoin("tipo_grado as tg_ant", "dpd.id_grado_anterior", "tg_ant.id_tipo_grado")
-      .leftJoin("tipo_grado as tg_asig", "dpd.id_grado_asignado", "tg_asig.id_tipo_grado")
+      .leftJoin("tipo_grado as tg_ant", "dpd.id_tipo_grado_anterior", "tg_ant.id_tipo_grado")
+      .leftJoin("tipo_grado as tg_asig", "dpd.id_tipo_grado_asignado", "tg_asig.id_tipo_grado")
       .leftJoin("usuario as u", "dpd.id_usuario_decision", "u.id_usuario")
       .select([
         "dpd.id_decision",
@@ -1415,8 +1415,8 @@ export const getParentStudentEnrollment = async (req: Request, res: Response) =>
       .leftJoin("grupos as g", "m.id_grupo", "g.id_grupo")
       .leftJoin("colegio as col", "col.id_colegio", "m.id_colegio")
       .leftJoin("anio_lectivo as al", "al.id_anio", "m.id_anio")
-      .leftJoin("nivel_escolar as ne", "g.id_nivel", "ne.id_nivel")
       .leftJoin("tipo_grado as tg", "g.id_tipo_grado", "tg.id_tipo_grado")
+      .leftJoin("nivel_escolar as ne", "tg.id_nivel", "ne.id_nivel")
       .leftJoin("secciones as s", "g.id_seccion", "s.id_seccion")
       .leftJoin("jornada as j", "g.id_jornada", "j.id_jornada")
       .leftJoin("estudiante as e", "e.id_estudiante", "m.id_estudiante")

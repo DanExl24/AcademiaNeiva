@@ -845,8 +845,8 @@ export const getTeacherManagementData = async (req: Request, res: Response): Pro
         .execute(),
       db
         .selectFrom("grupos as g")
-        .innerJoin("nivel_escolar as ne", "ne.id_nivel", "g.id_nivel")
         .innerJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
+        .innerJoin("nivel_escolar as ne", "ne.id_nivel", "tg.id_nivel")
         .innerJoin("secciones as s", "s.id_seccion", "g.id_seccion")
         .innerJoin("jornada as j", "j.id_jornada", "g.id_jornada")
         .select([
@@ -868,8 +868,8 @@ export const getTeacherManagementData = async (req: Request, res: Response): Pro
         .innerJoin("docente as d", "d.id_docente", "dg.id_docente")
         .innerJoin("materias as m", "m.id_materia", "dg.id_materia")
         .innerJoin("grupos as g", "g.id_grupo", "dg.id_grupo")
-        .innerJoin("nivel_escolar as ne", "ne.id_nivel", "g.id_nivel")
         .innerJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
+        .innerJoin("nivel_escolar as ne", "ne.id_nivel", "tg.id_nivel")
         .innerJoin("secciones as s", "s.id_seccion", "g.id_seccion")
         .innerJoin("jornada as j", "j.id_jornada", "g.id_jornada")
         .select([
@@ -958,8 +958,8 @@ export const assignTeacherCourseSubject = async (req: Request, res: Response): P
       .innerJoin("colegio as c", "c.id_colegio", "d.id_colegio")
       .innerJoin("materias as m", (join) => join.on("m.id_materia", "=", subjectId))
       .innerJoin("grupos as g", (join) => join.on("g.id_grupo", "=", groupId))
-      .innerJoin("nivel_escolar as ne", "ne.id_nivel", "g.id_nivel")
       .innerJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
+      .innerJoin("nivel_escolar as ne", "ne.id_nivel", "tg.id_nivel")
       .innerJoin("secciones as s", "s.id_seccion", "g.id_seccion")
       .innerJoin("jornada as j", "j.id_jornada", "g.id_jornada")
       .leftJoin("usuario_colegio_email as uce", (join) =>
@@ -1170,8 +1170,8 @@ export const deleteTeacherAssignment = async (req: Request, res: Response): Prom
       .innerJoin("colegio as c", "c.id_colegio", "dg.id_colegio")
       .innerJoin("materias as m", "m.id_materia", "dg.id_materia")
       .innerJoin("grupos as g", "g.id_grupo", "dg.id_grupo")
-      .innerJoin("nivel_escolar as ne", "ne.id_nivel", "g.id_nivel")
       .innerJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
+      .innerJoin("nivel_escolar as ne", "ne.id_nivel", "tg.id_nivel")
       .innerJoin("secciones as s", "s.id_seccion", "g.id_seccion")
       .innerJoin("jornada as j", "j.id_jornada", "g.id_jornada")
       .leftJoin("usuario_colegio_email as uce", (join) =>

@@ -123,14 +123,14 @@ async function getMaxGradeIdForSchool(schoolId: number): Promise<number | null> 
     const maxGradeFromGroups = await db
       .selectFrom("grupos as g")
       .innerJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
-      .innerJoin("nivel_escolar as n", "n.id_nivel", "g.id_nivel")
+      .innerJoin("nivel_escolar as n", "n.id_nivel", "tg.id_nivel")
       .select([
         "tg.id_tipo_grado",
         "tg.nombre as grado_nombre",
         "n.nombre as nivel_nombre"
       ])
       .where("g.id_colegio", "=", schoolId)
-      .orderBy("g.id_nivel", "desc")
+      .orderBy("tg.id_nivel", "desc")
       .orderBy("tg.id_tipo_grado", "desc")
       .executeTakeFirst();
 
@@ -1281,8 +1281,8 @@ export const recordDirectiveDecision = async (req: Request, res: Response): Prom
         .set({
           resultado_calculado: calculatedResult as any,
           decision_tomada: decisionTaken as any,
-          id_grado_anterior: previousGradeId || null,
-          id_grado_asignado: finalAssignedGradeId,
+          id_tipo_grado_anterior: previousGradeId || null,
+          id_tipo_grado_asignado: finalAssignedGradeId,
           id_usuario_decision: userId,
           fecha_decision: sql`CURRENT_TIMESTAMP`,
           observacion: observation || (autoGraduated ? "Estudiante promovido y graduado exitosamente del ciclo escolar." : null)
@@ -1299,8 +1299,8 @@ export const recordDirectiveDecision = async (req: Request, res: Response): Prom
           id_anio_anterior: previousYearId,
           resultado_calculado: calculatedResult as any,
           decision_tomada: decisionTaken as any,
-          id_grado_anterior: previousGradeId || null,
-          id_grado_asignado: finalAssignedGradeId,
+          id_tipo_grado_anterior: previousGradeId || null,
+          id_tipo_grado_asignado: finalAssignedGradeId,
           id_usuario_decision: userId,
           observacion: observation || (autoGraduated ? "Estudiante promovido y graduado exitosamente del ciclo escolar." : null)
         })

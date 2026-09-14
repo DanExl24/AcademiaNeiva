@@ -139,11 +139,11 @@ export class MatriculaService {
           const grupoInfo = await trx
             .selectFrom('grupos as g')
             .innerJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
-            .select(['g.id_nivel as g_nivel', 'tg.id_nivel as tg_nivel'])
+            .select(['tg.id_nivel as tg_nivel'])
             .where('g.id_grupo', '=', Number(data.grade))
             .executeTakeFirst();
 
-          resolvedNivelId = grupoInfo?.g_nivel || grupoInfo?.tg_nivel || null;
+          resolvedNivelId = grupoInfo?.tg_nivel || null;
         }
 
         await trx
@@ -202,11 +202,11 @@ export class MatriculaService {
         const grupoInfo = await trx
           .selectFrom('grupos as g')
           .innerJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
-          .select(['g.id_nivel as g_nivel', 'tg.id_nivel as tg_nivel'])
+          .select(['tg.id_nivel as tg_nivel'])
           .where('g.id_grupo', '=', Number(data.grade))
           .executeTakeFirst();
 
-        const resolvedNivelId = grupoInfo?.g_nivel || grupoInfo?.tg_nivel || null;
+        const resolvedNivelId = grupoInfo?.tg_nivel || null;
 
         const matRes = await trx
           .insertInto("matricula")
@@ -462,7 +462,7 @@ export class MatriculaService {
         .selectFrom('grupos as g')
         .innerJoin('secciones as s', 'g.id_seccion', 's.id_seccion')
         .innerJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
-        .innerJoin('nivel_escolar as ne', 'g.id_nivel', 'ne.id_nivel')
+        .innerJoin('nivel_escolar as ne', 'tg.id_nivel', 'ne.id_nivel')
         .select([
           'g.id_grupo as id_grado',
           's.nombre as seccion',
@@ -713,7 +713,7 @@ export class MatriculaService {
             )
             .leftJoin('grupos as g', 'm.id_grupo', 'g.id_grupo')
             .leftJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
-            .leftJoin('nivel_escolar as ne', 'g.id_nivel', 'ne.id_nivel')
+            .leftJoin('nivel_escolar as ne', 'tg.id_nivel', 'ne.id_nivel')
             .select([
               'e.id_estudiante',
               'e.nombre',
@@ -1024,8 +1024,8 @@ export class MatriculaService {
     const mat = await db
       .selectFrom('matricula as m')
       .leftJoin('grupos as g', 'm.id_grupo', 'g.id_grupo')
-      .leftJoin('nivel_escolar as ne', 'g.id_nivel', 'ne.id_nivel')
       .leftJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
+      .leftJoin('nivel_escolar as ne', 'tg.id_nivel', 'ne.id_nivel')
       .leftJoin('jornada as j', 'g.id_jornada', 'j.id_jornada')
       .select([
         'm.id_matricula',

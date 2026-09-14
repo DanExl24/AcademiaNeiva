@@ -459,7 +459,7 @@ export const createActivity = async (req: Request, res: Response): Promise<void>
             eb
               .selectFrom("grupos as g1")
               .innerJoin("grupos as g2", (join) =>
-                join.onRef("g2.id_nivel", "=", "g1.id_nivel").onRef("g2.id_tipo_grado", "=", "g1.id_tipo_grado")
+                join.onRef("g2.id_tipo_grado", "=", "g1.id_tipo_grado")
               )
               .where("g1.id_grupo", "=", id_grupo)
               .where("g1.id_colegio", "=", finalIdColegio)
@@ -635,7 +635,7 @@ export const updateActivity = async (req: Request, res: Response): Promise<void>
             eb
               .selectFrom("grupos as g1")
               .innerJoin("grupos as g2", (join) =>
-                join.onRef("g2.id_nivel", "=", "g1.id_nivel").onRef("g2.id_tipo_grado", "=", "g1.id_tipo_grado")
+                join.onRef("g2.id_tipo_grado", "=", "g1.id_tipo_grado")
               )
               .where("g1.id_grupo", "=", id_grupo)
               .where("g1.id_colegio", "=", currentAct.id_colegio)
@@ -1570,7 +1570,7 @@ export const closeTeacherSubject = async (req: Request, res: Response): Promise<
         eb
           .selectFrom("grupos as g1")
           .innerJoin("grupos as g2", (join) =>
-            join.onRef("g2.id_nivel", "=", "g1.id_nivel").onRef("g2.id_tipo_grado", "=", "g1.id_tipo_grado")
+            join.onRef("g2.id_tipo_grado", "=", "g1.id_tipo_grado")
           )
           .where("g1.id_grupo", "=", id_grupo)
           .where("g1.id_colegio", "=", id_colegio)
@@ -1799,7 +1799,7 @@ export const getCourseEvidenciasDba = async (req: Request, res: Response): Promi
         eb
           .selectFrom("grupos as g1")
           .innerJoin("grupos as g2", (join) =>
-            join.onRef("g2.id_nivel", "=", "g1.id_nivel").onRef("g2.id_tipo_grado", "=", "g1.id_tipo_grado")
+            join.onRef("g2.id_tipo_grado", "=", "g1.id_tipo_grado")
           )
           .where("g1.id_grupo", "=", gradeId)
           .where("g1.id_colegio", "=", schoolId)
@@ -1904,7 +1904,7 @@ export const getCourseEvidenciasDba = async (req: Request, res: Response): Promi
           eb
             .selectFrom("grupos as g1")
             .innerJoin("grupos as g2", (join) =>
-              join.onRef("g2.id_nivel", "=", "g1.id_nivel").onRef("g2.id_tipo_grado", "=", "g1.id_tipo_grado")
+              join.onRef("g2.id_tipo_grado", "=", "g1.id_tipo_grado")
             )
             .where("g1.id_grupo", "=", gradeId)
             .where("g1.id_colegio", "=", schoolId)

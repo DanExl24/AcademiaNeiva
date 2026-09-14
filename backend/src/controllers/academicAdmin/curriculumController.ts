@@ -289,8 +289,8 @@ export const deleteSubject = async (req: Request, res: Response): Promise<void> 
         const assignmentsBackup = await trx
           .selectFrom("detalle_grados as dg")
           .innerJoin("grupos as gr", "gr.id_grupo", "dg.id_grupo")
-          .innerJoin("nivel_escolar as n", "n.id_nivel", "gr.id_nivel")
           .innerJoin("tipo_grado as tg", "tg.id_tipo_grado", "gr.id_tipo_grado")
+          .innerJoin("nivel_escolar as n", "n.id_nivel", "tg.id_nivel")
           .innerJoin("secciones as s", "s.id_seccion", "gr.id_seccion")
           .innerJoin("docente as d", "d.id_docente", "dg.id_docente")
           .select([
@@ -630,8 +630,8 @@ export const getSubjectCurriculumDetails = async (req: Request, res: Response): 
       .selectFrom("detalle_grados as dg")
       .innerJoin("docente as d", "d.id_docente", "dg.id_docente")
       .innerJoin("grupos as g", "g.id_grupo", "dg.id_grupo")
-      .innerJoin("nivel_escolar as ne", "ne.id_nivel", "g.id_nivel")
       .innerJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
+      .innerJoin("nivel_escolar as ne", "ne.id_nivel", "tg.id_nivel")
       .innerJoin("secciones as sec", "sec.id_seccion", "g.id_seccion")
       .innerJoin("jornada as j", "j.id_jornada", "g.id_jornada")
       .select([
@@ -659,8 +659,8 @@ export const getSubjectCurriculumDetails = async (req: Request, res: Response): 
     const comps = await db
       .selectFrom("competencias as c")
       .innerJoin("grupos as g", "g.id_grupo", "c.id_grupo")
-      .innerJoin("nivel_escolar as ne", "ne.id_nivel", "g.id_nivel")
       .innerJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
+      .innerJoin("nivel_escolar as ne", "ne.id_nivel", "tg.id_nivel")
       .innerJoin("secciones as sec", "sec.id_seccion", "g.id_seccion")
       .innerJoin("jornada as j", "j.id_jornada", "g.id_jornada")
       .innerJoin("periodo_academico as p", "p.id_periodo", "c.id_periodo")
@@ -738,8 +738,8 @@ export const getSubjectCurriculumDetails = async (req: Request, res: Response): 
     // 6. School groups
     const groups = await db
       .selectFrom("grupos as g")
-      .innerJoin("nivel_escolar as ne", "ne.id_nivel", "g.id_nivel")
       .innerJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
+      .innerJoin("nivel_escolar as ne", "ne.id_nivel", "tg.id_nivel")
       .innerJoin("secciones as sec", "sec.id_seccion", "g.id_seccion")
       .innerJoin("jornada as j", "j.id_jornada", "g.id_jornada")
       .select([
@@ -968,7 +968,7 @@ export const upsertCompetencyByAdmin = async (req: Request, res: Response): Prom
                 qb
                   .selectFrom("grupos as g1")
                   .innerJoin("grupos as g2", (join) =>
-                    join.onRef("g2.id_nivel", "=", "g1.id_nivel").onRef("g2.id_tipo_grado", "=", "g1.id_tipo_grado")
+                    join.onRef("g2.id_tipo_grado", "=", "g1.id_tipo_grado")
                   )
                   .select("g2.id_grupo")
                   .where("g1.id_grupo", "=", createdComp.id_grupo)
@@ -1233,8 +1233,8 @@ export const checkCompetenciaUsage = async (req: Request, res: Response): Promis
       .leftJoin("detalle_grados as dg", "dg.id_detallegrado", "am.id_detallegrado")
       .leftJoin("materias as m", "m.id_materia", "c.id_materia")
       .leftJoin("grupos as g", "g.id_grupo", "c.id_grupo")
-      .leftJoin("nivel_escolar as ne", "ne.id_nivel", "g.id_nivel")
       .leftJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
+      .leftJoin("nivel_escolar as ne", "ne.id_nivel", "tg.id_nivel")
       .leftJoin("secciones as s", "s.id_seccion", "g.id_seccion")
       .leftJoin("docente as d", "d.id_docente", "dg.id_docente")
       .leftJoin("usuario as u", "u.id_usuario", "d.id_usuario")
@@ -1720,9 +1720,7 @@ export const getDbaPlaneacionDisponibles = async (req: Request, res: Response): 
             eb
               .selectFrom("grupos as g1")
               .innerJoin("grupos as g2", (join) =>
-                join
-                  .onRef("g2.id_nivel", "=", "g1.id_nivel")
-                  .onRef("g2.id_tipo_grado", "=", "g1.id_tipo_grado")
+                join.onRef("g2.id_tipo_grado", "=", "g1.id_tipo_grado")
               )
               .select("g2.id_grupo")
               .where("g1.id_grupo", "=", groupId)
@@ -1771,9 +1769,7 @@ export const getDbaPlaneacionDisponibles = async (req: Request, res: Response): 
             eb
               .selectFrom("grupos as g1")
               .innerJoin("grupos as g2", (join) =>
-                join
-                  .onRef("g2.id_nivel", "=", "g1.id_nivel")
-                  .onRef("g2.id_tipo_grado", "=", "g1.id_tipo_grado")
+                join.onRef("g2.id_tipo_grado", "=", "g1.id_tipo_grado")
               )
               .select("g2.id_grupo")
               .where("g1.id_grupo", "=", groupId)
@@ -1887,9 +1883,7 @@ export const vincularEvidenciasDbaACompetencia = async (req: Request, res: Respo
       const peerGroups = await trx
         .selectFrom("grupos as g1")
         .innerJoin("grupos as g2", (join) =>
-          join
-            .onRef("g2.id_nivel", "=", "g1.id_nivel")
-            .onRef("g2.id_tipo_grado", "=", "g1.id_tipo_grado")
+          join.onRef("g2.id_tipo_grado", "=", "g1.id_tipo_grado")
         )
         .select("g2.id_grupo")
         .where("g1.id_grupo", "=", comp.id_grupo)

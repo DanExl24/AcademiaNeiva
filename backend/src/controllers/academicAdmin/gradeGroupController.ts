@@ -244,7 +244,6 @@ export const createGroup = async (req: Request, res: Response): Promise<void> =>
         .selectFrom("grupos")
         .select("id_grupo")
         .where("id_colegio", "=", schoolId)
-        .where("id_nivel", "=", idNivel)
         .where("id_jornada", "=", idJornada)
         .where("id_seccion", "=", idSeccion)
         .where("id_tipo_grado", "=", idTipoGrado)
@@ -257,7 +256,6 @@ export const createGroup = async (req: Request, res: Response): Promise<void> =>
       return await trx
         .insertInto("grupos")
         .values({
-          id_nivel: idNivel,
           id_jornada: idJornada,
           id_colegio: schoolId,
           id_seccion: idSeccion,
@@ -437,8 +435,8 @@ export const getGradeManagementData = async (req: Request, res: Response): Promi
 
     const groupsQuery = db
       .selectFrom("grupos as g")
-      .innerJoin("nivel_escolar as ne", "ne.id_nivel", "g.id_nivel")
       .innerJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
+      .innerJoin("nivel_escolar as ne", "ne.id_nivel", "tg.id_nivel")
       .innerJoin("jornada as j", "j.id_jornada", "g.id_jornada")
       .innerJoin("secciones as s", "s.id_seccion", "g.id_seccion")
       .leftJoin("matricula as m", (join) => {
@@ -466,7 +464,7 @@ export const getGradeManagementData = async (req: Request, res: Response): Promi
     const groupsPromise = groupsQuery
       .select([
         "g.id_grupo",
-        "g.id_nivel",
+        "tg.id_nivel",
         "g.id_jornada",
         "g.id_seccion",
         "g.id_tipo_grado",
@@ -482,7 +480,7 @@ export const getGradeManagementData = async (req: Request, res: Response): Promi
       .where("g.id_colegio", "=", schoolId)
       .groupBy([
         "g.id_grupo",
-        "g.id_nivel",
+        "tg.id_nivel",
         "g.id_jornada",
         "g.id_seccion",
         "g.id_tipo_grado",
@@ -534,7 +532,7 @@ export const getGroupMembers = async (req: Request, res: Response): Promise<void
     const group = await db
       .selectFrom("grupos as g")
       .innerJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
-      .innerJoin("nivel_escolar as ne", "ne.id_nivel", "g.id_nivel")
+      .innerJoin("nivel_escolar as ne", "ne.id_nivel", "tg.id_nivel")
       .innerJoin("jornada as j", "j.id_jornada", "g.id_jornada")
       .innerJoin("secciones as s", "s.id_seccion", "g.id_seccion")
       .select([
@@ -951,8 +949,8 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
             .selectFrom("detalle_grados as dg")
             .innerJoin("materias as m", "m.id_materia", "dg.id_materia")
             .innerJoin("grupos as g", "g.id_grupo", "dg.id_grupo")
-            .innerJoin("nivel_escolar as ne", "ne.id_nivel", "g.id_nivel")
             .innerJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
+            .innerJoin("nivel_escolar as ne", "ne.id_nivel", "tg.id_nivel")
             .innerJoin("secciones as s", "s.id_seccion", "g.id_seccion")
             .innerJoin("jornada as j", "j.id_jornada", "g.id_jornada")
             .select([

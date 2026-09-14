@@ -270,8 +270,6 @@ export interface DecisionPromocionDirectivo {
   id_colegio: number;
   id_decision: Generated<number>;
   id_estudiante: number;
-  id_grado_anterior: number | null;
-  id_grado_asignado: number | null;
   id_tipo_grado_anterior: number | null;
   id_tipo_grado_asignado: number | null;
   id_usuario_decision: number;
@@ -384,23 +382,12 @@ export interface EvidenciasDba {
   orden: Generated<number>;
 }
 
-export interface Grados {
-  cupos_totales: Generated<number>;
-  id_colegio: number;
-  id_grado: Generated<number>;
-  id_jornada: number;
-  nivel: string;
-  seccion: Generated<string | null>;
-  tipo_grado: string;
-}
-
 export interface Grupos {
   cupos_totales: Generated<number>;
   id_colegio: number;
   id_docente: number | null;
   id_grupo: Generated<number>;
   id_jornada: number;
-  id_nivel: number;
   id_seccion: number;
   id_tipo_grado: number;
 }
@@ -829,7 +816,6 @@ export interface DB {
   estudiante: Estudiante;
   evidencia_aprendizaje: EvidenciaAprendizaje;
   evidencias_dba: EvidenciasDba;
-  grados: Grados;
   grupos: Grupos;
   jornada: Jornada;
   legacy_grados_archive: LegacyGradosArchive;

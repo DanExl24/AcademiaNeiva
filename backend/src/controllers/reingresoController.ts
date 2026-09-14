@@ -630,7 +630,7 @@ export const getReingresoGroups = async (req: Request, res: Response): Promise<v
       .select([
         "g.id_grupo",
         "g.id_tipo_grado",
-        "g.id_nivel",
+        "tg.id_nivel",
         "tg.nombre as grado_nombre",
         "s.nombre as seccion_nombre",
         sql<string>`CONCAT(tg.nombre, ' - ', s.nombre)`.as("nombre"),
@@ -641,7 +641,7 @@ export const getReingresoGroups = async (req: Request, res: Response): Promise<v
         ),
       ])
       .where("g.id_colegio", "=", schoolId)
-      .where("g.id_nivel", "=", Number(nivelId))
+      .where("tg.id_nivel", "=", Number(nivelId))
       .orderBy("tg.id_tipo_grado", "asc")
       .orderBy("s.nombre", "asc")
       .execute();

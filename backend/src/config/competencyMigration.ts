@@ -647,6 +647,13 @@ export const ensureCompetencySchema = async (): Promise<void> => {
       await client.query(configAnioSql);
     }
 
+    // Ejecutar migración 055 (Drop tabla grados y normalización 3NF en grupos eliminando id_nivel)
+    const dropGradosMigrationPath = path.join(__dirname, "../migrations/055_drop_grados_and_normalize_grupos_3nf.sql");
+    if (fs.existsSync(dropGradosMigrationPath)) {
+      const dropGradosSql = fs.readFileSync(dropGradosMigrationPath, "utf8");
+      await client.query(dropGradosSql);
+    }
+
 
     // Backfill sync_uuid for existing competencies
     const unmigratedRes = await client.query(`

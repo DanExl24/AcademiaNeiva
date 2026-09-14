@@ -525,7 +525,7 @@ export class TrasladoService {
       .leftJoin('secciones as s', 'g.id_seccion', 's.id_seccion')
       .leftJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
       .leftJoin('jornada as j', 'g.id_jornada', 'j.id_jornada')
-      .leftJoin('nivel_escolar as ne', 'g.id_nivel', 'ne.id_nivel')
+      .leftJoin('nivel_escolar as ne', 'tg.id_nivel', 'ne.id_nivel')
       .select([
         'g.id_grupo',
         'g.id_tipo_grado',

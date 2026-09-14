@@ -82,10 +82,10 @@ export const getStudentBoletin = async (req: Request, res: Response) => {
           .on("m.id_anio", "=", idAnio)
       )
       .leftJoin("grupos as gr", "gr.id_grupo", "m.id_grupo")
-      .leftJoin("jornada as j", "j.id_jornada", "gr.id_jornada")
-      .leftJoin("nivel_escolar as ne", "ne.id_nivel", "gr.id_nivel")
-      .leftJoin("secciones as s", "s.id_seccion", "gr.id_seccion")
       .leftJoin("tipo_grado as tg", "tg.id_tipo_grado", "gr.id_tipo_grado")
+      .leftJoin("nivel_escolar as ne", "ne.id_nivel", "tg.id_nivel")
+      .leftJoin("jornada as j", "j.id_jornada", "gr.id_jornada")
+      .leftJoin("secciones as s", "s.id_seccion", "gr.id_seccion")
       .leftJoin("anio_lectivo as al", (join) =>
         join
           .onRef("al.id_colegio", "=", "c.id_colegio")
@@ -474,10 +474,10 @@ export const getStudentTransferPartialReport = async (req: Request, res: Respons
       .leftJoin("usuario as u", "u.id_usuario", "e.id_usuario")
       .innerJoin("colegio as c", "c.id_colegio", "e.id_colegio")
       .leftJoin("grupos as gr", "gr.id_grupo", "m.id_grupo")
-      .leftJoin("jornada as j", "j.id_jornada", "gr.id_jornada")
-      .leftJoin("nivel_escolar as ne", "ne.id_nivel", "gr.id_nivel")
-      .leftJoin("secciones as s", "s.id_seccion", "gr.id_seccion")
       .leftJoin("tipo_grado as tg", "tg.id_tipo_grado", "gr.id_tipo_grado")
+      .leftJoin("nivel_escolar as ne", "ne.id_nivel", "tg.id_nivel")
+      .leftJoin("jornada as j", "j.id_jornada", "gr.id_jornada")
+      .leftJoin("secciones as s", "s.id_seccion", "gr.id_seccion")
       .leftJoin("anio_lectivo as al", "al.id_anio", "m.id_anio")
       .select([
         "e.id_estudiante",
@@ -518,10 +518,10 @@ export const getStudentTransferPartialReport = async (req: Request, res: Respons
         .leftJoin("usuario as u", "u.id_usuario", "e.id_usuario")
         .innerJoin("colegio as c", "c.id_colegio", "e.id_colegio")
         .leftJoin("grupos as gr", "gr.id_grupo", "m.id_grupo")
-        .leftJoin("jornada as j", "j.id_jornada", "gr.id_jornada")
-        .leftJoin("nivel_escolar as ne", "ne.id_nivel", "gr.id_nivel")
-        .leftJoin("secciones as s", "s.id_seccion", "gr.id_seccion")
         .leftJoin("tipo_grado as tg", "tg.id_tipo_grado", "gr.id_tipo_grado")
+        .leftJoin("nivel_escolar as ne", "ne.id_nivel", "tg.id_nivel")
+        .leftJoin("jornada as j", "j.id_jornada", "gr.id_jornada")
+        .leftJoin("secciones as s", "s.id_seccion", "gr.id_seccion")
         .leftJoin("anio_lectivo as al", "al.id_anio", "m.id_anio")
         .select([
           "e.id_estudiante",
