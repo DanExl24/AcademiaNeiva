@@ -345,17 +345,7 @@ export const deleteSubject = async (req: Request, res: Response): Promise<void> 
           )
           .execute();
 
-        // 3. desempeno
-        await trx
-          .deleteFrom("desempeno")
-          .where("id_actividadmateria", "in", (eb) =>
-            eb
-              .selectFrom("actividad_materia as aa")
-              .innerJoin("detalle_grados as dg", "dg.id_detallegrado", "aa.id_detallegrado")
-              .select("aa.id_actividadmateria")
-              .where("dg.id_materia", "=", subjectId)
-          )
-          .execute();
+
 
         // 4. criterio_evaluacion
         await trx

@@ -628,7 +628,6 @@ export const deleteTeacher = async (req: Request, res: Response): Promise<void> 
 
         if (actividadIds.length > 0) {
           await trx.deleteFrom("notas_actividad").where("id_actividadmateria", "in", actividadIds).execute();
-          await trx.deleteFrom("desempeno").where("id_actividadmateria", "in", actividadIds).execute();
           await trx.deleteFrom("criterio_evaluacion").where("id_actividadmateria", "in", actividadIds).execute();
           await trx.deleteFrom("actividad_evidencia_dba").where("id_actividadmateria", "in", actividadIds).execute();
         }

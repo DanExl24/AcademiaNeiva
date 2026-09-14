@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict sOvJGehyoxNtyzRjBswXdycn1Fj0CRc2CLWK5E4EY8uofVlmzZUosmE4SeqcML5
+\restrict EuHmSy5TYwnmGZDvQg4qLZvMTIQnZxYdpcVHNWd3RXtjGcFEqudTgNk1GK9c2eS
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -806,8 +806,8 @@ ALTER TABLE public.actividad_evidencia_dba OWNER TO postgres;
 
 CREATE TABLE public.actividad_materia (
     id_actividadmateria integer NOT NULL,
-    id_detallegrado integer,
-    id_periodo integer,
+    id_detallegrado integer NOT NULL,
+    id_periodo integer NOT NULL,
     nombre character varying(255) NOT NULL,
     porcentaje numeric(5,2) NOT NULL,
     id_colegio integer NOT NULL,
@@ -817,7 +817,8 @@ CREATE TABLE public.actividad_materia (
     motivo_extra character varying(100) DEFAULT NULL::character varying,
     justificacion_extra text,
     id_docente_creador integer,
-    CONSTRAINT chk_actividad_pct CHECK (((porcentaje > 0.00) AND (porcentaje <= 100.00)))
+    CONSTRAINT chk_actividad_pct CHECK (((porcentaje > 0.00) AND (porcentaje <= 100.00))),
+    CONSTRAINT chk_actividad_porcentaje CHECK (((porcentaje > (0)::numeric) AND (porcentaje <= (100)::numeric)))
 );
 
 
@@ -1279,7 +1280,8 @@ CREATE TABLE public.criterio_evaluacion (
     descripcion text NOT NULL,
     porcentaje numeric(5,2) NOT NULL,
     id_colegio integer NOT NULL,
-    CONSTRAINT chk_criterio_pct CHECK (((porcentaje > 0.00) AND (porcentaje <= 100.00)))
+    CONSTRAINT chk_criterio_pct CHECK (((porcentaje > 0.00) AND (porcentaje <= 100.00))),
+    CONSTRAINT chk_criterio_porcentaje CHECK (((porcentaje > (0)::numeric) AND (porcentaje <= (100)::numeric)))
 );
 
 
@@ -1401,42 +1403,6 @@ ALTER SEQUENCE public.decision_promocion_directivo_id_decision_seq OWNER TO post
 --
 
 ALTER SEQUENCE public.decision_promocion_directivo_id_decision_seq OWNED BY public.decision_promocion_directivo.id_decision;
-
-
---
--- Name: desempeno; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.desempeno (
-    id_desempeno integer NOT NULL,
-    descripcion text NOT NULL,
-    id_actividadmateria integer NOT NULL,
-    id_colegio integer NOT NULL
-);
-
-
-ALTER TABLE public.desempeno OWNER TO postgres;
-
---
--- Name: desempeno_id_desempeno_seq; Type: SEQUENCE; Schema: public; Owner: postgres
---
-
-CREATE SEQUENCE public.desempeno_id_desempeno_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER SEQUENCE public.desempeno_id_desempeno_seq OWNER TO postgres;
-
---
--- Name: desempeno_id_desempeno_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
---
-
-ALTER SEQUENCE public.desempeno_id_desempeno_seq OWNED BY public.desempeno.id_desempeno;
 
 
 --
@@ -2100,6 +2066,7 @@ CREATE TABLE public.notas_actividad (
     id_escalavaloracion integer NOT NULL,
     nota numeric(5,2),
     id_colegio integer NOT NULL,
+    CONSTRAINT chk_nota_actividad_rango CHECK (((nota IS NULL) OR (nota >= (0)::numeric))),
     CONSTRAINT chk_nota_o_escala_obligatoria CHECK (((nota IS NOT NULL) OR (id_escalavaloracion IS NOT NULL))),
     CONSTRAINT chk_nota_valida CHECK (((nota IS NULL) OR ((nota >= 0.00) AND (nota <= 100.00))))
 );
@@ -2568,7 +2535,8 @@ CREATE TABLE public.resultado_academico (
     fecha_cierre timestamp with time zone NOT NULL,
     id_docente integer NOT NULL,
     observacion text,
-    CONSTRAINT chk_promedio_valido CHECK (((promedio >= 0.00) AND (promedio <= 100.00)))
+    CONSTRAINT chk_promedio_valido CHECK (((promedio >= 0.00) AND (promedio <= 100.00))),
+    CONSTRAINT chk_resultado_promedio CHECK ((promedio >= (0)::numeric))
 );
 
 
@@ -3368,13 +3336,6 @@ ALTER TABLE ONLY public.decision_promocion_directivo ALTER COLUMN id_decision SE
 
 
 --
--- Name: desempeno id_desempeno; Type: DEFAULT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.desempeno ALTER COLUMN id_desempeno SET DEFAULT nextval('public.desempeno_id_desempeno_seq'::regclass);
-
-
---
 -- Name: detalle_grados id_detallegrado; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -3802,14 +3763,6 @@ ALTER TABLE ONLY public.dba
 
 ALTER TABLE ONLY public.decision_promocion_directivo
     ADD CONSTRAINT decision_promocion_directivo_pkey PRIMARY KEY (id_decision);
-
-
---
--- Name: desempeno desempeno_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.desempeno
-    ADD CONSTRAINT desempeno_pkey PRIMARY KEY (id_desempeno);
 
 
 --
@@ -4365,6 +4318,14 @@ ALTER TABLE ONLY public.periodo_academico
 
 
 --
+-- Name: resultado_academico uq_resultado_estudiante_detalle_periodo; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.resultado_academico
+    ADD CONSTRAINT uq_resultado_estudiante_detalle_periodo UNIQUE (id_estudiante, id_detallegrado, id_periodo);
+
+
+--
 -- Name: tipo_grado uq_tipo_grado; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -4440,6 +4401,13 @@ CREATE INDEX idx_actividad_evidencia_dba_act ON public.actividad_evidencia_dba U
 --
 
 CREATE INDEX idx_actividad_evidencia_dba_ev ON public.actividad_evidencia_dba USING btree (id_evidencia_dba);
+
+
+--
+-- Name: idx_actividad_materia_dg_periodo; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_actividad_materia_dg_periodo ON public.actividad_materia USING btree (id_detallegrado, id_periodo);
 
 
 --
@@ -5400,22 +5368,6 @@ ALTER TABLE ONLY public.decision_promocion_directivo
 
 
 --
--- Name: desempeno desempeno_id_actividadmateria_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.desempeno
-    ADD CONSTRAINT desempeno_id_actividadmateria_fkey FOREIGN KEY (id_actividadmateria) REFERENCES public.actividad_materia(id_actividadmateria);
-
-
---
--- Name: desempeno desempeno_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.desempeno
-    ADD CONSTRAINT desempeno_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio);
-
-
---
 -- Name: detalle_grados detalle_grados_id_anio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -6138,5 +6090,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict sOvJGehyoxNtyzRjBswXdycn1Fj0CRc2CLWK5E4EY8uofVlmzZUosmE4SeqcML5
+\unrestrict EuHmSy5TYwnmGZDvQg4qLZvMTIQnZxYdpcVHNWd3RXtjGcFEqudTgNk1GK9c2eS
 

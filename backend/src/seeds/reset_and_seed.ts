@@ -987,7 +987,6 @@ async function run(): Promise<void> {
       "observacion_estudiante",
       "actividad_materia",
       "cierre_materia",
-      "desempeno",
       "evidencia_aprendizaje",
       "competencias",
       // Promotions and Graduations

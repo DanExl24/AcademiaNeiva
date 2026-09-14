@@ -91,10 +91,10 @@ export interface ActividadMateria {
   id_actividadmateria: Generated<number>;
   id_colegio: number;
   id_competencia: number | null;
-  id_detallegrado: number | null;
+  id_detallegrado: number;
   id_docente_creador: number | null;
   id_evidencia: number | null;
-  id_periodo: number | null;
+  id_periodo: number;
   justificacion_extra: string | null;
   motivo_extra: Generated<string | null>;
   nombre: string;
@@ -275,13 +275,6 @@ export interface DecisionPromocionDirectivo {
   id_usuario_decision: number;
   observacion: string | null;
   resultado_calculado: ResultadoConsolidadoAnual;
-}
-
-export interface Desempeno {
-  descripcion: string;
-  id_actividadmateria: number;
-  id_colegio: number;
-  id_desempeno: Generated<number>;
 }
 
 export interface DetalleGrados {
@@ -808,7 +801,6 @@ export interface DB {
   dba: Dba;
   dba_dimensiones_preescolar: DbaDimensionesPreescolar;
   decision_promocion_directivo: DecisionPromocionDirectivo;
-  desempeno: Desempeno;
   detalle_grados: DetalleGrados;
   detalle_padrefamilia: DetallePadrefamilia;
   dimensiones_preescolar: DimensionesPreescolar;
