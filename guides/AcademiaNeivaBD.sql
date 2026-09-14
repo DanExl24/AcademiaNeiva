@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 5NgrKdZhlgZvUeh8bOHN6dxRh3cRzzyXEQGbUf05Dd37W88jXpR7JTLKIBiydlJ
+\restrict zHJRchUfcR0RgxSZsQGO9MutPGFVAOHpYx4t4oggZtduYn6vSfSebmbAcgVXuzc
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -4226,6 +4226,14 @@ ALTER TABLE ONLY public.dba
 
 
 --
+-- Name: decision_promocion_directivo uq_decision_promocion_estudiante_colegio_anio; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.decision_promocion_directivo
+    ADD CONSTRAINT uq_decision_promocion_estudiante_colegio_anio UNIQUE (id_estudiante, id_colegio, id_anio_anterior);
+
+
+--
 -- Name: detalle_padrefamilia uq_detalle_padrefamilia_padre_estudiante; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -4534,6 +4542,13 @@ CREATE INDEX idx_dba_version ON public.dba USING btree (version_curricular);
 --
 
 CREATE INDEX idx_decision_promocion_anio ON public.decision_promocion_directivo USING btree (id_anio_anterior);
+
+
+--
+-- Name: idx_decision_promocion_colegio_anio; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_decision_promocion_colegio_anio ON public.decision_promocion_directivo USING btree (id_colegio, id_anio_anterior);
 
 
 --
@@ -5550,6 +5565,14 @@ ALTER TABLE ONLY public.decision_promocion_directivo
 
 
 --
+-- Name: decision_promocion_directivo fk_decision_promocion_usuario; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.decision_promocion_directivo
+    ADD CONSTRAINT fk_decision_promocion_usuario FOREIGN KEY (id_usuario_decision) REFERENCES public.usuario(id_usuario) ON DELETE CASCADE;
+
+
+--
 -- Name: detalle_grados fk_detalle_grupo; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -6120,5 +6143,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 5NgrKdZhlgZvUeh8bOHN6dxRh3cRzzyXEQGbUf05Dd37W88jXpR7JTLKIBiydlJ
+\unrestrict zHJRchUfcR0RgxSZsQGO9MutPGFVAOHpYx4t4oggZtduYn6vSfSebmbAcgVXuzc
 
