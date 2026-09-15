@@ -592,6 +592,14 @@ const loadData = async () => {
   loading.value = false
 }
 
+// Carga activa por pestaña para evitar mostrar ceros en transiciones
+const isCurrentTabLoading = computed(() => {
+  if (loading.value) return true
+  if (activeTab.value === 'cobertura' && !hasLoadedCobertura.value) return true
+  if (activeTab.value === 'coherencia' && coherenciaData.value.length === 0 && fetchingReports.value) return true
+  return false
+})
+
 // Lazy load Cobertura tab when switched to it
 watch(activeTab, async (newTab) => {
   if (newTab === 'cobertura' && !hasLoadedCobertura.value) {
@@ -942,6 +950,10 @@ onMounted(() => {
               <BookOpen class="h-3.5 w-3.5" />
               <span>Ver Catálogo Global</span>
             </button>
+            <span v-if="fetchingReports && !isCurrentTabLoading" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 text-xs font-bold border border-amber-200/40 animate-pulse">
+              <RefreshCw class="w-3.5 h-3.5 animate-spin" />
+              <span>Actualizando datos...</span>
+            </span>
           </div>
           <p class="mt-1 text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-400">Analiza la correspondencia entre la planeación curricular y la evaluación docente en aula.</p>
         </div>
@@ -971,10 +983,14 @@ onMounted(() => {
     </div>
 
     <!-- Loading State -->
-    <div v-if="loading" class="rounded-2xl sm:rounded-[32px] border border-slate-100 bg-white p-10 sm:p-20 text-center dark:bg-slate-900 dark:border-slate-800">
-      <RefreshCw class="mx-auto h-8 w-8 sm:h-10 sm:w-10 animate-spin text-amber-500 mb-3 sm:mb-4" />
-      <p class="text-sm sm:text-base font-black text-slate-800 dark:text-slate-200 uppercase tracking-widest">Cargando reportes analíticos...</p>
-      <p class="text-xs sm:text-sm font-semibold text-slate-400 dark:text-slate-500 mt-1">Esto puede demorar unos segundos.</p>
+    <div v-if="isCurrentTabLoading" class="rounded-2xl sm:rounded-[32px] border border-slate-100 bg-white p-12 sm:p-24 text-center dark:bg-slate-900 dark:border-slate-800 shadow-sm animate-in fade-in duration-300">
+      <RefreshCw class="mx-auto h-10 w-10 sm:h-12 sm:w-12 animate-spin text-amber-500 mb-4" />
+      <p class="text-base sm:text-lg font-black text-slate-900 dark:text-white uppercase tracking-wider">
+        {{ activeTab === 'cobertura' ? 'Calculando Cobertura del Catálogo DBA...' : 'Cargando Reportes Analíticos DBA...' }}
+      </p>
+      <p class="text-xs sm:text-sm font-semibold text-slate-400 dark:text-slate-500 mt-1.5">
+        Procesando evidencias curriculares y registros evaluativos en tiempo real...
+      </p>
     </div>
 
     <template v-else>
