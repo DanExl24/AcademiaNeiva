@@ -552,6 +552,8 @@ const fetchCoherenciaReport = async () => {
   }
 }
 
+const hasLoadedCobertura = ref(false)
+
 // Fetch Cobertura Report
 const fetchCoberturaReport = async () => {
   if (!schoolId.value) return
@@ -570,6 +572,7 @@ const fetchCoberturaReport = async () => {
     coberturaDetalles.value = res.detalles || []
     selectedResumenCard.value = null
     searchResumenTerm.value = ''
+    hasLoadedCobertura.value = true
   } catch (error) {
     console.error('Error loading cobertura report:', error)
   } finally {
@@ -577,22 +580,44 @@ const fetchCoberturaReport = async () => {
   }
 }
 
-
 const loadData = async () => {
   loading.value = true
+  hasLoadedCobertura.value = false
   await loadFilterOptions()
-  await Promise.all([
-    fetchCoherenciaReport(),
-    fetchCoberturaReport()
-  ])
+  if (activeTab.value === 'coherencia') {
+    await fetchCoherenciaReport()
+  } else {
+    await fetchCoberturaReport()
+  }
   loading.value = false
 }
 
+// Lazy load Cobertura tab when switched to it
+watch(activeTab, async (newTab) => {
+  if (newTab === 'cobertura' && !hasLoadedCobertura.value) {
+    await fetchCoberturaReport()
+  } else if (newTab === 'coherencia' && coherenciaData.value.length === 0) {
+    await fetchCoherenciaReport()
+  }
+})
+
 // Refresh data triggered by filters & academic year store
-watch([filterPeriod, filterGroup, filterCoherenciaGrade, filterSubject, filterTeacher], fetchCoherenciaReport)
-watch([filterPeriod, filterCoberturaGroup, filterCoberturaSubject], fetchCoberturaReport)
+watch([filterPeriod, filterGroup, filterCoherenciaGrade, filterSubject, filterTeacher], () => {
+  if (activeTab.value === 'coherencia') {
+    fetchCoherenciaReport()
+  }
+})
+watch([filterPeriod, filterCoberturaGroup, filterCoberturaSubject], () => {
+  if (activeTab.value === 'cobertura' || hasLoadedCobertura.value) {
+    fetchCoberturaReport()
+  }
+})
 watch(() => yearStore.selectedYearId, async () => {
   catalogData.value = []
+  coherenciaData.value = []
+  coberturaResumen.value = []
+  coberturaDetalles.value = []
+  hasLoadedCobertura.value = false
   await loadData()
 })
 
