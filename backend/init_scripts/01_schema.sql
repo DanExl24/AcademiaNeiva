@@ -1,0 +1,5786 @@
+-- ====================================================================
+-- AcademiaNeiva - Esquema DDL Oficial de Base de Datos
+-- Generado automáticamente para PostgreSQL 16+
+-- Fecha: 2026-09-15T20:28:00.348Z
+-- Nota: Contiene 100% definiciones DDL (tablas, tipos, constraints e índices).
+-- Sin datos sensibles ni sentencias incompatibles.
+-- ====================================================================
+--
+-- PostgreSQL database dump
+--
+
+
+-- Dumped from database version 18.6
+-- Dumped by pg_dump version 18.6
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET transaction_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+--
+-- Name: public; Type: SCHEMA; Schema: -; Owner: -
+--
+
+-- *not* creating schema, since initdb creates it
+
+
+--
+-- Name: SCHEMA public; Type: COMMENT; Schema: -; Owner: -
+--
+
+COMMENT ON SCHEMA public IS '';
+
+
+--
+-- Name: uuid-ossp; Type: EXTENSION; Schema: -; Owner: -
+--
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA public;
+
+
+--
+-- Name: EXTENSION "uuid-ossp"; Type: COMMENT; Schema: -; Owner: -
+--
+
+COMMENT ON EXTENSION "uuid-ossp" IS 'generate universally unique identifiers (UUIDs)';
+
+
+--
+-- Name: accion_aprobacion_traslado; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.accion_aprobacion_traslado AS ENUM (
+    'APROBAR',
+    'RECHAZAR',
+    'CANCELAR'
+);
+
+
+--
+-- Name: decision_promocion_tipo; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.decision_promocion_tipo AS ENUM (
+    'PROMOVER_SIGUIENTE_GRADO',
+    'MANTENER_GRADO',
+    'MATRICULA_CONDICIONADA',
+    'OTRA_DECISION'
+);
+
+
+--
+-- Name: escala_modo_evaluacion; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.escala_modo_evaluacion AS ENUM (
+    'AUTOMATICO',
+    'MANUAL'
+);
+
+
+--
+-- Name: estado_asistencia; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.estado_asistencia AS ENUM (
+    'PRESENTE',
+    'AUSENTE',
+    'TARDE',
+    'JUSTIFICADA'
+);
+
+
+--
+-- Name: estado_cierre_materia; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.estado_cierre_materia AS ENUM (
+    'ABIERTO',
+    'CERRADO'
+);
+
+
+--
+-- Name: estado_colegio; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.estado_colegio AS ENUM (
+    'PENDIENTE',
+    'ACTIVO',
+    'SUSPENDIDO',
+    'RECHAZADO',
+    'ELIMINADO'
+);
+
+
+--
+-- Name: estado_dba; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.estado_dba AS ENUM (
+    'ACTIVO',
+    'INACTIVO'
+);
+
+
+--
+-- Name: estado_documento; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.estado_documento AS ENUM (
+    'PENDIENTE',
+    'VALIDADO',
+    'RECHAZADO'
+);
+
+
+--
+-- Name: estado_estudiante; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.estado_estudiante AS ENUM (
+    'ACTIVO',
+    'SANCIONADO',
+    'EXPULSADO',
+    'RETIRADO',
+    'GRADUADO'
+);
+
+
+--
+-- Name: estado_matricula; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.estado_matricula AS ENUM (
+    'PENDIENTE',
+    'ACTIVA',
+    'CANCELADA',
+    'TRASLADADA',
+    'RECHAZADA',
+    'CORRECCION',
+    'APROBADA',
+    'CULMINADA',
+    'PENDIENTE_RENOVACION',
+    'CORREGIDA'
+);
+
+
+--
+-- Name: estado_periodo; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.estado_periodo AS ENUM (
+    'ABIERTO',
+    'CERRADO',
+    'PENDIENTE'
+);
+
+
+--
+-- Name: estado_renovacion_documento; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.estado_renovacion_documento AS ENUM (
+    'VIGENTE',
+    'RECOMENDADO_ACTUALIZAR',
+    'OBLIGATORIO_ACTUALIZAR',
+    'DESACTUALIZADO_POR_FECHA'
+);
+
+
+--
+-- Name: estado_resultado; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.estado_resultado AS ENUM (
+    'APROBADO',
+    'REPROBADO',
+    'EN_PROCESO'
+);
+
+
+--
+-- Name: estado_sancion; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.estado_sancion AS ENUM (
+    'ACTIVA',
+    'REVOCADA',
+    'VENCIDA'
+);
+
+
+--
+-- Name: estado_solicitud_traslado; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.estado_solicitud_traslado AS ENUM (
+    'SOLICITADA',
+    'EN_APROBACION',
+    'APROBADA',
+    'RECHAZADA',
+    'CANCELADA',
+    'EJECUTADA'
+);
+
+
+--
+-- Name: estado_supervision; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.estado_supervision AS ENUM (
+    'SOLICITADA',
+    'APROBADA',
+    'ACTIVA',
+    'FINALIZADA',
+    'REVOCADA',
+    'EXPIRADA'
+);
+
+
+--
+-- Name: estado_ticket_soporte; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.estado_ticket_soporte AS ENUM (
+    'ABIERTO',
+    'EN_PROCESO',
+    'RESUELTO',
+    'ESCALADO'
+);
+
+
+--
+-- Name: estado_usuario_sistema; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.estado_usuario_sistema AS ENUM (
+    'ACTIVO',
+    'SUSPENDIDO',
+    'BANEADO',
+    'ELIMINADO'
+);
+
+
+--
+-- Name: resultado_consolidado_anual; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.resultado_consolidado_anual AS ENUM (
+    'APROBADO',
+    'NO_PROMOVIDO',
+    'PENDIENTE_RECUPERACION',
+    'PENDIENTE_DECISION'
+);
+
+
+--
+-- Name: tipo_accion_auditoria; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.tipo_accion_auditoria AS ENUM (
+    'LECTURA',
+    'CREACION',
+    'MODIFICACION',
+    'ELIMINACION',
+    'EXPORTACION'
+);
+
+
+--
+-- Name: tipo_documento_identidad; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.tipo_documento_identidad AS ENUM (
+    'TI',
+    'CC',
+    'CE',
+    'RC',
+    'PAS'
+);
+
+
+--
+-- Name: tipo_incidencia_soporte; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.tipo_incidencia_soporte AS ENUM (
+    'TECNICO',
+    'CALIFICACIONES',
+    'ASISTENCIA',
+    'AUTENTICACION',
+    'SOPORTE',
+    'REINGRESO',
+    'MATRICULA_EXTRAORDINARIA'
+);
+
+
+--
+-- Name: tipo_jornada; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.tipo_jornada AS ENUM (
+    'MAÑANA',
+    'TARDE',
+    'NOCTURNA',
+    'UNICA'
+);
+
+
+--
+-- Name: tipo_matricula; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.tipo_matricula AS ENUM (
+    'REGULAR',
+    'RENOVACION',
+    'REINGRESO',
+    'EXTRAORDINARIA',
+    'TRASLADO'
+);
+
+
+--
+-- Name: tipo_observacion; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.tipo_observacion AS ENUM (
+    'ACADEMICA',
+    'CONVIVENCIA',
+    'OTRO',
+    'DISCIPLINARIA'
+);
+
+
+--
+-- Name: tipo_supervision; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.tipo_supervision AS ENUM (
+    'SOLO_LECTURA',
+    'EDITOR'
+);
+
+
+--
+-- Name: tipo_traslado; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.tipo_traslado AS ENUM (
+    'TRASLADO_USUARIO',
+    'TRASLADO_MATRICULA'
+);
+
+
+--
+-- Name: tipo_verificacion_email; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.tipo_verificacion_email AS ENUM (
+    'MATRICULA_NUEVA',
+    'CAMBIO_CORREO',
+    'RECUPERACION_PASSWORD'
+);
+
+
+--
+-- Name: fn_bloquear_periodo_cerrado(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_bloquear_periodo_cerrado() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    v_id_periodo INTEGER;
+    v_estado VARCHAR(20);
+    v_fecha TIMESTAMP WITH TIME ZONE;
+    v_id_colegio INTEGER;
+    v_val INTEGER;
+BEGIN
+    -- Permitir bypass para scripts de seed
+    IF current_setting('my.app.bypass_triggers', true) = 'true' THEN
+        IF TG_OP = 'DELETE' THEN
+            RETURN OLD;
+        ELSE
+            RETURN NEW;
+        END IF;
+    END IF;
+
+    -- Determinar el periodo según la tabla
+    IF TG_TABLE_NAME = 'notas_actividad' THEN
+        IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
+            SELECT id_periodo INTO v_id_periodo 
+            FROM actividad_materia 
+            WHERE id_actividadmateria = NEW.id_actividadmateria;
+        ELSIF TG_OP = 'DELETE' THEN
+            SELECT id_periodo INTO v_id_periodo 
+            FROM actividad_materia 
+            WHERE id_actividadmateria = OLD.id_actividadmateria;
+        END IF;
+
+    ELSIF TG_TABLE_NAME = 'observacion_estudiante' THEN
+        IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
+            v_id_periodo := NEW.id_periodo;
+        ELSIF TG_OP = 'DELETE' THEN
+            v_id_periodo := OLD.id_periodo;
+        END IF;
+
+    ELSIF TG_TABLE_NAME = 'registro_asistencia' THEN
+        IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
+            v_fecha := NEW.fecha;
+            v_id_colegio := NEW.id_colegio;
+        ELSIF TG_OP = 'DELETE' THEN
+            v_fecha := OLD.fecha;
+            v_id_colegio := OLD.id_colegio;
+        END IF;
+
+        v_val := EXTRACT(MONTH FROM v_fecha) * 100 + EXTRACT(DAY FROM v_fecha);
+
+        -- Encontrar el periodo que abarca esta fecha para el colegio
+        SELECT pa.id_periodo INTO v_id_periodo
+        FROM periodo_academico pa
+        JOIN anio_lectivo al ON pa.id_anio = al.id_anio
+        WHERE pa.id_colegio = v_id_colegio
+          AND (
+            al.calendario = EXTRACT(YEAR FROM v_fecha)::text OR
+            al.calendario LIKE '%' || EXTRACT(YEAR FROM v_fecha)::text || '%'
+          )
+          AND (
+            -- Rango sin cruce de año
+            (pa.mes_inicio * 100 + pa.dia_inicio <= pa.mes_fin * 100 + pa.dia_fin AND
+             v_val BETWEEN (pa.mes_inicio * 100 + pa.dia_inicio) AND (pa.mes_fin * 100 + pa.dia_fin))
+            OR
+            -- Rango con cruce de año (ej. Calendario B Agosto a Junio)
+            (pa.mes_inicio * 100 + pa.dia_inicio > pa.mes_fin * 100 + pa.dia_fin AND
+             (v_val >= pa.mes_inicio * 100 + pa.dia_inicio OR v_val <= pa.mes_fin * 100 + pa.dia_fin))
+          )
+        LIMIT 1;
+    END IF;
+
+    -- Validar estado del periodo
+    IF v_id_periodo IS NOT NULL THEN
+        SELECT estado INTO v_estado FROM periodo_academico WHERE id_periodo = v_id_periodo;
+        IF v_estado = 'CERRADO' THEN
+            RAISE EXCEPTION 'Operación denegada: El periodo académico correspondiente está cerrado y no se permiten modificaciones.';
+        END IF;
+    END IF;
+
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    ELSE
+        RETURN NEW;
+    END IF;
+END;
+$$;
+
+
+--
+-- Name: fn_prohibir_mutacion_calificaciones_cerradas(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_prohibir_mutacion_calificaciones_cerradas() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    materia_cerrada BOOLEAN;
+BEGIN
+    -- Comprobar si la materia y periodo de la actividad asociada estan formalmente cerrados
+    SELECT EXISTS (
+        SELECT 1 
+        FROM public.actividad_materia am
+        JOIN public.cierre_materia cm 
+          ON am.id_detallegrado = cm.id_detallegrado 
+         AND am.id_periodo = cm.id_periodo
+        WHERE am.id_actividadmateria = OLD.id_actividadmateria
+          AND cm.estado = 'CERRADO'
+    ) INTO materia_cerrada;
+
+    IF materia_cerrada THEN
+        RAISE EXCEPTION 'VIOLACION_DE_INTEGRIDAD: La calificacion pertenece a una materia con acta formalmente CERRADA en el periodo. Mutacion rechazada conforme al Decreto 1290/2009.'
+            USING ERRCODE = 'integrity_constraint_violation';
+    END IF;
+
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    ELSE
+        RETURN NEW;
+    END IF;
+END;
+$$;
+
+
+--
+-- Name: fn_sync_estudiante_sancion(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_sync_estudiante_sancion() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    v_tipo character varying(100);
+BEGIN
+    SELECT nombre INTO v_tipo FROM public.tipo_sancion WHERE id_tipo_sancion = NEW.id_tipo_sancion;
+
+    -- Si la sanción está activa y vigente
+    IF NEW.estado = 'ACTIVA' AND CURRENT_DATE BETWEEN NEW.fecha_inicio AND NEW.fecha_fin THEN
+        IF v_tipo = 'EXPULSION' THEN
+            UPDATE public.estudiante
+            SET estado = 'EXPULSADO'
+            WHERE id_estudiante = NEW.id_estudiante;
+        ELSE
+            UPDATE public.estudiante
+            SET estado = 'SANCIONADO'
+            WHERE id_estudiante = NEW.id_estudiante;
+        END IF;
+    ELSE
+        -- Si no está activa, verificar si le queda alguna otra sanción activa hoy
+        IF NOT EXISTS (
+            SELECT 1 FROM public.sancion
+            WHERE id_estudiante = NEW.id_estudiante
+              AND estado = 'ACTIVA'
+              AND CURRENT_DATE BETWEEN fecha_inicio AND fecha_fin
+        ) THEN
+            -- Si no quedan otras sanciones activas, volver a ACTIVO
+            UPDATE public.estudiante
+            SET estado = 'ACTIVO'
+            WHERE id_estudiante = NEW.id_estudiante AND estado IN ('SANCIONADO', 'EXPULSADO');
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+
+--
+-- Name: proteger_acciones_auditoria(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.proteger_acciones_auditoria() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    v_estado estado_supervision;
+BEGIN
+    -- Obtener el estado de la auditoría padre
+    SELECT estado_supervision INTO v_estado
+    FROM auditoria_supervision
+    WHERE id_auditoria = COALESCE(OLD.id_auditoria, NEW.id_auditoria);
+
+    IF v_estado IN ('FINALIZADA', 'REVOCADA', 'EXPIRADA') THEN
+        IF TG_OP = 'DELETE' THEN
+            RAISE EXCEPTION 'No se pueden eliminar acciones de una auditoría finalizada';
+        END IF;
+        IF TG_OP = 'UPDATE' THEN
+            RAISE EXCEPTION 'No se pueden modificar acciones de una auditoría finalizada';
+        END IF;
+    END IF;
+
+    -- Bloquear DELETE siempre (las acciones de auditoría nunca se eliminan)
+    IF TG_OP = 'DELETE' THEN
+        RAISE EXCEPTION 'Los registros de acciones de auditoría no pueden ser eliminados';
+    END IF;
+
+    RETURN COALESCE(NEW, OLD);
+END;
+$$;
+
+
+--
+-- Name: proteger_auditoria_finalizada(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.proteger_auditoria_finalizada() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    -- Bloquear DELETE siempre (soft-delete únicamente)
+    IF TG_OP = 'DELETE' THEN
+        RAISE EXCEPTION 'Los registros de auditoría no pueden ser eliminados. Use soft-delete.';
+    END IF;
+
+    -- Bloquear UPDATE si la auditoría ya fue finalizada/revocada/expirada
+    IF TG_OP = 'UPDATE' THEN
+        IF OLD.estado_supervision IN ('FINALIZADA', 'REVOCADA', 'EXPIRADA') THEN
+            -- Permitir solo actualizar el campo "eliminado" para soft-delete
+            IF NEW.eliminado IS DISTINCT FROM OLD.eliminado AND
+               NEW.id_auditoria = OLD.id_auditoria AND
+               NEW.estado_supervision = OLD.estado_supervision THEN
+                RETURN NEW;
+            END IF;
+            RAISE EXCEPTION 'No se puede modificar una auditoría en estado %', OLD.estado_supervision;
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+
+--
+-- Name: trg_check_subject_not_closed(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.trg_check_subject_not_closed() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    v_id_detallegrado INTEGER;
+    v_id_periodo INTEGER;
+    v_is_closed BOOLEAN;
+BEGIN
+    IF current_setting('my.app.bypass_triggers', true) = 'true' THEN
+        IF TG_OP = 'DELETE' THEN
+            RETURN OLD;
+        ELSE
+            RETURN NEW;
+        END IF;
+    END IF;
+    IF TG_TABLE_NAME = 'actividad_materia' THEN
+        IF TG_OP = 'DELETE' THEN
+            v_id_detallegrado := OLD.id_detallegrado;
+            v_id_periodo := OLD.id_periodo;
+        ELSE
+            v_id_detallegrado := NEW.id_detallegrado;
+            v_id_periodo := NEW.id_periodo;
+        END IF;
+    ELSIF TG_TABLE_NAME = 'notas_actividad' THEN
+        IF TG_OP = 'DELETE' THEN
+            SELECT id_detallegrado, id_periodo INTO v_id_detallegrado, v_id_periodo
+            FROM public.actividad_materia WHERE id_actividadmateria = OLD.id_actividadmateria;
+        ELSE
+            SELECT id_detallegrado, id_periodo INTO v_id_detallegrado, v_id_periodo
+            FROM public.actividad_materia WHERE id_actividadmateria = NEW.id_actividadmateria;
+        END IF;
+    ELSIF TG_TABLE_NAME = 'criterio_evaluacion' THEN
+        IF TG_OP = 'DELETE' THEN
+            SELECT id_detallegrado, id_periodo INTO v_id_detallegrado, v_id_periodo
+            FROM public.actividad_materia WHERE id_actividadmateria = OLD.id_actividadmateria;
+        ELSE
+            SELECT id_detallegrado, id_periodo INTO v_id_detallegrado, v_id_periodo
+            FROM public.actividad_materia WHERE id_actividadmateria = NEW.id_actividadmateria;
+        END IF;
+    ELSIF TG_TABLE_NAME = 'nota_criterio' THEN
+        IF TG_OP = 'DELETE' THEN
+            SELECT am.id_detallegrado, am.id_periodo INTO v_id_detallegrado, v_id_periodo
+            FROM public.criterio_evaluacion ce
+            JOIN public.actividad_materia am ON ce.id_actividadmateria = am.id_actividadmateria
+            WHERE ce.id_criterio = OLD.id_criterio;
+        ELSE
+            SELECT am.id_detallegrado, am.id_periodo INTO v_id_detallegrado, v_id_periodo
+            FROM public.criterio_evaluacion ce
+            JOIN public.actividad_materia am ON ce.id_actividadmateria = am.id_actividadmateria
+            WHERE ce.id_criterio = NEW.id_criterio;
+        END IF;
+    ELSIF TG_TABLE_NAME = 'registro_asistencia' THEN
+        IF TG_OP = 'DELETE' THEN
+            v_id_detallegrado := OLD.id_detallegrado;
+            v_id_periodo := NULL;
+        ELSE
+            v_id_detallegrado := NEW.id_detallegrado;
+            v_id_periodo := NULL;
+        END IF;
+    ELSIF TG_TABLE_NAME = 'observacion_estudiante' THEN
+        IF TG_OP = 'DELETE' THEN
+            v_id_detallegrado := OLD.id_detallegrado;
+            v_id_periodo := OLD.id_periodo;
+        ELSE
+            v_id_detallegrado := NEW.id_detallegrado;
+            v_id_periodo := NEW.id_periodo;
+        END IF;
+    END IF;
+
+    IF v_id_detallegrado IS NOT NULL AND v_id_periodo IS NOT NULL THEN
+        SELECT EXISTS (
+            SELECT 1 FROM public.cierre_materia
+            WHERE id_detallegrado = v_id_detallegrado
+              AND id_periodo = v_id_periodo
+              AND estado = 'CERRADO'
+        ) INTO v_is_closed;
+
+        IF v_is_closed THEN
+            RAISE EXCEPTION 'La materia se encuentra CERRADA para este periodo y no admite modificaciones.'
+                USING ERRCODE = '55000';
+        END IF;
+    END IF;
+
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    ELSE
+        RETURN NEW;
+    END IF;
+END;
+$$;
+
+
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+--
+-- Name: actividad_evidencia_dba; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.actividad_evidencia_dba (
+    id_actividadmateria integer NOT NULL,
+    id_evidencia_dba integer NOT NULL
+);
+
+
+--
+-- Name: actividad_materia; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.actividad_materia (
+    id_actividadmateria integer NOT NULL,
+    id_detallegrado integer NOT NULL,
+    id_periodo integer NOT NULL,
+    nombre character varying(255) NOT NULL,
+    porcentaje numeric(5,2) NOT NULL,
+    id_colegio integer NOT NULL,
+    id_competencia integer,
+    id_evidencia integer,
+    fecha_creacion timestamp with time zone DEFAULT now(),
+    motivo_extra character varying(100) DEFAULT NULL::character varying,
+    justificacion_extra text,
+    id_docente_creador integer,
+    CONSTRAINT chk_actividad_pct CHECK (((porcentaje > 0.00) AND (porcentaje <= 100.00))),
+    CONSTRAINT chk_actividad_porcentaje CHECK (((porcentaje > (0)::numeric) AND (porcentaje <= (100)::numeric)))
+);
+
+
+--
+-- Name: actividad_materia_id_actividadmateria_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.actividad_materia_id_actividadmateria_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: actividad_materia_id_actividadmateria_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.actividad_materia_id_actividadmateria_seq OWNED BY public.actividad_materia.id_actividadmateria;
+
+
+--
+-- Name: anio_lectivo; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.anio_lectivo (
+    id_anio integer CONSTRAINT "año_lectivo_id_año_not_null" NOT NULL,
+    calendario character varying(10),
+    id_colegio integer CONSTRAINT "año_lectivo_id_colegio_not_null" NOT NULL,
+    tipo_calendario character(1) DEFAULT 'A'::bpchar,
+    estado public.estado_periodo DEFAULT 'ABIERTO'::public.estado_periodo,
+    fecha_inicio date,
+    fecha_fin date,
+    nota_minima numeric(5,2) DEFAULT 0.00 NOT NULL,
+    nota_maxima numeric(5,2) DEFAULT 5.00 NOT NULL,
+    nota_aprobacion numeric(5,2) DEFAULT 3.00 NOT NULL,
+    escala_modo public.escala_modo_evaluacion DEFAULT 'AUTOMATICO'::public.escala_modo_evaluacion NOT NULL,
+    materias_reprobatorias_promocion integer DEFAULT 3 NOT NULL,
+    CONSTRAINT chk_calendario CHECK (((calendario)::text ~ '^[0-9]{4}(-[0-9]{4})?$'::text)),
+    CONSTRAINT chk_materias_reprobatorias CHECK (((materias_reprobatorias_promocion >= 1) AND (materias_reprobatorias_promocion <= 20))),
+    CONSTRAINT chk_nota_aprobacion CHECK (((nota_aprobacion >= nota_minima) AND (nota_aprobacion <= nota_maxima))),
+    CONSTRAINT chk_nota_min_max CHECK (((nota_minima >= (0)::numeric) AND (nota_maxima > nota_minima)))
+);
+
+
+--
+-- Name: anio_lectivo_id_anio_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.anio_lectivo_id_anio_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: anio_lectivo_id_anio_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.anio_lectivo_id_anio_seq OWNED BY public.anio_lectivo.id_anio;
+
+
+--
+-- Name: auditoria_acciones_realizadas; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.auditoria_acciones_realizadas (
+    id_accion integer NOT NULL,
+    id_auditoria integer NOT NULL,
+    fecha_accion timestamp with time zone DEFAULT now() NOT NULL,
+    modulo character varying(255) NOT NULL,
+    tipo_accion public.tipo_accion_auditoria NOT NULL,
+    accion character varying(255) NOT NULL,
+    recurso_afectado text NOT NULL,
+    id_usuario_afectado integer,
+    valor_antiguo jsonb,
+    valor_nuevo jsonb,
+    motivo_cambio text,
+    CONSTRAINT chk_modificacion_completa CHECK (((tipo_accion <> 'MODIFICACION'::public.tipo_accion_auditoria) OR ((valor_antiguo IS NOT NULL) AND (valor_nuevo IS NOT NULL) AND (motivo_cambio IS NOT NULL))))
+);
+
+
+--
+-- Name: auditoria_acciones_realizadas_id_accion_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.auditoria_acciones_realizadas ALTER COLUMN id_accion ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.auditoria_acciones_realizadas_id_accion_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: auditoria_supervision; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.auditoria_supervision (
+    id_auditoria integer NOT NULL,
+    id_admin_general integer NOT NULL,
+    id_colegio integer NOT NULL,
+    id_directivo_aprobador integer,
+    motivo_solicitud text NOT NULL,
+    fecha_solicitud timestamp with time zone DEFAULT now() NOT NULL,
+    tipo_supervision public.tipo_supervision NOT NULL,
+    estado_supervision public.estado_supervision DEFAULT 'SOLICITADA'::public.estado_supervision NOT NULL,
+    fecha_aprobacion timestamp with time zone,
+    motivo_entrada text,
+    fecha_entrada timestamp with time zone,
+    fecha_salida timestamp with time zone,
+    duracion_maxima_minutos integer DEFAULT 60 NOT NULL,
+    revocado_por integer,
+    fecha_revocacion timestamp with time zone,
+    ip_admin character varying(45),
+    eliminado boolean DEFAULT false NOT NULL,
+    fecha_retencion_hasta timestamp with time zone DEFAULT (now() + '5 years'::interval) NOT NULL,
+    motivo_revocacion text
+);
+
+
+--
+-- Name: auditoria_supervision_id_auditoria_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.auditoria_supervision ALTER COLUMN id_auditoria ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.auditoria_supervision_id_auditoria_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: cierre_materia; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.cierre_materia (
+    id_cierremateria integer NOT NULL,
+    id_detallegrado integer NOT NULL,
+    id_periodo integer NOT NULL,
+    estado public.estado_cierre_materia NOT NULL,
+    fecha_cierre timestamp with time zone NOT NULL,
+    justificacion_evidencias_pendientes text,
+    id_docente_cierre integer
+);
+
+
+--
+-- Name: cierre_materia_id_cierremateria_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.cierre_materia_id_cierremateria_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: cierre_materia_id_cierremateria_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.cierre_materia_id_cierremateria_seq OWNED BY public.cierre_materia.id_cierremateria;
+
+
+--
+-- Name: codigo_verificacion_email; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.codigo_verificacion_email (
+    id_verificacion integer NOT NULL,
+    email character varying(255) NOT NULL,
+    codigo character varying(6) NOT NULL,
+    tipo public.tipo_verificacion_email NOT NULL,
+    id_usuario integer,
+    expires_at timestamp with time zone NOT NULL,
+    verified boolean DEFAULT false NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP
+);
+
+
+--
+-- Name: codigo_verificacion_email_id_verificacion_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.codigo_verificacion_email_id_verificacion_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: codigo_verificacion_email_id_verificacion_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.codigo_verificacion_email_id_verificacion_seq OWNED BY public.codigo_verificacion_email.id_verificacion;
+
+
+--
+-- Name: colegio; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.colegio (
+    id_colegio integer NOT NULL,
+    nombre text NOT NULL,
+    tipo_colegio character varying(20) NOT NULL,
+    sede character varying(255) NOT NULL,
+    contacto numeric NOT NULL,
+    correo character varying(100) NOT NULL,
+    dane character varying(100) NOT NULL,
+    tipo_calendario character(1) DEFAULT 'A'::bpchar,
+    estado public.estado_colegio DEFAULT 'ACTIVO'::public.estado_colegio NOT NULL,
+    fecha_registro timestamp with time zone DEFAULT now() NOT NULL,
+    motivo_rechazo text,
+    fecha_cambio_estado timestamp with time zone,
+    escudo_url text,
+    colores character varying(255),
+    color_primario character varying(50) DEFAULT NULL::character varying,
+    color_secundario character varying(50) DEFAULT NULL::character varying
+);
+
+
+--
+-- Name: colegio_id_colegio_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.colegio_id_colegio_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: colegio_id_colegio_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.colegio_id_colegio_seq OWNED BY public.colegio.id_colegio;
+
+
+--
+-- Name: colegio_version_curricular; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.colegio_version_curricular (
+    id integer NOT NULL,
+    id_colegio integer NOT NULL,
+    area character varying(100) NOT NULL,
+    grado character varying(50) NOT NULL,
+    version_curricular character varying(20) NOT NULL,
+    fecha_asignacion timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: colegio_version_curricular_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.colegio_version_curricular_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: colegio_version_curricular_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.colegio_version_curricular_id_seq OWNED BY public.colegio_version_curricular.id;
+
+
+--
+-- Name: competencias; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.competencias (
+    id_competencia integer NOT NULL,
+    id_anio integer CONSTRAINT "competencias_id_año_not_null" NOT NULL,
+    id_grupo integer NOT NULL,
+    id_materia integer NOT NULL,
+    id_periodo integer NOT NULL,
+    descripcion text DEFAULT 'Competencia pendiente por definir.'::text NOT NULL,
+    id_colegio integer NOT NULL,
+    nombre character varying(200),
+    sync_uuid uuid,
+    id_dimension integer
+);
+
+
+--
+-- Name: competencias_id_competencia_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.competencias_id_competencia_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: competencias_id_competencia_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.competencias_id_competencia_seq OWNED BY public.competencias.id_competencia;
+
+
+--
+-- Name: configuracion_inscripcion; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.configuracion_inscripcion (
+    id_configuracion integer NOT NULL,
+    id_colegio integer NOT NULL,
+    id_anio integer CONSTRAINT "configuracion_inscripcion_id_año_not_null" NOT NULL,
+    fecha_inicio timestamp with time zone NOT NULL,
+    fecha_cierre timestamp with time zone NOT NULL,
+    habilitada boolean DEFAULT true NOT NULL,
+    CONSTRAINT chk_fechas CHECK ((fecha_cierre > fecha_inicio))
+);
+
+
+--
+-- Name: configuracion_inscripcion_id_configuracion_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.configuracion_inscripcion_id_configuracion_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: configuracion_inscripcion_id_configuracion_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.configuracion_inscripcion_id_configuracion_seq OWNED BY public.configuracion_inscripcion.id_configuracion;
+
+
+--
+-- Name: configuracion_plataforma; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.configuracion_plataforma (
+    clave character varying(100) NOT NULL,
+    valor character varying(255) NOT NULL,
+    descripcion text,
+    actualizado_por integer,
+    fecha_actualizacion timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: criterio_evaluacion; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.criterio_evaluacion (
+    id_criterio integer NOT NULL,
+    id_actividadmateria integer NOT NULL,
+    id_evidencia integer,
+    descripcion text NOT NULL,
+    porcentaje numeric(5,2) NOT NULL,
+    id_colegio integer NOT NULL,
+    CONSTRAINT chk_criterio_pct CHECK (((porcentaje > 0.00) AND (porcentaje <= 100.00))),
+    CONSTRAINT chk_criterio_porcentaje CHECK (((porcentaje > (0)::numeric) AND (porcentaje <= (100)::numeric)))
+);
+
+
+--
+-- Name: criterio_evaluacion_id_criterio_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.criterio_evaluacion_id_criterio_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: criterio_evaluacion_id_criterio_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.criterio_evaluacion_id_criterio_seq OWNED BY public.criterio_evaluacion.id_criterio;
+
+
+--
+-- Name: dba; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.dba (
+    id_dba integer NOT NULL,
+    area character varying(100) NOT NULL,
+    grado character varying(50) NOT NULL,
+    numero_dba integer NOT NULL,
+    enunciado text NOT NULL,
+    version_curricular character varying(20) NOT NULL,
+    estado public.estado_dba DEFAULT 'ACTIVO'::public.estado_dba NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: dba_dimensiones_preescolar; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.dba_dimensiones_preescolar (
+    id_dba integer NOT NULL,
+    id_dimension integer NOT NULL
+);
+
+
+--
+-- Name: dba_id_dba_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.dba_id_dba_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: dba_id_dba_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.dba_id_dba_seq OWNED BY public.dba.id_dba;
+
+
+--
+-- Name: decision_promocion_directivo; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.decision_promocion_directivo (
+    id_decision integer NOT NULL,
+    id_estudiante integer NOT NULL,
+    id_colegio integer NOT NULL,
+    id_anio_anterior integer NOT NULL,
+    resultado_calculado public.resultado_consolidado_anual NOT NULL,
+    decision_tomada public.decision_promocion_tipo NOT NULL,
+    id_usuario_decision integer NOT NULL,
+    fecha_decision timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+    observacion text,
+    id_tipo_grado_anterior integer,
+    id_tipo_grado_asignado integer
+);
+
+
+--
+-- Name: decision_promocion_directivo_id_decision_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.decision_promocion_directivo_id_decision_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: decision_promocion_directivo_id_decision_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.decision_promocion_directivo_id_decision_seq OWNED BY public.decision_promocion_directivo.id_decision;
+
+
+--
+-- Name: detalle_grados; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.detalle_grados (
+    id_detallegrado integer NOT NULL,
+    id_materia integer NOT NULL,
+    id_docente integer NOT NULL,
+    id_colegio integer NOT NULL,
+    id_grupo integer NOT NULL,
+    id_anio integer NOT NULL
+);
+
+
+--
+-- Name: detalle_grados_id_detallegrado_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.detalle_grados_id_detallegrado_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: detalle_grados_id_detallegrado_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.detalle_grados_id_detallegrado_seq OWNED BY public.detalle_grados.id_detallegrado;
+
+
+--
+-- Name: detalle_padrefamilia; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.detalle_padrefamilia (
+    id_detallepadrefamilia integer NOT NULL,
+    id_padrefamilia integer NOT NULL,
+    id_estudiante integer NOT NULL,
+    id_colegio integer NOT NULL,
+    parentesco character varying(50) DEFAULT 'ACUDIENTE'::character varying,
+    es_acudiente_principal boolean DEFAULT true
+);
+
+
+--
+-- Name: detalle_padrefamilia_id_detallepadrefamilia_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.detalle_padrefamilia_id_detallepadrefamilia_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: detalle_padrefamilia_id_detallepadrefamilia_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.detalle_padrefamilia_id_detallepadrefamilia_seq OWNED BY public.detalle_padrefamilia.id_detallepadrefamilia;
+
+
+--
+-- Name: dimensiones_preescolar; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.dimensiones_preescolar (
+    id_dimension integer NOT NULL,
+    nombre character varying(100) NOT NULL
+);
+
+
+--
+-- Name: dimensiones_preescolar_id_dimension_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.dimensiones_preescolar_id_dimension_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: dimensiones_preescolar_id_dimension_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.dimensiones_preescolar_id_dimension_seq OWNED BY public.dimensiones_preescolar.id_dimension;
+
+
+--
+-- Name: directivo; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.directivo (
+    id integer NOT NULL,
+    id_colegio integer NOT NULL,
+    id_usuario integer,
+    cargo character varying(100),
+    estado public.estado_usuario_sistema DEFAULT 'ACTIVO'::public.estado_usuario_sistema NOT NULL,
+    fecha_vinculacion timestamp with time zone DEFAULT now() NOT NULL,
+    fecha_desvinculacion timestamp with time zone
+);
+
+
+--
+-- Name: directivo_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.directivo_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: directivo_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.directivo_id_seq OWNED BY public.directivo.id;
+
+
+--
+-- Name: docente; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.docente (
+    id_docente integer NOT NULL,
+    nombre character varying(255) NOT NULL,
+    apellido character varying(255) NOT NULL,
+    id_colegio integer NOT NULL,
+    id_usuario integer,
+    estado character varying(20) DEFAULT 'ACTIVO'::character varying NOT NULL
+);
+
+
+--
+-- Name: docente_id_docente_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.docente_id_docente_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: docente_id_docente_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.docente_id_docente_seq OWNED BY public.docente.id_docente;
+
+
+--
+-- Name: documento_matriculas; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.documento_matriculas (
+    id_documento integer NOT NULL,
+    id_matricula integer NOT NULL,
+    tipo_documento character varying(100) NOT NULL,
+    url text NOT NULL,
+    estado public.estado_documento DEFAULT 'PENDIENTE'::public.estado_documento NOT NULL,
+    fecha timestamp with time zone NOT NULL,
+    id_colegio integer NOT NULL,
+    version integer DEFAULT 1 NOT NULL,
+    fecha_expedicion date,
+    estado_renovacion public.estado_renovacion_documento DEFAULT 'VIGENTE'::public.estado_renovacion_documento,
+    contenido bytea,
+    mime_type character varying(100),
+    nombre_original character varying(255),
+    tamano_bytes integer
+);
+
+
+--
+-- Name: documento_matriculas_id_documento_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.documento_matriculas_id_documento_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: documento_matriculas_id_documento_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.documento_matriculas_id_documento_seq OWNED BY public.documento_matriculas.id_documento;
+
+
+--
+-- Name: escala_valoracion; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.escala_valoracion (
+    id_escalavaloracion integer NOT NULL,
+    nivel character varying(20) NOT NULL,
+    valor_minimo numeric(5,2) NOT NULL,
+    valor_maximo numeric(5,2) NOT NULL,
+    id_colegio integer NOT NULL,
+    id_anio integer NOT NULL
+);
+
+
+--
+-- Name: escala_valoracion_id_escalavaloracion_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.escala_valoracion_id_escalavaloracion_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: escala_valoracion_id_escalavaloracion_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.escala_valoracion_id_escalavaloracion_seq OWNED BY public.escala_valoracion.id_escalavaloracion;
+
+
+--
+-- Name: estudiante; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.estudiante (
+    id_estudiante integer NOT NULL,
+    nombre character varying(100) NOT NULL,
+    apellido character varying(100) NOT NULL,
+    codigo character varying(20) NOT NULL,
+    id_colegio integer NOT NULL,
+    id_usuario integer,
+    estado public.estado_estudiante DEFAULT 'ACTIVO'::public.estado_estudiante,
+    motivo_estado text
+);
+
+
+--
+-- Name: estudiante_id_estudiante_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.estudiante_id_estudiante_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: estudiante_id_estudiante_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.estudiante_id_estudiante_seq OWNED BY public.estudiante.id_estudiante;
+
+
+--
+-- Name: evidencia_aprendizaje; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.evidencia_aprendizaje (
+    id_evidencia integer NOT NULL,
+    id_competencia integer NOT NULL,
+    descripcion text NOT NULL,
+    orden integer DEFAULT 0 NOT NULL,
+    id_colegio integer NOT NULL,
+    id_evidencia_dba integer,
+    CONSTRAINT chk_evidencia_orden CHECK ((orden >= 1))
+);
+
+
+--
+-- Name: evidencia_aprendizaje_id_evidencia_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.evidencia_aprendizaje_id_evidencia_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: evidencia_aprendizaje_id_evidencia_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.evidencia_aprendizaje_id_evidencia_seq OWNED BY public.evidencia_aprendizaje.id_evidencia;
+
+
+--
+-- Name: evidencias_dba; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.evidencias_dba (
+    id_evidencia_dba integer NOT NULL,
+    id_dba integer NOT NULL,
+    descripcion text NOT NULL,
+    orden integer DEFAULT 1 NOT NULL,
+    estado public.estado_dba DEFAULT 'ACTIVO'::public.estado_dba NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_evidencias_dba_orden CHECK ((orden >= 1))
+);
+
+
+--
+-- Name: evidencias_dba_id_evidencia_dba_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.evidencias_dba_id_evidencia_dba_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: evidencias_dba_id_evidencia_dba_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.evidencias_dba_id_evidencia_dba_seq OWNED BY public.evidencias_dba.id_evidencia_dba;
+
+
+--
+-- Name: grupos; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.grupos (
+    id_grupo integer NOT NULL,
+    id_jornada integer NOT NULL,
+    id_colegio integer NOT NULL,
+    id_seccion integer NOT NULL,
+    cupos_totales integer DEFAULT 0 NOT NULL,
+    id_tipo_grado integer NOT NULL,
+    id_docente integer,
+    CONSTRAINT chk_cupos CHECK ((cupos_totales >= 0))
+);
+
+
+--
+-- Name: grupos_id_grupo_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.grupos_id_grupo_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: grupos_id_grupo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.grupos_id_grupo_seq OWNED BY public.grupos.id_grupo;
+
+
+--
+-- Name: jornada; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.jornada (
+    id_jornada integer NOT NULL,
+    nombre public.tipo_jornada NOT NULL,
+    id_colegio integer NOT NULL
+);
+
+
+--
+-- Name: jornada_id_jornada_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.jornada_id_jornada_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: jornada_id_jornada_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.jornada_id_jornada_seq OWNED BY public.jornada.id_jornada;
+
+
+--
+-- Name: legacy_grados_archive; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.legacy_grados_archive (
+    id_grado integer,
+    nivel character varying(50),
+    tipo_grado character varying(50),
+    id_jornada integer,
+    id_colegio integer,
+    cupos_totales integer,
+    seccion character varying(10)
+);
+
+
+--
+-- Name: TABLE legacy_grados_archive; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.legacy_grados_archive IS 'Respaldo inmutable del historico de la entidad arcaica grados previo a su deprecacion formal.';
+
+
+--
+-- Name: materias; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.materias (
+    id_materia integer NOT NULL,
+    nombre character varying(100) NOT NULL,
+    id_colegio integer NOT NULL
+);
+
+
+--
+-- Name: materias_id_materia_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.materias_id_materia_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: materias_id_materia_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.materias_id_materia_seq OWNED BY public.materias.id_materia;
+
+
+--
+-- Name: matricula; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.matricula (
+    id_matricula integer NOT NULL,
+    id_estudiante integer,
+    id_nivel integer,
+    id_colegio integer NOT NULL,
+    id_anio integer CONSTRAINT "matricula_id_año_not_null" NOT NULL,
+    estado public.estado_matricula NOT NULL,
+    correo_padre character varying(100),
+    tiene_discapacidad boolean DEFAULT false,
+    es_extranjero boolean DEFAULT false,
+    token_seguimiento uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    id_grupo integer,
+    motivo_cancelacion character varying(100),
+    detalles_cancelacion text,
+    es_traslado boolean DEFAULT false,
+    fecha_aprobacion timestamp without time zone,
+    tipo public.tipo_matricula DEFAULT 'REGULAR'::public.tipo_matricula NOT NULL,
+    motivo text,
+    observaciones text,
+    id_usuario_responsable integer,
+    fecha_creacion timestamp without time zone DEFAULT now(),
+    id_ticket integer
+);
+
+
+--
+-- Name: matricula_id_matricula_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.matricula_id_matricula_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: matricula_id_matricula_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.matricula_id_matricula_seq OWNED BY public.matricula.id_matricula;
+
+
+--
+-- Name: nivel_escolar; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.nivel_escolar (
+    id_nivel integer NOT NULL,
+    nombre character varying(100) NOT NULL,
+    id_colegio integer NOT NULL
+);
+
+
+--
+-- Name: nivel_escolar_id_nivel_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.nivel_escolar_id_nivel_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: nivel_escolar_id_nivel_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.nivel_escolar_id_nivel_seq OWNED BY public.nivel_escolar.id_nivel;
+
+
+--
+-- Name: nota_criterio; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.nota_criterio (
+    id_nota_criterio integer NOT NULL,
+    id_criterio integer NOT NULL,
+    id_estudiante integer NOT NULL,
+    nota numeric(5,2) NOT NULL,
+    id_colegio integer NOT NULL
+);
+
+
+--
+-- Name: nota_criterio_id_nota_criterio_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.nota_criterio_id_nota_criterio_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: nota_criterio_id_nota_criterio_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.nota_criterio_id_nota_criterio_seq OWNED BY public.nota_criterio.id_nota_criterio;
+
+
+--
+-- Name: notas_actividad; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.notas_actividad (
+    id_notaactividad integer NOT NULL,
+    id_actividadmateria integer NOT NULL,
+    id_estudiante integer NOT NULL,
+    id_escalavaloracion integer NOT NULL,
+    nota numeric(5,2),
+    id_colegio integer NOT NULL,
+    CONSTRAINT chk_nota_actividad_rango CHECK (((nota IS NULL) OR (nota >= (0)::numeric))),
+    CONSTRAINT chk_nota_o_escala_obligatoria CHECK (((nota IS NOT NULL) OR (id_escalavaloracion IS NOT NULL))),
+    CONSTRAINT chk_nota_valida CHECK (((nota IS NULL) OR ((nota >= 0.00) AND (nota <= 100.00))))
+);
+
+
+--
+-- Name: notas_actividad_id_notaactividad_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.notas_actividad_id_notaactividad_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: notas_actividad_id_notaactividad_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.notas_actividad_id_notaactividad_seq OWNED BY public.notas_actividad.id_notaactividad;
+
+
+--
+-- Name: notificacion_colegio; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.notificacion_colegio (
+    id_notificacion integer NOT NULL,
+    id_colegio integer NOT NULL,
+    id_directivo integer NOT NULL,
+    tipo character varying(50) NOT NULL,
+    mensaje text NOT NULL,
+    estado_anterior character varying(20),
+    estado_nuevo character varying(20),
+    leida boolean DEFAULT false NOT NULL,
+    fecha_notificacion timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: notificacion_colegio_id_notificacion_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.notificacion_colegio ALTER COLUMN id_notificacion ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.notificacion_colegio_id_notificacion_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: notificacion_supervision; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.notificacion_supervision (
+    id_notificacion integer NOT NULL,
+    id_auditoria integer NOT NULL,
+    id_directivo integer NOT NULL,
+    tipo_notificacion character varying(50) NOT NULL,
+    mensaje text NOT NULL,
+    leida boolean DEFAULT false NOT NULL,
+    fecha_notificacion timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: notificacion_supervision_id_notificacion_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.notificacion_supervision ALTER COLUMN id_notificacion ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.notificacion_supervision_id_notificacion_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: observacion_estudiante; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.observacion_estudiante (
+    id_observacion integer NOT NULL,
+    id_estudiante integer NOT NULL,
+    id_detallegrado integer NOT NULL,
+    id_periodo integer NOT NULL,
+    fortalezas text,
+    debilidades text,
+    recomendaciones text,
+    fecha timestamp with time zone NOT NULL,
+    id_colegio integer NOT NULL,
+    tipo public.tipo_observacion DEFAULT 'ACADEMICA'::public.tipo_observacion
+);
+
+
+--
+-- Name: observacion_estudiante_id_observacion_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.observacion_estudiante_id_observacion_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: observacion_estudiante_id_observacion_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.observacion_estudiante_id_observacion_seq OWNED BY public.observacion_estudiante.id_observacion;
+
+
+--
+-- Name: padre_familia; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.padre_familia (
+    id_padrefamilia integer NOT NULL,
+    nombre character varying(50) NOT NULL,
+    apellido character varying(50) NOT NULL,
+    id_colegio integer,
+    id_usuario integer
+);
+
+
+--
+-- Name: padre_familia_id_padrefamilia_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.padre_familia_id_padrefamilia_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: padre_familia_id_padrefamilia_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.padre_familia_id_padrefamilia_seq OWNED BY public.padre_familia.id_padrefamilia;
+
+
+--
+-- Name: papelera_materias; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.papelera_materias (
+    id_papelera integer NOT NULL,
+    id_colegio integer,
+    nombre_materia character varying(255),
+    data_respaldo jsonb,
+    fecha_borrado timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    fecha_expiracion timestamp without time zone DEFAULT (CURRENT_TIMESTAMP + '30 days'::interval)
+);
+
+
+--
+-- Name: papelera_materias_id_papelera_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.papelera_materias_id_papelera_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: papelera_materias_id_papelera_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.papelera_materias_id_papelera_seq OWNED BY public.papelera_materias.id_papelera;
+
+
+--
+-- Name: password_reset_tokens; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.password_reset_tokens (
+    id integer NOT NULL,
+    id_usuario integer NOT NULL,
+    token character varying(255) NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    used boolean DEFAULT false NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: password_reset_tokens_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.password_reset_tokens_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: password_reset_tokens_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.password_reset_tokens_id_seq OWNED BY public.password_reset_tokens.id;
+
+
+--
+-- Name: periodo_academico; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.periodo_academico (
+    id_periodo integer NOT NULL,
+    nombre character varying(100) NOT NULL,
+    estado public.estado_periodo NOT NULL,
+    porcentaje numeric(5,2) NOT NULL,
+    id_anio integer NOT NULL,
+    id_colegio integer NOT NULL,
+    trimestre integer,
+    dia_inicio integer,
+    dia_fin integer,
+    mes_inicio integer,
+    mes_fin integer,
+    fecha_inicio date NOT NULL,
+    fecha_fin date NOT NULL,
+    CONSTRAINT chk_periodo_fechas CHECK ((fecha_fin >= fecha_inicio)),
+    CONSTRAINT chk_periodo_porcentaje CHECK (((porcentaje > (0)::numeric) AND (porcentaje <= (100)::numeric)))
+);
+
+
+--
+-- Name: periodo_academico_id_periodo_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.periodo_academico_id_periodo_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: periodo_academico_id_periodo_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.periodo_academico_id_periodo_seq OWNED BY public.periodo_academico.id_periodo;
+
+
+--
+-- Name: registro_asistencia; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.registro_asistencia (
+    id_registroasistencia integer NOT NULL,
+    id_estudiante integer NOT NULL,
+    id_detallegrado integer NOT NULL,
+    fecha timestamp with time zone NOT NULL,
+    estado public.estado_asistencia DEFAULT 'PRESENTE'::public.estado_asistencia NOT NULL,
+    id_colegio integer NOT NULL,
+    justificacion text,
+    hora_llegada time without time zone
+);
+
+
+--
+-- Name: registro_asistencia_detalle; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.registro_asistencia_detalle (
+    id_asistencia_detalle integer NOT NULL,
+    id_registroasistencia integer NOT NULL,
+    numero_bloque integer NOT NULL,
+    estado character varying(20) NOT NULL,
+    hora_registro time without time zone,
+    observacion text,
+    CONSTRAINT chk_bloque_positivo CHECK (((numero_bloque > 0) AND (numero_bloque <= 12)))
+);
+
+
+--
+-- Name: registro_asistencia_detalle_id_asistencia_detalle_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.registro_asistencia_detalle_id_asistencia_detalle_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: registro_asistencia_detalle_id_asistencia_detalle_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.registro_asistencia_detalle_id_asistencia_detalle_seq OWNED BY public.registro_asistencia_detalle.id_asistencia_detalle;
+
+
+--
+-- Name: registro_asistencia_id_registroasistencia_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.registro_asistencia_id_registroasistencia_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: registro_asistencia_id_registroasistencia_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.registro_asistencia_id_registroasistencia_seq OWNED BY public.registro_asistencia.id_registroasistencia;
+
+
+--
+-- Name: registro_graduados; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.registro_graduados (
+    id_graduado integer NOT NULL,
+    id_estudiante integer NOT NULL,
+    fecha_graduacion timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    observaciones text,
+    id_usuario_registro integer,
+    creado_en timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    id_anio integer NOT NULL
+);
+
+
+--
+-- Name: registro_graduados_id_graduado_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.registro_graduados_id_graduado_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: registro_graduados_id_graduado_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.registro_graduados_id_graduado_seq OWNED BY public.registro_graduados.id_graduado;
+
+
+--
+-- Name: resultado_academico; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.resultado_academico (
+    id_resultado integer NOT NULL,
+    id_estudiante integer NOT NULL,
+    id_detallegrado integer NOT NULL,
+    id_periodo integer NOT NULL,
+    promedio numeric(5,2) NOT NULL,
+    estado public.estado_resultado NOT NULL,
+    fecha_cierre timestamp with time zone NOT NULL,
+    id_docente integer NOT NULL,
+    observacion text,
+    CONSTRAINT chk_promedio_valido CHECK (((promedio >= 0.00) AND (promedio <= 100.00))),
+    CONSTRAINT chk_resultado_promedio CHECK ((promedio >= (0)::numeric))
+);
+
+
+--
+-- Name: resultado_academico_id_resultado_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.resultado_academico_id_resultado_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: resultado_academico_id_resultado_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.resultado_academico_id_resultado_seq OWNED BY public.resultado_academico.id_resultado;
+
+
+--
+-- Name: rol; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.rol (
+    id_rol integer NOT NULL,
+    nombre character varying(50) NOT NULL
+);
+
+
+--
+-- Name: rol_id_rol_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.rol_id_rol_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: rol_id_rol_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.rol_id_rol_seq OWNED BY public.rol.id_rol;
+
+
+--
+-- Name: sancion; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.sancion (
+    id_sancion integer NOT NULL,
+    id_estudiante integer NOT NULL,
+    id_tipo_sancion integer NOT NULL,
+    motivo text NOT NULL,
+    fecha_inicio date DEFAULT CURRENT_DATE NOT NULL,
+    fecha_fin date NOT NULL,
+    estado public.estado_sancion DEFAULT 'ACTIVA'::public.estado_sancion,
+    observaciones text,
+    id_directivo integer NOT NULL,
+    creado_en timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_fechas_sancion CHECK ((fecha_fin >= fecha_inicio))
+);
+
+
+--
+-- Name: sancion_id_sancion_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.sancion_id_sancion_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: sancion_id_sancion_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.sancion_id_sancion_seq OWNED BY public.sancion.id_sancion;
+
+
+--
+-- Name: secciones; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.secciones (
+    id_seccion integer NOT NULL,
+    nombre character varying(10) NOT NULL
+);
+
+
+--
+-- Name: secciones_id_seccion_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.secciones_id_seccion_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: secciones_id_seccion_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.secciones_id_seccion_seq OWNED BY public.secciones.id_seccion;
+
+
+--
+-- Name: solicitud_traslado; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.solicitud_traslado (
+    id_solicitud integer NOT NULL,
+    tipo public.tipo_traslado DEFAULT 'TRASLADO_USUARIO'::public.tipo_traslado NOT NULL,
+    id_usuario integer NOT NULL,
+    id_colegio_origen integer NOT NULL,
+    id_colegio_destino integer NOT NULL,
+    id_matricula integer,
+    estado public.estado_solicitud_traslado DEFAULT 'SOLICITADA'::public.estado_solicitud_traslado NOT NULL,
+    motivo text NOT NULL,
+    creado_por integer NOT NULL,
+    fecha_creacion timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+    fecha_finalizacion timestamp with time zone,
+    id_grupo_destino integer,
+    CONSTRAINT chk_origen_destino_diff CHECK ((id_colegio_origen <> id_colegio_destino))
+);
+
+
+--
+-- Name: solicitud_traslado_id_solicitud_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.solicitud_traslado_id_solicitud_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: solicitud_traslado_id_solicitud_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.solicitud_traslado_id_solicitud_seq OWNED BY public.solicitud_traslado.id_solicitud;
+
+
+--
+-- Name: ticket_observaciones; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ticket_observaciones (
+    id_observacion integer NOT NULL,
+    id_ticket integer NOT NULL,
+    id_usuario integer,
+    contenido text NOT NULL,
+    fecha_creacion timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: ticket_observaciones_id_observacion_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.ticket_observaciones_id_observacion_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: ticket_observaciones_id_observacion_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.ticket_observaciones_id_observacion_seq OWNED BY public.ticket_observaciones.id_observacion;
+
+
+--
+-- Name: tickets_soporte; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.tickets_soporte (
+    id_ticket integer NOT NULL,
+    id_usuario integer,
+    nombre_remitente character varying(155) NOT NULL,
+    correo_remitente character varying(155) NOT NULL,
+    telefono character varying(50),
+    tipo_incidencia public.tipo_incidencia_soporte NOT NULL,
+    asunto character varying(255) NOT NULL,
+    descripcion text NOT NULL,
+    estado public.estado_ticket_soporte DEFAULT 'ABIERTO'::public.estado_ticket_soporte,
+    fecha_creacion timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+    id_colegio integer,
+    observaciones jsonb DEFAULT '[]'::jsonb,
+    codigo_ticket character varying(50),
+    fecha_escalado timestamp with time zone,
+    id_estudiante integer
+);
+
+
+--
+-- Name: tickets_soporte_id_ticket_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.tickets_soporte_id_ticket_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: tickets_soporte_id_ticket_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.tickets_soporte_id_ticket_seq OWNED BY public.tickets_soporte.id_ticket;
+
+
+--
+-- Name: tipo_documento; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.tipo_documento (
+    id_tipodocumento integer NOT NULL,
+    tipo character varying(255) NOT NULL
+);
+
+
+--
+-- Name: tipo_documento_id_tipodocumento_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.tipo_documento_id_tipodocumento_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: tipo_documento_id_tipodocumento_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.tipo_documento_id_tipodocumento_seq OWNED BY public.tipo_documento.id_tipodocumento;
+
+
+--
+-- Name: tipo_grado; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.tipo_grado (
+    id_tipo_grado integer CONSTRAINT tipo_grado_tabla_id_tipo_grado_not_null NOT NULL,
+    nombre character varying(50) CONSTRAINT tipo_grado_tabla_nombre_not_null NOT NULL,
+    id_nivel integer CONSTRAINT tipo_grado_tabla_id_nivel_not_null NOT NULL
+);
+
+
+--
+-- Name: tipo_grado_tabla_id_tipo_grado_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.tipo_grado_tabla_id_tipo_grado_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: tipo_grado_tabla_id_tipo_grado_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.tipo_grado_tabla_id_tipo_grado_seq OWNED BY public.tipo_grado.id_tipo_grado;
+
+
+--
+-- Name: tipo_sancion; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.tipo_sancion (
+    id_tipo_sancion integer NOT NULL,
+    nombre character varying(100) NOT NULL,
+    descripcion text
+);
+
+
+--
+-- Name: tipo_sancion_id_tipo_sancion_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.tipo_sancion_id_tipo_sancion_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: tipo_sancion_id_tipo_sancion_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.tipo_sancion_id_tipo_sancion_seq OWNED BY public.tipo_sancion.id_tipo_sancion;
+
+
+--
+-- Name: token_blacklist; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.token_blacklist (
+    id integer NOT NULL,
+    jti character varying(255) NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    created_at timestamp with time zone DEFAULT now()
+);
+
+
+--
+-- Name: token_blacklist_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.token_blacklist_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: token_blacklist_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.token_blacklist_id_seq OWNED BY public.token_blacklist.id;
+
+
+--
+-- Name: tokens_verificacion; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.tokens_verificacion (
+    id_token integer NOT NULL,
+    id_usuario integer,
+    tipo_token character varying(50) NOT NULL,
+    token_hash character varying(255) NOT NULL,
+    codigo_verificacion character varying(50),
+    metadata jsonb,
+    usado boolean DEFAULT false NOT NULL,
+    fecha_expiracion timestamp with time zone NOT NULL,
+    fecha_creacion timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: tokens_verificacion_id_token_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.tokens_verificacion_id_token_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: tokens_verificacion_id_token_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.tokens_verificacion_id_token_seq OWNED BY public.tokens_verificacion.id_token;
+
+
+--
+-- Name: traslado_aprobacion; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.traslado_aprobacion (
+    id_aprobacion integer NOT NULL,
+    id_solicitud integer NOT NULL,
+    id_usuario integer NOT NULL,
+    rol character varying(50) NOT NULL,
+    accion public.accion_aprobacion_traslado NOT NULL,
+    comentario text,
+    fecha timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+    id_grupo_destino integer
+);
+
+
+--
+-- Name: traslado_aprobacion_id_aprobacion_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.traslado_aprobacion_id_aprobacion_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: traslado_aprobacion_id_aprobacion_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.traslado_aprobacion_id_aprobacion_seq OWNED BY public.traslado_aprobacion.id_aprobacion;
+
+
+--
+-- Name: usuario; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.usuario (
+    id_usuario integer NOT NULL,
+    email character varying(255),
+    password character varying(255) NOT NULL,
+    nombre character varying(255) NOT NULL,
+    apellido character varying(255),
+    activo boolean DEFAULT true,
+    fecha_creacion timestamp with time zone DEFAULT now(),
+    estado public.estado_usuario_sistema DEFAULT 'ACTIVO'::public.estado_usuario_sistema NOT NULL,
+    motivo_baneo text,
+    fecha_baneo timestamp with time zone,
+    baneado_por integer,
+    logged_out_at timestamp with time zone,
+    id_tipodocumento integer,
+    documento character varying(50),
+    telefono character varying(50),
+    CONSTRAINT chk_usuario_documento_format CHECK (((documento IS NULL) OR ((documento)::text ~ '^[a-zA-Z0-9]+$'::text)))
+);
+
+
+--
+-- Name: usuario_colegio; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.usuario_colegio (
+    id_usuario_colegio integer NOT NULL,
+    id_usuario integer NOT NULL,
+    id_colegio integer NOT NULL,
+    id_rol integer NOT NULL,
+    estado character varying(20) DEFAULT 'ACTIVO'::character varying NOT NULL,
+    fecha_inicio timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+    fecha_fin timestamp with time zone,
+    CONSTRAINT usuario_colegio_estado_check CHECK (((estado)::text = ANY (ARRAY[('ACTIVO'::character varying)::text, ('INACTIVO'::character varying)::text, ('SUSPENDIDO'::character varying)::text])))
+);
+
+
+--
+-- Name: usuario_colegio_email; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.usuario_colegio_email (
+    id integer NOT NULL,
+    id_usuario integer NOT NULL,
+    id_colegio integer NOT NULL,
+    email_institucional character varying(255) NOT NULL,
+    fecha_asignacion timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: usuario_colegio_email_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.usuario_colegio_email_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: usuario_colegio_email_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.usuario_colegio_email_id_seq OWNED BY public.usuario_colegio_email.id;
+
+
+--
+-- Name: usuario_colegio_id_usuario_colegio_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.usuario_colegio_id_usuario_colegio_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: usuario_colegio_id_usuario_colegio_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.usuario_colegio_id_usuario_colegio_seq OWNED BY public.usuario_colegio.id_usuario_colegio;
+
+
+--
+-- Name: usuario_id_usuario_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.usuario_id_usuario_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: usuario_id_usuario_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.usuario_id_usuario_seq OWNED BY public.usuario.id_usuario;
+
+
+--
+-- Name: usuario_rol; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.usuario_rol (
+    id_usuario integer NOT NULL,
+    id_rol integer NOT NULL
+);
+
+
+--
+-- Name: vw_asistencia_estudiante; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.vw_asistencia_estudiante AS
+ SELECT id_estudiante,
+    id_detallegrado,
+    count(*) FILTER (WHERE ((estado)::text = 'PRESENTE'::text)) AS presentes,
+    count(*) FILTER (WHERE ((estado)::text = 'AUSENTE'::text)) AS ausentes,
+    count(*) FILTER (WHERE ((estado)::text = 'TARDE'::text)) AS tardes,
+    count(*) FILTER (WHERE ((estado)::text = 'JUSTIFICADA'::text)) AS justificadas
+   FROM public.registro_asistencia
+  GROUP BY id_estudiante, id_detallegrado;
+
+
+--
+-- Name: vw_notas_enriquecidas; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.vw_notas_enriquecidas AS
+ SELECT n.id_estudiante,
+    e.nombre,
+    e.apellido,
+    n.nota,
+    n.id_escalavaloracion,
+    a.id_periodo,
+    a.id_detallegrado,
+    a.nombre AS actividad,
+    dg.id_materia,
+    dg.id_docente,
+    n.id_colegio
+   FROM (((public.notas_actividad n
+     JOIN public.estudiante e ON ((e.id_estudiante = n.id_estudiante)))
+     JOIN public.actividad_materia a ON ((a.id_actividadmateria = n.id_actividadmateria)))
+     JOIN public.detalle_grados dg ON ((dg.id_detallegrado = a.id_detallegrado)));
+
+
+--
+-- Name: vw_observaciones_estudiante; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.vw_observaciones_estudiante AS
+ SELECT id_estudiante,
+    id_periodo,
+    string_agg(fortalezas, ', '::text) AS fortalezas,
+    string_agg(debilidades, ', '::text) AS debilidades
+   FROM public.observacion_estudiante
+  GROUP BY id_estudiante, id_periodo;
+
+
+--
+-- Name: vw_promedio_estudiante_periodo; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.vw_promedio_estudiante_periodo AS
+ SELECT id_estudiante,
+    id_periodo,
+    id_colegio,
+    avg(nota) AS promedio_raw
+   FROM public.vw_notas_enriquecidas
+  GROUP BY id_estudiante, id_periodo, id_colegio;
+
+
+--
+-- Name: vw_promedio_materia; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.vw_promedio_materia AS
+ SELECT dg.id_materia,
+    n.id_estudiante,
+    a.id_periodo,
+    n.id_colegio,
+    avg(n.nota) AS promedio_materia
+   FROM ((public.notas_actividad n
+     JOIN public.actividad_materia a ON ((a.id_actividadmateria = n.id_actividadmateria)))
+     JOIN public.detalle_grados dg ON ((dg.id_detallegrado = a.id_detallegrado)))
+  GROUP BY dg.id_materia, n.id_estudiante, a.id_periodo, n.id_colegio;
+
+
+--
+-- Name: actividad_materia id_actividadmateria; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.actividad_materia ALTER COLUMN id_actividadmateria SET DEFAULT nextval('public.actividad_materia_id_actividadmateria_seq'::regclass);
+
+
+--
+-- Name: anio_lectivo id_anio; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.anio_lectivo ALTER COLUMN id_anio SET DEFAULT nextval('public.anio_lectivo_id_anio_seq'::regclass);
+
+
+--
+-- Name: cierre_materia id_cierremateria; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cierre_materia ALTER COLUMN id_cierremateria SET DEFAULT nextval('public.cierre_materia_id_cierremateria_seq'::regclass);
+
+
+--
+-- Name: codigo_verificacion_email id_verificacion; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.codigo_verificacion_email ALTER COLUMN id_verificacion SET DEFAULT nextval('public.codigo_verificacion_email_id_verificacion_seq'::regclass);
+
+
+--
+-- Name: colegio id_colegio; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.colegio ALTER COLUMN id_colegio SET DEFAULT nextval('public.colegio_id_colegio_seq'::regclass);
+
+
+--
+-- Name: colegio_version_curricular id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.colegio_version_curricular ALTER COLUMN id SET DEFAULT nextval('public.colegio_version_curricular_id_seq'::regclass);
+
+
+--
+-- Name: competencias id_competencia; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.competencias ALTER COLUMN id_competencia SET DEFAULT nextval('public.competencias_id_competencia_seq'::regclass);
+
+
+--
+-- Name: configuracion_inscripcion id_configuracion; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.configuracion_inscripcion ALTER COLUMN id_configuracion SET DEFAULT nextval('public.configuracion_inscripcion_id_configuracion_seq'::regclass);
+
+
+--
+-- Name: criterio_evaluacion id_criterio; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.criterio_evaluacion ALTER COLUMN id_criterio SET DEFAULT nextval('public.criterio_evaluacion_id_criterio_seq'::regclass);
+
+
+--
+-- Name: dba id_dba; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dba ALTER COLUMN id_dba SET DEFAULT nextval('public.dba_id_dba_seq'::regclass);
+
+
+--
+-- Name: decision_promocion_directivo id_decision; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.decision_promocion_directivo ALTER COLUMN id_decision SET DEFAULT nextval('public.decision_promocion_directivo_id_decision_seq'::regclass);
+
+
+--
+-- Name: detalle_grados id_detallegrado; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.detalle_grados ALTER COLUMN id_detallegrado SET DEFAULT nextval('public.detalle_grados_id_detallegrado_seq'::regclass);
+
+
+--
+-- Name: detalle_padrefamilia id_detallepadrefamilia; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.detalle_padrefamilia ALTER COLUMN id_detallepadrefamilia SET DEFAULT nextval('public.detalle_padrefamilia_id_detallepadrefamilia_seq'::regclass);
+
+
+--
+-- Name: dimensiones_preescolar id_dimension; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dimensiones_preescolar ALTER COLUMN id_dimension SET DEFAULT nextval('public.dimensiones_preescolar_id_dimension_seq'::regclass);
+
+
+--
+-- Name: directivo id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.directivo ALTER COLUMN id SET DEFAULT nextval('public.directivo_id_seq'::regclass);
+
+
+--
+-- Name: docente id_docente; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.docente ALTER COLUMN id_docente SET DEFAULT nextval('public.docente_id_docente_seq'::regclass);
+
+
+--
+-- Name: documento_matriculas id_documento; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.documento_matriculas ALTER COLUMN id_documento SET DEFAULT nextval('public.documento_matriculas_id_documento_seq'::regclass);
+
+
+--
+-- Name: escala_valoracion id_escalavaloracion; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.escala_valoracion ALTER COLUMN id_escalavaloracion SET DEFAULT nextval('public.escala_valoracion_id_escalavaloracion_seq'::regclass);
+
+
+--
+-- Name: estudiante id_estudiante; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.estudiante ALTER COLUMN id_estudiante SET DEFAULT nextval('public.estudiante_id_estudiante_seq'::regclass);
+
+
+--
+-- Name: evidencia_aprendizaje id_evidencia; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.evidencia_aprendizaje ALTER COLUMN id_evidencia SET DEFAULT nextval('public.evidencia_aprendizaje_id_evidencia_seq'::regclass);
+
+
+--
+-- Name: evidencias_dba id_evidencia_dba; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.evidencias_dba ALTER COLUMN id_evidencia_dba SET DEFAULT nextval('public.evidencias_dba_id_evidencia_dba_seq'::regclass);
+
+
+--
+-- Name: grupos id_grupo; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.grupos ALTER COLUMN id_grupo SET DEFAULT nextval('public.grupos_id_grupo_seq'::regclass);
+
+
+--
+-- Name: jornada id_jornada; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.jornada ALTER COLUMN id_jornada SET DEFAULT nextval('public.jornada_id_jornada_seq'::regclass);
+
+
+--
+-- Name: materias id_materia; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.materias ALTER COLUMN id_materia SET DEFAULT nextval('public.materias_id_materia_seq'::regclass);
+
+
+--
+-- Name: matricula id_matricula; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.matricula ALTER COLUMN id_matricula SET DEFAULT nextval('public.matricula_id_matricula_seq'::regclass);
+
+
+--
+-- Name: nivel_escolar id_nivel; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.nivel_escolar ALTER COLUMN id_nivel SET DEFAULT nextval('public.nivel_escolar_id_nivel_seq'::regclass);
+
+
+--
+-- Name: nota_criterio id_nota_criterio; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.nota_criterio ALTER COLUMN id_nota_criterio SET DEFAULT nextval('public.nota_criterio_id_nota_criterio_seq'::regclass);
+
+
+--
+-- Name: notas_actividad id_notaactividad; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notas_actividad ALTER COLUMN id_notaactividad SET DEFAULT nextval('public.notas_actividad_id_notaactividad_seq'::regclass);
+
+
+--
+-- Name: observacion_estudiante id_observacion; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.observacion_estudiante ALTER COLUMN id_observacion SET DEFAULT nextval('public.observacion_estudiante_id_observacion_seq'::regclass);
+
+
+--
+-- Name: padre_familia id_padrefamilia; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.padre_familia ALTER COLUMN id_padrefamilia SET DEFAULT nextval('public.padre_familia_id_padrefamilia_seq'::regclass);
+
+
+--
+-- Name: papelera_materias id_papelera; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.papelera_materias ALTER COLUMN id_papelera SET DEFAULT nextval('public.papelera_materias_id_papelera_seq'::regclass);
+
+
+--
+-- Name: password_reset_tokens id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.password_reset_tokens ALTER COLUMN id SET DEFAULT nextval('public.password_reset_tokens_id_seq'::regclass);
+
+
+--
+-- Name: periodo_academico id_periodo; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.periodo_academico ALTER COLUMN id_periodo SET DEFAULT nextval('public.periodo_academico_id_periodo_seq'::regclass);
+
+
+--
+-- Name: registro_asistencia id_registroasistencia; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.registro_asistencia ALTER COLUMN id_registroasistencia SET DEFAULT nextval('public.registro_asistencia_id_registroasistencia_seq'::regclass);
+
+
+--
+-- Name: registro_asistencia_detalle id_asistencia_detalle; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.registro_asistencia_detalle ALTER COLUMN id_asistencia_detalle SET DEFAULT nextval('public.registro_asistencia_detalle_id_asistencia_detalle_seq'::regclass);
+
+
+--
+-- Name: registro_graduados id_graduado; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.registro_graduados ALTER COLUMN id_graduado SET DEFAULT nextval('public.registro_graduados_id_graduado_seq'::regclass);
+
+
+--
+-- Name: resultado_academico id_resultado; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.resultado_academico ALTER COLUMN id_resultado SET DEFAULT nextval('public.resultado_academico_id_resultado_seq'::regclass);
+
+
+--
+-- Name: rol id_rol; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.rol ALTER COLUMN id_rol SET DEFAULT nextval('public.rol_id_rol_seq'::regclass);
+
+
+--
+-- Name: sancion id_sancion; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.sancion ALTER COLUMN id_sancion SET DEFAULT nextval('public.sancion_id_sancion_seq'::regclass);
+
+
+--
+-- Name: secciones id_seccion; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.secciones ALTER COLUMN id_seccion SET DEFAULT nextval('public.secciones_id_seccion_seq'::regclass);
+
+
+--
+-- Name: solicitud_traslado id_solicitud; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.solicitud_traslado ALTER COLUMN id_solicitud SET DEFAULT nextval('public.solicitud_traslado_id_solicitud_seq'::regclass);
+
+
+--
+-- Name: ticket_observaciones id_observacion; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ticket_observaciones ALTER COLUMN id_observacion SET DEFAULT nextval('public.ticket_observaciones_id_observacion_seq'::regclass);
+
+
+--
+-- Name: tickets_soporte id_ticket; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tickets_soporte ALTER COLUMN id_ticket SET DEFAULT nextval('public.tickets_soporte_id_ticket_seq'::regclass);
+
+
+--
+-- Name: tipo_documento id_tipodocumento; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tipo_documento ALTER COLUMN id_tipodocumento SET DEFAULT nextval('public.tipo_documento_id_tipodocumento_seq'::regclass);
+
+
+--
+-- Name: tipo_grado id_tipo_grado; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tipo_grado ALTER COLUMN id_tipo_grado SET DEFAULT nextval('public.tipo_grado_tabla_id_tipo_grado_seq'::regclass);
+
+
+--
+-- Name: tipo_sancion id_tipo_sancion; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tipo_sancion ALTER COLUMN id_tipo_sancion SET DEFAULT nextval('public.tipo_sancion_id_tipo_sancion_seq'::regclass);
+
+
+--
+-- Name: token_blacklist id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.token_blacklist ALTER COLUMN id SET DEFAULT nextval('public.token_blacklist_id_seq'::regclass);
+
+
+--
+-- Name: tokens_verificacion id_token; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tokens_verificacion ALTER COLUMN id_token SET DEFAULT nextval('public.tokens_verificacion_id_token_seq'::regclass);
+
+
+--
+-- Name: traslado_aprobacion id_aprobacion; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.traslado_aprobacion ALTER COLUMN id_aprobacion SET DEFAULT nextval('public.traslado_aprobacion_id_aprobacion_seq'::regclass);
+
+
+--
+-- Name: usuario id_usuario; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.usuario ALTER COLUMN id_usuario SET DEFAULT nextval('public.usuario_id_usuario_seq'::regclass);
+
+
+--
+-- Name: usuario_colegio id_usuario_colegio; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.usuario_colegio ALTER COLUMN id_usuario_colegio SET DEFAULT nextval('public.usuario_colegio_id_usuario_colegio_seq'::regclass);
+
+
+--
+-- Name: usuario_colegio_email id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.usuario_colegio_email ALTER COLUMN id SET DEFAULT nextval('public.usuario_colegio_email_id_seq'::regclass);
+
+
+--
+-- Name: actividad_evidencia_dba actividad_evidencia_dba_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.actividad_evidencia_dba
+    ADD CONSTRAINT actividad_evidencia_dba_pkey PRIMARY KEY (id_actividadmateria, id_evidencia_dba);
+
+
+--
+-- Name: actividad_materia actividad_materia_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.actividad_materia
+    ADD CONSTRAINT actividad_materia_pkey PRIMARY KEY (id_actividadmateria);
+
+
+--
+-- Name: auditoria_acciones_realizadas auditoria_acciones_realizadas_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.auditoria_acciones_realizadas
+    ADD CONSTRAINT auditoria_acciones_realizadas_pkey PRIMARY KEY (id_accion);
+
+
+--
+-- Name: auditoria_supervision auditoria_supervision_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.auditoria_supervision
+    ADD CONSTRAINT auditoria_supervision_pkey PRIMARY KEY (id_auditoria);
+
+
+--
+-- Name: anio_lectivo año_lectivo_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.anio_lectivo
+    ADD CONSTRAINT "año_lectivo_pkey" PRIMARY KEY (id_anio);
+
+
+--
+-- Name: cierre_materia cierre_materia_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cierre_materia
+    ADD CONSTRAINT cierre_materia_pkey PRIMARY KEY (id_cierremateria);
+
+
+--
+-- Name: codigo_verificacion_email codigo_verificacion_email_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.codigo_verificacion_email
+    ADD CONSTRAINT codigo_verificacion_email_pkey PRIMARY KEY (id_verificacion);
+
+
+--
+-- Name: colegio colegio_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.colegio
+    ADD CONSTRAINT colegio_pkey PRIMARY KEY (id_colegio);
+
+
+--
+-- Name: colegio_version_curricular colegio_version_curricular_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.colegio_version_curricular
+    ADD CONSTRAINT colegio_version_curricular_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: competencias competencias_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.competencias
+    ADD CONSTRAINT competencias_pkey PRIMARY KEY (id_competencia);
+
+
+--
+-- Name: configuracion_inscripcion configuracion_inscripcion_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.configuracion_inscripcion
+    ADD CONSTRAINT configuracion_inscripcion_pkey PRIMARY KEY (id_configuracion);
+
+
+--
+-- Name: configuracion_plataforma configuracion_plataforma_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.configuracion_plataforma
+    ADD CONSTRAINT configuracion_plataforma_pkey PRIMARY KEY (clave);
+
+
+--
+-- Name: criterio_evaluacion criterio_evaluacion_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.criterio_evaluacion
+    ADD CONSTRAINT criterio_evaluacion_pkey PRIMARY KEY (id_criterio);
+
+
+--
+-- Name: dba_dimensiones_preescolar dba_dimensiones_preescolar_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dba_dimensiones_preescolar
+    ADD CONSTRAINT dba_dimensiones_preescolar_pkey PRIMARY KEY (id_dba, id_dimension);
+
+
+--
+-- Name: dba dba_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dba
+    ADD CONSTRAINT dba_pkey PRIMARY KEY (id_dba);
+
+
+--
+-- Name: decision_promocion_directivo decision_promocion_directivo_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.decision_promocion_directivo
+    ADD CONSTRAINT decision_promocion_directivo_pkey PRIMARY KEY (id_decision);
+
+
+--
+-- Name: detalle_grados detalle_grados_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.detalle_grados
+    ADD CONSTRAINT detalle_grados_pkey PRIMARY KEY (id_detallegrado);
+
+
+--
+-- Name: detalle_padrefamilia detalle_padrefamilia_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.detalle_padrefamilia
+    ADD CONSTRAINT detalle_padrefamilia_pkey PRIMARY KEY (id_detallepadrefamilia);
+
+
+--
+-- Name: dimensiones_preescolar dimensiones_preescolar_nombre_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dimensiones_preescolar
+    ADD CONSTRAINT dimensiones_preescolar_nombre_key UNIQUE (nombre);
+
+
+--
+-- Name: dimensiones_preescolar dimensiones_preescolar_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dimensiones_preescolar
+    ADD CONSTRAINT dimensiones_preescolar_pkey PRIMARY KEY (id_dimension);
+
+
+--
+-- Name: directivo directivo_id_usuario_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.directivo
+    ADD CONSTRAINT directivo_id_usuario_key UNIQUE (id_usuario);
+
+
+--
+-- Name: directivo directivo_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.directivo
+    ADD CONSTRAINT directivo_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: docente docente_id_usuario_id_colegio_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.docente
+    ADD CONSTRAINT docente_id_usuario_id_colegio_key UNIQUE (id_usuario, id_colegio);
+
+
+--
+-- Name: docente docente_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.docente
+    ADD CONSTRAINT docente_pkey PRIMARY KEY (id_docente);
+
+
+--
+-- Name: documento_matriculas documento_matriculas_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.documento_matriculas
+    ADD CONSTRAINT documento_matriculas_pkey PRIMARY KEY (id_documento);
+
+
+--
+-- Name: escala_valoracion escala_valoracion_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.escala_valoracion
+    ADD CONSTRAINT escala_valoracion_pkey PRIMARY KEY (id_escalavaloracion);
+
+
+--
+-- Name: estudiante estudiante_id_usuario_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.estudiante
+    ADD CONSTRAINT estudiante_id_usuario_key UNIQUE (id_usuario);
+
+
+--
+-- Name: estudiante estudiante_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.estudiante
+    ADD CONSTRAINT estudiante_pkey PRIMARY KEY (id_estudiante);
+
+
+--
+-- Name: evidencia_aprendizaje evidencia_aprendizaje_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.evidencia_aprendizaje
+    ADD CONSTRAINT evidencia_aprendizaje_pkey PRIMARY KEY (id_evidencia);
+
+
+--
+-- Name: evidencias_dba evidencias_dba_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.evidencias_dba
+    ADD CONSTRAINT evidencias_dba_pkey PRIMARY KEY (id_evidencia_dba);
+
+
+--
+-- Name: grupos grupos_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.grupos
+    ADD CONSTRAINT grupos_pkey PRIMARY KEY (id_grupo);
+
+
+--
+-- Name: jornada jornada_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.jornada
+    ADD CONSTRAINT jornada_pkey PRIMARY KEY (id_jornada);
+
+
+--
+-- Name: materias materias_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.materias
+    ADD CONSTRAINT materias_pkey PRIMARY KEY (id_materia);
+
+
+--
+-- Name: matricula matricula_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.matricula
+    ADD CONSTRAINT matricula_pkey PRIMARY KEY (id_matricula);
+
+
+--
+-- Name: matricula matricula_token_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.matricula
+    ADD CONSTRAINT matricula_token_key UNIQUE (token_seguimiento);
+
+
+--
+-- Name: nivel_escolar nivel_escolar_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.nivel_escolar
+    ADD CONSTRAINT nivel_escolar_pkey PRIMARY KEY (id_nivel);
+
+
+--
+-- Name: nota_criterio nota_criterio_id_criterio_id_estudiante_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.nota_criterio
+    ADD CONSTRAINT nota_criterio_id_criterio_id_estudiante_key UNIQUE (id_criterio, id_estudiante);
+
+
+--
+-- Name: nota_criterio nota_criterio_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.nota_criterio
+    ADD CONSTRAINT nota_criterio_pkey PRIMARY KEY (id_nota_criterio);
+
+
+--
+-- Name: notas_actividad notas_actividad_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notas_actividad
+    ADD CONSTRAINT notas_actividad_pkey PRIMARY KEY (id_notaactividad);
+
+
+--
+-- Name: notificacion_colegio notificacion_colegio_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notificacion_colegio
+    ADD CONSTRAINT notificacion_colegio_pkey PRIMARY KEY (id_notificacion);
+
+
+--
+-- Name: notificacion_supervision notificacion_supervision_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notificacion_supervision
+    ADD CONSTRAINT notificacion_supervision_pkey PRIMARY KEY (id_notificacion);
+
+
+--
+-- Name: observacion_estudiante observacion_estudiante_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.observacion_estudiante
+    ADD CONSTRAINT observacion_estudiante_pkey PRIMARY KEY (id_observacion);
+
+
+--
+-- Name: padre_familia padre_familia_id_usuario_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.padre_familia
+    ADD CONSTRAINT padre_familia_id_usuario_key UNIQUE (id_usuario);
+
+
+--
+-- Name: padre_familia padre_familia_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.padre_familia
+    ADD CONSTRAINT padre_familia_pkey PRIMARY KEY (id_padrefamilia);
+
+
+--
+-- Name: papelera_materias papelera_materias_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.papelera_materias
+    ADD CONSTRAINT papelera_materias_pkey PRIMARY KEY (id_papelera);
+
+
+--
+-- Name: password_reset_tokens password_reset_tokens_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.password_reset_tokens
+    ADD CONSTRAINT password_reset_tokens_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: password_reset_tokens password_reset_tokens_token_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.password_reset_tokens
+    ADD CONSTRAINT password_reset_tokens_token_key UNIQUE (token);
+
+
+--
+-- Name: periodo_academico periodo_academico_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.periodo_academico
+    ADD CONSTRAINT periodo_academico_pkey PRIMARY KEY (id_periodo);
+
+
+--
+-- Name: registro_asistencia_detalle registro_asistencia_detalle_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.registro_asistencia_detalle
+    ADD CONSTRAINT registro_asistencia_detalle_pkey PRIMARY KEY (id_asistencia_detalle);
+
+
+--
+-- Name: registro_asistencia registro_asistencia_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.registro_asistencia
+    ADD CONSTRAINT registro_asistencia_pkey PRIMARY KEY (id_registroasistencia);
+
+
+--
+-- Name: registro_graduados registro_graduados_id_estudiante_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.registro_graduados
+    ADD CONSTRAINT registro_graduados_id_estudiante_key UNIQUE (id_estudiante);
+
+
+--
+-- Name: registro_graduados registro_graduados_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.registro_graduados
+    ADD CONSTRAINT registro_graduados_pkey PRIMARY KEY (id_graduado);
+
+
+--
+-- Name: resultado_academico resultado_academico_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.resultado_academico
+    ADD CONSTRAINT resultado_academico_pkey PRIMARY KEY (id_resultado);
+
+
+--
+-- Name: rol rol_nombre_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.rol
+    ADD CONSTRAINT rol_nombre_key UNIQUE (nombre);
+
+
+--
+-- Name: rol rol_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.rol
+    ADD CONSTRAINT rol_pkey PRIMARY KEY (id_rol);
+
+
+--
+-- Name: sancion sancion_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.sancion
+    ADD CONSTRAINT sancion_pkey PRIMARY KEY (id_sancion);
+
+
+--
+-- Name: secciones secciones_nombre_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.secciones
+    ADD CONSTRAINT secciones_nombre_key UNIQUE (nombre);
+
+
+--
+-- Name: secciones secciones_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.secciones
+    ADD CONSTRAINT secciones_pkey PRIMARY KEY (id_seccion);
+
+
+--
+-- Name: solicitud_traslado solicitud_traslado_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.solicitud_traslado
+    ADD CONSTRAINT solicitud_traslado_pkey PRIMARY KEY (id_solicitud);
+
+
+--
+-- Name: ticket_observaciones ticket_observaciones_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ticket_observaciones
+    ADD CONSTRAINT ticket_observaciones_pkey PRIMARY KEY (id_observacion);
+
+
+--
+-- Name: tickets_soporte tickets_soporte_codigo_ticket_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tickets_soporte
+    ADD CONSTRAINT tickets_soporte_codigo_ticket_key UNIQUE (codigo_ticket);
+
+
+--
+-- Name: tickets_soporte tickets_soporte_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tickets_soporte
+    ADD CONSTRAINT tickets_soporte_pkey PRIMARY KEY (id_ticket);
+
+
+--
+-- Name: tipo_documento tipo_documento_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tipo_documento
+    ADD CONSTRAINT tipo_documento_pkey PRIMARY KEY (id_tipodocumento);
+
+
+--
+-- Name: tipo_grado tipo_grado_tabla_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tipo_grado
+    ADD CONSTRAINT tipo_grado_tabla_pkey PRIMARY KEY (id_tipo_grado);
+
+
+--
+-- Name: tipo_sancion tipo_sancion_nombre_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tipo_sancion
+    ADD CONSTRAINT tipo_sancion_nombre_key UNIQUE (nombre);
+
+
+--
+-- Name: tipo_sancion tipo_sancion_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tipo_sancion
+    ADD CONSTRAINT tipo_sancion_pkey PRIMARY KEY (id_tipo_sancion);
+
+
+--
+-- Name: token_blacklist token_blacklist_jti_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.token_blacklist
+    ADD CONSTRAINT token_blacklist_jti_key UNIQUE (jti);
+
+
+--
+-- Name: token_blacklist token_blacklist_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.token_blacklist
+    ADD CONSTRAINT token_blacklist_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: tokens_verificacion tokens_verificacion_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tokens_verificacion
+    ADD CONSTRAINT tokens_verificacion_pkey PRIMARY KEY (id_token);
+
+
+--
+-- Name: traslado_aprobacion traslado_aprobacion_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.traslado_aprobacion
+    ADD CONSTRAINT traslado_aprobacion_pkey PRIMARY KEY (id_aprobacion);
+
+
+--
+-- Name: notas_actividad unique_actividad_estudiante; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notas_actividad
+    ADD CONSTRAINT unique_actividad_estudiante UNIQUE (id_actividadmateria, id_estudiante);
+
+
+--
+-- Name: actividad_materia uq_actividad_materia_tenant; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.actividad_materia
+    ADD CONSTRAINT uq_actividad_materia_tenant UNIQUE (id_actividadmateria, id_colegio);
+
+
+--
+-- Name: anio_lectivo uq_anio_colegio_calendario; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.anio_lectivo
+    ADD CONSTRAINT uq_anio_colegio_calendario UNIQUE (id_colegio, calendario, tipo_calendario);
+
+
+--
+-- Name: registro_asistencia_detalle uq_asistencia_bloque; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.registro_asistencia_detalle
+    ADD CONSTRAINT uq_asistencia_bloque UNIQUE (id_registroasistencia, numero_bloque);
+
+
+--
+-- Name: cierre_materia uq_cierre_materia_periodo; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cierre_materia
+    ADD CONSTRAINT uq_cierre_materia_periodo UNIQUE (id_detallegrado, id_periodo);
+
+
+--
+-- Name: configuracion_inscripcion uq_colegio_anio; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.configuracion_inscripcion
+    ADD CONSTRAINT uq_colegio_anio UNIQUE (id_colegio, id_anio);
+
+
+--
+-- Name: colegio_version_curricular uq_colegio_area_grado; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.colegio_version_curricular
+    ADD CONSTRAINT uq_colegio_area_grado UNIQUE (id_colegio, area, grado);
+
+
+--
+-- Name: criterio_evaluacion uq_criterio_evaluacion_tenant; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.criterio_evaluacion
+    ADD CONSTRAINT uq_criterio_evaluacion_tenant UNIQUE (id_criterio, id_colegio);
+
+
+--
+-- Name: dba uq_dba_area_grado_num_version; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dba
+    ADD CONSTRAINT uq_dba_area_grado_num_version UNIQUE (area, grado, numero_dba, version_curricular);
+
+
+--
+-- Name: decision_promocion_directivo uq_decision_promocion_estudiante_colegio_anio; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.decision_promocion_directivo
+    ADD CONSTRAINT uq_decision_promocion_estudiante_colegio_anio UNIQUE (id_estudiante, id_colegio, id_anio_anterior);
+
+
+--
+-- Name: detalle_padrefamilia uq_detalle_padrefamilia_padre_estudiante; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.detalle_padrefamilia
+    ADD CONSTRAINT uq_detalle_padrefamilia_padre_estudiante UNIQUE (id_padrefamilia, id_estudiante);
+
+
+--
+-- Name: escala_valoracion uq_escala_colegio_anio_nivel; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.escala_valoracion
+    ADD CONSTRAINT uq_escala_colegio_anio_nivel UNIQUE (id_colegio, id_anio, nivel);
+
+
+--
+-- Name: estudiante uq_estudiante_colegio_codigo; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.estudiante
+    ADD CONSTRAINT uq_estudiante_colegio_codigo UNIQUE (id_colegio, codigo);
+
+
+--
+-- Name: evidencia_aprendizaje uq_evidencia_competencia_orden; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.evidencia_aprendizaje
+    ADD CONSTRAINT uq_evidencia_competencia_orden UNIQUE (id_competencia, orden);
+
+
+--
+-- Name: matricula uq_matricula_estudiante_anio_colegio; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.matricula
+    ADD CONSTRAINT uq_matricula_estudiante_anio_colegio UNIQUE (id_estudiante, id_anio, id_colegio);
+
+
+--
+-- Name: matricula uq_matricula_tenant; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.matricula
+    ADD CONSTRAINT uq_matricula_tenant UNIQUE (id_matricula, id_colegio);
+
+
+--
+-- Name: observacion_estudiante uq_observacion_estudiante_periodo_tipo; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.observacion_estudiante
+    ADD CONSTRAINT uq_observacion_estudiante_periodo_tipo UNIQUE (id_estudiante, id_detallegrado, id_periodo, tipo);
+
+
+--
+-- Name: periodo_academico uq_periodo_anio_trimestre; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.periodo_academico
+    ADD CONSTRAINT uq_periodo_anio_trimestre UNIQUE (id_anio, trimestre);
+
+
+--
+-- Name: resultado_academico uq_resultado_estudiante_detalle_periodo; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.resultado_academico
+    ADD CONSTRAINT uq_resultado_estudiante_detalle_periodo UNIQUE (id_estudiante, id_detallegrado, id_periodo);
+
+
+--
+-- Name: tipo_documento uq_tipo_documento_tipo; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tipo_documento
+    ADD CONSTRAINT uq_tipo_documento_tipo UNIQUE (tipo);
+
+
+--
+-- Name: tipo_grado uq_tipo_grado; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tipo_grado
+    ADD CONSTRAINT uq_tipo_grado UNIQUE (nombre, id_nivel);
+
+
+--
+-- Name: usuario_colegio_email uq_usuario_colegio_email; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.usuario_colegio_email
+    ADD CONSTRAINT uq_usuario_colegio_email UNIQUE (id_usuario, id_colegio);
+
+
+--
+-- Name: usuario_colegio uq_usuario_colegio_rol; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.usuario_colegio
+    ADD CONSTRAINT uq_usuario_colegio_rol UNIQUE (id_usuario, id_colegio, id_rol);
+
+
+--
+-- Name: usuario_colegio_email usuario_colegio_email_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.usuario_colegio_email
+    ADD CONSTRAINT usuario_colegio_email_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: usuario_colegio usuario_colegio_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.usuario_colegio
+    ADD CONSTRAINT usuario_colegio_pkey PRIMARY KEY (id_usuario_colegio);
+
+
+--
+-- Name: usuario usuario_email_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.usuario
+    ADD CONSTRAINT usuario_email_key UNIQUE (email);
+
+
+--
+-- Name: usuario usuario_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.usuario
+    ADD CONSTRAINT usuario_pkey PRIMARY KEY (id_usuario);
+
+
+--
+-- Name: usuario_rol usuario_rol_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.usuario_rol
+    ADD CONSTRAINT usuario_rol_pkey PRIMARY KEY (id_usuario, id_rol);
+
+
+--
+-- Name: idx_actividad_evidencia_dba_act; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_actividad_evidencia_dba_act ON public.actividad_evidencia_dba USING btree (id_actividadmateria);
+
+
+--
+-- Name: idx_actividad_evidencia_dba_ev; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_actividad_evidencia_dba_ev ON public.actividad_evidencia_dba USING btree (id_evidencia_dba);
+
+
+--
+-- Name: idx_actividad_materia_dg_periodo; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_actividad_materia_dg_periodo ON public.actividad_materia USING btree (id_detallegrado, id_periodo);
+
+
+--
+-- Name: idx_asistencia_detalle_padre; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_asistencia_detalle_padre ON public.registro_asistencia_detalle USING btree (id_registroasistencia);
+
+
+--
+-- Name: idx_asistencia_estudiante; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_asistencia_estudiante ON public.registro_asistencia USING btree (id_estudiante);
+
+
+--
+-- Name: idx_audit_acc_auditoria; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_audit_acc_auditoria ON public.auditoria_acciones_realizadas USING btree (id_auditoria);
+
+
+--
+-- Name: idx_audit_acc_fecha; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_audit_acc_fecha ON public.auditoria_acciones_realizadas USING btree (fecha_accion);
+
+
+--
+-- Name: idx_audit_acc_tipo; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_audit_acc_tipo ON public.auditoria_acciones_realizadas USING btree (tipo_accion);
+
+
+--
+-- Name: idx_audit_acc_usuario; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_audit_acc_usuario ON public.auditoria_acciones_realizadas USING btree (id_usuario_afectado) WHERE (id_usuario_afectado IS NOT NULL);
+
+
+--
+-- Name: idx_audit_sup_admin; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_audit_sup_admin ON public.auditoria_supervision USING btree (id_admin_general);
+
+
+--
+-- Name: idx_audit_sup_colegio; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_audit_sup_colegio ON public.auditoria_supervision USING btree (id_colegio);
+
+
+--
+-- Name: idx_audit_sup_eliminado; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_audit_sup_eliminado ON public.auditoria_supervision USING btree (eliminado) WHERE (eliminado = false);
+
+
+--
+-- Name: idx_audit_sup_estado; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_audit_sup_estado ON public.auditoria_supervision USING btree (estado_supervision);
+
+
+--
+-- Name: idx_audit_sup_fecha; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_audit_sup_fecha ON public.auditoria_supervision USING btree (fecha_solicitud);
+
+
+--
+-- Name: idx_codigo_verificacion_email; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_codigo_verificacion_email ON public.codigo_verificacion_email USING btree (email, codigo, tipo);
+
+
+--
+-- Name: idx_colegio_estado; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_colegio_estado ON public.colegio USING btree (estado);
+
+
+--
+-- Name: idx_colegio_version_colegio; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_colegio_version_colegio ON public.colegio_version_curricular USING btree (id_colegio);
+
+
+--
+-- Name: idx_competencias_context; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_competencias_context ON public.competencias USING btree (id_colegio, id_anio, id_periodo, id_grupo, id_materia);
+
+
+--
+-- Name: idx_competencias_dimension; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_competencias_dimension ON public.competencias USING btree (id_dimension) WHERE (id_dimension IS NOT NULL);
+
+
+--
+-- Name: idx_competencias_sync_uuid; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_competencias_sync_uuid ON public.competencias USING btree (sync_uuid);
+
+
+--
+-- Name: idx_config_inscripcion_colegio; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_config_inscripcion_colegio ON public.configuracion_inscripcion USING btree (id_colegio);
+
+
+--
+-- Name: idx_dba_area_grado; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_dba_area_grado ON public.dba USING btree (area, grado);
+
+
+--
+-- Name: idx_dba_estado; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_dba_estado ON public.dba USING btree (estado) WHERE (estado = 'ACTIVO'::public.estado_dba);
+
+
+--
+-- Name: idx_dba_version; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_dba_version ON public.dba USING btree (version_curricular);
+
+
+--
+-- Name: idx_decision_promocion_anio; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_decision_promocion_anio ON public.decision_promocion_directivo USING btree (id_anio_anterior);
+
+
+--
+-- Name: idx_decision_promocion_colegio_anio; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_decision_promocion_colegio_anio ON public.decision_promocion_directivo USING btree (id_colegio, id_anio_anterior);
+
+
+--
+-- Name: idx_decision_promocion_estudiante; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_decision_promocion_estudiante ON public.decision_promocion_directivo USING btree (id_estudiante, id_colegio);
+
+
+--
+-- Name: idx_decision_promocion_tg_ant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_decision_promocion_tg_ant ON public.decision_promocion_directivo USING btree (id_tipo_grado_anterior);
+
+
+--
+-- Name: idx_decision_promocion_tg_asig; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_decision_promocion_tg_asig ON public.decision_promocion_directivo USING btree (id_tipo_grado_asignado);
+
+
+--
+-- Name: idx_detalle_grados_anio; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_detalle_grados_anio ON public.detalle_grados USING btree (id_anio);
+
+
+--
+-- Name: idx_detalle_grados_docente; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_detalle_grados_docente ON public.detalle_grados USING btree (id_docente);
+
+
+--
+-- Name: idx_detalle_grados_grupo; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_detalle_grados_grupo ON public.detalle_grados USING btree (id_grupo);
+
+
+--
+-- Name: idx_detalle_grados_materia; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_detalle_grados_materia ON public.detalle_grados USING btree (id_materia);
+
+
+--
+-- Name: idx_detalle_padrefamilia_padrefamilia; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_detalle_padrefamilia_padrefamilia ON public.detalle_padrefamilia USING btree (id_padrefamilia);
+
+
+--
+-- Name: idx_documento_matriculas_colegio; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_documento_matriculas_colegio ON public.documento_matriculas USING btree (id_colegio);
+
+
+--
+-- Name: idx_documento_matriculas_estado; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_documento_matriculas_estado ON public.documento_matriculas USING btree (id_matricula, estado);
+
+
+--
+-- Name: idx_documento_matriculas_lookup; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_documento_matriculas_lookup ON public.documento_matriculas USING btree (id_matricula, tipo_documento, version DESC);
+
+
+--
+-- Name: idx_documento_matriculas_matricula; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_documento_matriculas_matricula ON public.documento_matriculas USING btree (id_matricula);
+
+
+--
+-- Name: idx_evidencia_aprendizaje_colegio; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_evidencia_aprendizaje_colegio ON public.evidencia_aprendizaje USING btree (id_colegio);
+
+
+--
+-- Name: idx_evidencia_aprendizaje_dba; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_evidencia_aprendizaje_dba ON public.evidencia_aprendizaje USING btree (id_evidencia_dba) WHERE (id_evidencia_dba IS NOT NULL);
+
+
+--
+-- Name: idx_evidencia_competencia; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_evidencia_competencia ON public.evidencia_aprendizaje USING btree (id_competencia);
+
+
+--
+-- Name: idx_evidencias_dba_dba; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_evidencias_dba_dba ON public.evidencias_dba USING btree (id_dba);
+
+
+--
+-- Name: idx_grupos_tipo_grado; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_grupos_tipo_grado ON public.grupos USING btree (id_tipo_grado);
+
+
+--
+-- Name: idx_matricula_anio; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_matricula_anio ON public.matricula USING btree (id_anio);
+
+
+--
+-- Name: idx_matricula_colegio; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_matricula_colegio ON public.matricula USING btree (id_colegio);
+
+
+--
+-- Name: idx_matricula_estudiante; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_matricula_estudiante ON public.matricula USING btree (id_estudiante);
+
+
+--
+-- Name: idx_matricula_estudiante_anio_colegio_activo; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_matricula_estudiante_anio_colegio_activo ON public.matricula USING btree (id_estudiante, id_anio, id_colegio) WHERE (estado <> ALL (ARRAY['CANCELADA'::public.estado_matricula, 'RECHAZADA'::public.estado_matricula]));
+
+
+--
+-- Name: idx_matricula_grupo; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_matricula_grupo ON public.matricula USING btree (id_grupo);
+
+
+--
+-- Name: idx_nota_criterio_colegio; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_nota_criterio_colegio ON public.nota_criterio USING btree (id_colegio);
+
+
+--
+-- Name: idx_notas_actividad; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_notas_actividad ON public.notas_actividad USING btree (id_actividadmateria);
+
+
+--
+-- Name: idx_notas_estudiante; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_notas_estudiante ON public.notas_actividad USING btree (id_estudiante);
+
+
+--
+-- Name: idx_notif_col_colegio; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_notif_col_colegio ON public.notificacion_colegio USING btree (id_colegio);
+
+
+--
+-- Name: idx_notif_col_directivo; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_notif_col_directivo ON public.notificacion_colegio USING btree (id_directivo);
+
+
+--
+-- Name: idx_notif_col_leida; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_notif_col_leida ON public.notificacion_colegio USING btree (leida) WHERE (leida = false);
+
+
+--
+-- Name: idx_notif_sup_auditoria; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_notif_sup_auditoria ON public.notificacion_supervision USING btree (id_auditoria);
+
+
+--
+-- Name: idx_notif_sup_directivo; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_notif_sup_directivo ON public.notificacion_supervision USING btree (id_directivo);
+
+
+--
+-- Name: idx_notif_sup_leida; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_notif_sup_leida ON public.notificacion_supervision USING btree (leida) WHERE (leida = false);
+
+
+--
+-- Name: idx_observacion_detallegrado_periodo; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_observacion_detallegrado_periodo ON public.observacion_estudiante USING btree (id_detallegrado, id_periodo);
+
+
+--
+-- Name: idx_observacion_estudiante; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_observacion_estudiante ON public.observacion_estudiante USING btree (id_estudiante);
+
+
+--
+-- Name: idx_observacion_estudiante_periodo; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_observacion_estudiante_periodo ON public.observacion_estudiante USING btree (id_estudiante, id_periodo);
+
+
+--
+-- Name: idx_password_reset_token; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_password_reset_token ON public.password_reset_tokens USING btree (token);
+
+
+--
+-- Name: idx_registro_asistencia_detallegrado; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_registro_asistencia_detallegrado ON public.registro_asistencia USING btree (id_detallegrado);
+
+
+--
+-- Name: idx_registro_asistencia_detallegrado_fecha; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_registro_asistencia_detallegrado_fecha ON public.registro_asistencia USING btree (id_detallegrado, (((fecha AT TIME ZONE 'UTC'::text))::date));
+
+
+--
+-- Name: idx_registro_asistencia_dia_unique; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_registro_asistencia_dia_unique ON public.registro_asistencia USING btree (id_estudiante, id_detallegrado, (((fecha AT TIME ZONE 'UTC'::text))::date));
+
+
+--
+-- Name: idx_registro_graduados_anio; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_registro_graduados_anio ON public.registro_graduados USING btree (id_anio);
+
+
+--
+-- Name: idx_resultado_academico_detallegrado; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_resultado_academico_detallegrado ON public.resultado_academico USING btree (id_detallegrado);
+
+
+--
+-- Name: idx_resultado_academico_estudiante; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_resultado_academico_estudiante ON public.resultado_academico USING btree (id_estudiante);
+
+
+--
+-- Name: idx_resultado_academico_periodo; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_resultado_academico_periodo ON public.resultado_academico USING btree (id_periodo);
+
+
+--
+-- Name: idx_sancion_directivo; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_sancion_directivo ON public.sancion USING btree (id_directivo);
+
+
+--
+-- Name: idx_sancion_estudiante; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_sancion_estudiante ON public.sancion USING btree (id_estudiante);
+
+
+--
+-- Name: idx_sancion_tipo_sancion; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_sancion_tipo_sancion ON public.sancion USING btree (id_tipo_sancion);
+
+
+--
+-- Name: idx_solicitud_traslado_destino; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_solicitud_traslado_destino ON public.solicitud_traslado USING btree (id_colegio_destino);
+
+
+--
+-- Name: idx_solicitud_traslado_origen; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_solicitud_traslado_origen ON public.solicitud_traslado USING btree (id_colegio_origen);
+
+
+--
+-- Name: idx_solicitud_traslado_usr; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_solicitud_traslado_usr ON public.solicitud_traslado USING btree (id_usuario);
+
+
+--
+-- Name: idx_ticket_obs_ticket; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_ticket_obs_ticket ON public.ticket_observaciones USING btree (id_ticket);
+
+
+--
+-- Name: idx_ticket_obs_usuario; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_ticket_obs_usuario ON public.ticket_observaciones USING btree (id_usuario);
+
+
+--
+-- Name: idx_tickets_codigo; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_tickets_codigo ON public.tickets_soporte USING btree (codigo_ticket);
+
+
+--
+-- Name: idx_tickets_colegio; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_tickets_colegio ON public.tickets_soporte USING btree (id_colegio);
+
+
+--
+-- Name: idx_tickets_estado; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_tickets_estado ON public.tickets_soporte USING btree (estado);
+
+
+--
+-- Name: idx_tickets_usuario; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_tickets_usuario ON public.tickets_soporte USING btree (id_usuario);
+
+
+--
+-- Name: idx_token_blacklist_expires_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_token_blacklist_expires_at ON public.token_blacklist USING btree (expires_at);
+
+
+--
+-- Name: idx_tokens_verificacion_hash; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_tokens_verificacion_hash ON public.tokens_verificacion USING btree (token_hash);
+
+
+--
+-- Name: idx_tokens_verificacion_usuario; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_tokens_verificacion_usuario ON public.tokens_verificacion USING btree (id_usuario, tipo_token);
+
+
+--
+-- Name: idx_traslado_aprobacion_sol; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_traslado_aprobacion_sol ON public.traslado_aprobacion USING btree (id_solicitud);
+
+
+--
+-- Name: idx_uce_colegio; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_uce_colegio ON public.usuario_colegio_email USING btree (id_colegio);
+
+
+--
+-- Name: idx_uce_usuario; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_uce_usuario ON public.usuario_colegio_email USING btree (id_usuario);
+
+
+--
+-- Name: idx_usuario_colegio_activo; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_usuario_colegio_activo ON public.usuario_colegio USING btree (id_usuario, id_colegio) WHERE ((estado)::text = 'ACTIVO'::text);
+
+
+--
+-- Name: idx_usuario_colegio_col; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_usuario_colegio_col ON public.usuario_colegio USING btree (id_colegio);
+
+
+--
+-- Name: idx_usuario_colegio_colegio_rol; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_usuario_colegio_colegio_rol ON public.usuario_colegio USING btree (id_colegio, id_rol);
+
+
+--
+-- Name: idx_usuario_colegio_usr; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_usuario_colegio_usr ON public.usuario_colegio USING btree (id_usuario);
+
+
+--
+-- Name: idx_usuario_colegio_usuario_colegio; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_usuario_colegio_usuario_colegio ON public.usuario_colegio USING btree (id_usuario, id_colegio);
+
+
+--
+-- Name: idx_usuario_documento; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_usuario_documento ON public.usuario USING btree (documento);
+
+
+--
+-- Name: idx_usuario_email; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_usuario_email ON public.usuario USING btree (email);
+
+
+--
+-- Name: idx_usuario_estado; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_usuario_estado ON public.usuario USING btree (estado);
+
+
+--
+-- Name: registro_asistencia trg_bloquear_asistencia_periodo; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_bloquear_asistencia_periodo BEFORE INSERT OR DELETE OR UPDATE ON public.registro_asistencia FOR EACH ROW EXECUTE FUNCTION public.fn_bloquear_periodo_cerrado();
+
+
+--
+-- Name: notas_actividad trg_bloquear_notas_periodo; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_bloquear_notas_periodo BEFORE INSERT OR DELETE OR UPDATE ON public.notas_actividad FOR EACH ROW EXECUTE FUNCTION public.fn_bloquear_periodo_cerrado();
+
+
+--
+-- Name: observacion_estudiante trg_bloquear_observacion_periodo; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_bloquear_observacion_periodo BEFORE INSERT OR DELETE OR UPDATE ON public.observacion_estudiante FOR EACH ROW EXECUTE FUNCTION public.fn_bloquear_periodo_cerrado();
+
+
+--
+-- Name: notas_actividad trg_bloqueo_mutacion_notas; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_bloqueo_mutacion_notas BEFORE DELETE OR UPDATE ON public.notas_actividad FOR EACH ROW EXECUTE FUNCTION public.fn_prohibir_mutacion_calificaciones_cerradas();
+
+
+--
+-- Name: actividad_materia trg_prevent_closed_actividad_materia; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_prevent_closed_actividad_materia BEFORE INSERT OR DELETE OR UPDATE ON public.actividad_materia FOR EACH ROW EXECUTE FUNCTION public.trg_check_subject_not_closed();
+
+
+--
+-- Name: criterio_evaluacion trg_prevent_closed_criterio_evaluacion; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_prevent_closed_criterio_evaluacion BEFORE INSERT OR DELETE OR UPDATE ON public.criterio_evaluacion FOR EACH ROW EXECUTE FUNCTION public.trg_check_subject_not_closed();
+
+
+--
+-- Name: nota_criterio trg_prevent_closed_nota_criterio; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_prevent_closed_nota_criterio BEFORE INSERT OR DELETE OR UPDATE ON public.nota_criterio FOR EACH ROW EXECUTE FUNCTION public.trg_check_subject_not_closed();
+
+
+--
+-- Name: notas_actividad trg_prevent_closed_notas_actividad; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_prevent_closed_notas_actividad BEFORE INSERT OR DELETE OR UPDATE ON public.notas_actividad FOR EACH ROW EXECUTE FUNCTION public.trg_check_subject_not_closed();
+
+
+--
+-- Name: observacion_estudiante trg_prevent_closed_observacion_estudiante; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_prevent_closed_observacion_estudiante BEFORE INSERT OR DELETE OR UPDATE ON public.observacion_estudiante FOR EACH ROW EXECUTE FUNCTION public.trg_check_subject_not_closed();
+
+
+--
+-- Name: registro_asistencia trg_prevent_closed_registro_asistencia; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_prevent_closed_registro_asistencia BEFORE INSERT OR DELETE OR UPDATE ON public.registro_asistencia FOR EACH ROW EXECUTE FUNCTION public.trg_check_subject_not_closed();
+
+
+--
+-- Name: auditoria_acciones_realizadas trg_proteger_acciones; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_proteger_acciones BEFORE DELETE OR UPDATE ON public.auditoria_acciones_realizadas FOR EACH ROW EXECUTE FUNCTION public.proteger_acciones_auditoria();
+
+
+--
+-- Name: auditoria_supervision trg_proteger_auditoria; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_proteger_auditoria BEFORE DELETE OR UPDATE ON public.auditoria_supervision FOR EACH ROW EXECUTE FUNCTION public.proteger_auditoria_finalizada();
+
+
+--
+-- Name: sancion trg_sync_estudiante_sancion; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_sync_estudiante_sancion AFTER INSERT OR UPDATE ON public.sancion FOR EACH ROW EXECUTE FUNCTION public.fn_sync_estudiante_sancion();
+
+
+--
+-- Name: actividad_evidencia_dba actividad_evidencia_dba_id_actividadmateria_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.actividad_evidencia_dba
+    ADD CONSTRAINT actividad_evidencia_dba_id_actividadmateria_fkey FOREIGN KEY (id_actividadmateria) REFERENCES public.actividad_materia(id_actividadmateria) ON DELETE CASCADE;
+
+
+--
+-- Name: actividad_evidencia_dba actividad_evidencia_dba_id_evidencia_dba_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.actividad_evidencia_dba
+    ADD CONSTRAINT actividad_evidencia_dba_id_evidencia_dba_fkey FOREIGN KEY (id_evidencia_dba) REFERENCES public.evidencias_dba(id_evidencia_dba) ON DELETE CASCADE;
+
+
+--
+-- Name: actividad_materia actividad_materia_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.actividad_materia
+    ADD CONSTRAINT actividad_materia_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio);
+
+
+--
+-- Name: actividad_materia actividad_materia_id_competencia_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.actividad_materia
+    ADD CONSTRAINT actividad_materia_id_competencia_fkey FOREIGN KEY (id_competencia) REFERENCES public.competencias(id_competencia) ON DELETE CASCADE;
+
+
+--
+-- Name: actividad_materia actividad_materia_id_docente_creador_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.actividad_materia
+    ADD CONSTRAINT actividad_materia_id_docente_creador_fkey FOREIGN KEY (id_docente_creador) REFERENCES public.docente(id_docente);
+
+
+--
+-- Name: actividad_materia actividad_materia_id_evidencia_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.actividad_materia
+    ADD CONSTRAINT actividad_materia_id_evidencia_fkey FOREIGN KEY (id_evidencia) REFERENCES public.evidencia_aprendizaje(id_evidencia) ON DELETE SET NULL;
+
+
+--
+-- Name: actividad_materia actividad_materia_id_periodo_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.actividad_materia
+    ADD CONSTRAINT actividad_materia_id_periodo_fkey FOREIGN KEY (id_periodo) REFERENCES public.periodo_academico(id_periodo);
+
+
+--
+-- Name: auditoria_acciones_realizadas auditoria_acciones_realizadas_id_auditoria_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.auditoria_acciones_realizadas
+    ADD CONSTRAINT auditoria_acciones_realizadas_id_auditoria_fkey FOREIGN KEY (id_auditoria) REFERENCES public.auditoria_supervision(id_auditoria);
+
+
+--
+-- Name: auditoria_supervision auditoria_supervision_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.auditoria_supervision
+    ADD CONSTRAINT auditoria_supervision_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio);
+
+
+--
+-- Name: auditoria_supervision auditoria_supervision_id_directivo_aprobador_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.auditoria_supervision
+    ADD CONSTRAINT auditoria_supervision_id_directivo_aprobador_fkey FOREIGN KEY (id_directivo_aprobador) REFERENCES public.directivo(id);
+
+
+--
+-- Name: auditoria_supervision auditoria_supervision_revocado_por_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.auditoria_supervision
+    ADD CONSTRAINT auditoria_supervision_revocado_por_fkey FOREIGN KEY (revocado_por) REFERENCES public.directivo(id);
+
+
+--
+-- Name: anio_lectivo año_lectivo_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.anio_lectivo
+    ADD CONSTRAINT "año_lectivo_id_colegio_fkey" FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
+
+
+--
+-- Name: cierre_materia cierre_materia_id_detallegrado_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cierre_materia
+    ADD CONSTRAINT cierre_materia_id_detallegrado_fkey FOREIGN KEY (id_detallegrado) REFERENCES public.detalle_grados(id_detallegrado);
+
+
+--
+-- Name: cierre_materia cierre_materia_id_docente_cierre_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cierre_materia
+    ADD CONSTRAINT cierre_materia_id_docente_cierre_fkey FOREIGN KEY (id_docente_cierre) REFERENCES public.docente(id_docente) ON DELETE SET NULL;
+
+
+--
+-- Name: cierre_materia cierre_materia_id_periodo_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cierre_materia
+    ADD CONSTRAINT cierre_materia_id_periodo_fkey FOREIGN KEY (id_periodo) REFERENCES public.periodo_academico(id_periodo);
+
+
+--
+-- Name: codigo_verificacion_email codigo_verificacion_email_id_usuario_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.codigo_verificacion_email
+    ADD CONSTRAINT codigo_verificacion_email_id_usuario_fkey FOREIGN KEY (id_usuario) REFERENCES public.usuario(id_usuario) ON DELETE CASCADE;
+
+
+--
+-- Name: colegio_version_curricular colegio_version_curricular_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.colegio_version_curricular
+    ADD CONSTRAINT colegio_version_curricular_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
+
+
+--
+-- Name: competencias competencias_id_año_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.competencias
+    ADD CONSTRAINT "competencias_id_año_fkey" FOREIGN KEY (id_anio) REFERENCES public.anio_lectivo(id_anio) ON DELETE CASCADE;
+
+
+--
+-- Name: competencias competencias_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.competencias
+    ADD CONSTRAINT competencias_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
+
+
+--
+-- Name: competencias competencias_id_dimension_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.competencias
+    ADD CONSTRAINT competencias_id_dimension_fkey FOREIGN KEY (id_dimension) REFERENCES public.dimensiones_preescolar(id_dimension) ON DELETE SET NULL;
+
+
+--
+-- Name: competencias competencias_id_grupo_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.competencias
+    ADD CONSTRAINT competencias_id_grupo_fkey FOREIGN KEY (id_grupo) REFERENCES public.grupos(id_grupo) ON DELETE CASCADE;
+
+
+--
+-- Name: competencias competencias_id_materia_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.competencias
+    ADD CONSTRAINT competencias_id_materia_fkey FOREIGN KEY (id_materia) REFERENCES public.materias(id_materia) ON DELETE CASCADE;
+
+
+--
+-- Name: competencias competencias_id_periodo_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.competencias
+    ADD CONSTRAINT competencias_id_periodo_fkey FOREIGN KEY (id_periodo) REFERENCES public.periodo_academico(id_periodo) ON DELETE CASCADE;
+
+
+--
+-- Name: configuracion_inscripcion configuracion_inscripcion_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.configuracion_inscripcion
+    ADD CONSTRAINT configuracion_inscripcion_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
+
+
+--
+-- Name: criterio_evaluacion criterio_evaluacion_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.criterio_evaluacion
+    ADD CONSTRAINT criterio_evaluacion_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
+
+
+--
+-- Name: criterio_evaluacion criterio_evaluacion_id_evidencia_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.criterio_evaluacion
+    ADD CONSTRAINT criterio_evaluacion_id_evidencia_fkey FOREIGN KEY (id_evidencia) REFERENCES public.evidencia_aprendizaje(id_evidencia) ON DELETE SET NULL;
+
+
+--
+-- Name: dba_dimensiones_preescolar dba_dimensiones_preescolar_id_dba_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dba_dimensiones_preescolar
+    ADD CONSTRAINT dba_dimensiones_preescolar_id_dba_fkey FOREIGN KEY (id_dba) REFERENCES public.dba(id_dba) ON DELETE CASCADE;
+
+
+--
+-- Name: dba_dimensiones_preescolar dba_dimensiones_preescolar_id_dimension_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dba_dimensiones_preescolar
+    ADD CONSTRAINT dba_dimensiones_preescolar_id_dimension_fkey FOREIGN KEY (id_dimension) REFERENCES public.dimensiones_preescolar(id_dimension) ON DELETE CASCADE;
+
+
+--
+-- Name: decision_promocion_directivo decision_promocion_directivo_id_anio_anterior_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.decision_promocion_directivo
+    ADD CONSTRAINT decision_promocion_directivo_id_anio_anterior_fkey FOREIGN KEY (id_anio_anterior) REFERENCES public.anio_lectivo(id_anio) ON DELETE CASCADE;
+
+
+--
+-- Name: decision_promocion_directivo decision_promocion_directivo_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.decision_promocion_directivo
+    ADD CONSTRAINT decision_promocion_directivo_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
+
+
+--
+-- Name: decision_promocion_directivo decision_promocion_directivo_id_estudiante_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.decision_promocion_directivo
+    ADD CONSTRAINT decision_promocion_directivo_id_estudiante_fkey FOREIGN KEY (id_estudiante) REFERENCES public.estudiante(id_estudiante) ON DELETE CASCADE;
+
+
+--
+-- Name: detalle_grados detalle_grados_id_anio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.detalle_grados
+    ADD CONSTRAINT detalle_grados_id_anio_fkey FOREIGN KEY (id_anio) REFERENCES public.anio_lectivo(id_anio) ON DELETE CASCADE;
+
+
+--
+-- Name: detalle_grados detalle_grados_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.detalle_grados
+    ADD CONSTRAINT detalle_grados_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio);
+
+
+--
+-- Name: detalle_grados detalle_grados_id_docente_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.detalle_grados
+    ADD CONSTRAINT detalle_grados_id_docente_fkey FOREIGN KEY (id_docente) REFERENCES public.docente(id_docente);
+
+
+--
+-- Name: detalle_grados detalle_grados_id_materia_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.detalle_grados
+    ADD CONSTRAINT detalle_grados_id_materia_fkey FOREIGN KEY (id_materia) REFERENCES public.materias(id_materia);
+
+
+--
+-- Name: detalle_padrefamilia detalle_padrefamilia_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.detalle_padrefamilia
+    ADD CONSTRAINT detalle_padrefamilia_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio);
+
+
+--
+-- Name: detalle_padrefamilia detalle_padrefamilia_id_estudiante_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.detalle_padrefamilia
+    ADD CONSTRAINT detalle_padrefamilia_id_estudiante_fkey FOREIGN KEY (id_estudiante) REFERENCES public.estudiante(id_estudiante);
+
+
+--
+-- Name: detalle_padrefamilia detalle_padrefamilia_id_padrefamilia_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.detalle_padrefamilia
+    ADD CONSTRAINT detalle_padrefamilia_id_padrefamilia_fkey FOREIGN KEY (id_padrefamilia) REFERENCES public.padre_familia(id_padrefamilia);
+
+
+--
+-- Name: directivo directivo_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.directivo
+    ADD CONSTRAINT directivo_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio);
+
+
+--
+-- Name: docente docente_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.docente
+    ADD CONSTRAINT docente_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
+
+
+--
+-- Name: documento_matriculas documento_matriculas_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.documento_matriculas
+    ADD CONSTRAINT documento_matriculas_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio);
+
+
+--
+-- Name: escala_valoracion escala_valoracion_id_anio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.escala_valoracion
+    ADD CONSTRAINT escala_valoracion_id_anio_fkey FOREIGN KEY (id_anio) REFERENCES public.anio_lectivo(id_anio) ON DELETE CASCADE;
+
+
+--
+-- Name: estudiante estudiante_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.estudiante
+    ADD CONSTRAINT estudiante_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
+
+
+--
+-- Name: evidencia_aprendizaje evidencia_aprendizaje_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.evidencia_aprendizaje
+    ADD CONSTRAINT evidencia_aprendizaje_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
+
+
+--
+-- Name: evidencia_aprendizaje evidencia_aprendizaje_id_competencia_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.evidencia_aprendizaje
+    ADD CONSTRAINT evidencia_aprendizaje_id_competencia_fkey FOREIGN KEY (id_competencia) REFERENCES public.competencias(id_competencia) ON DELETE CASCADE;
+
+
+--
+-- Name: evidencia_aprendizaje evidencia_aprendizaje_id_evidencia_dba_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.evidencia_aprendizaje
+    ADD CONSTRAINT evidencia_aprendizaje_id_evidencia_dba_fkey FOREIGN KEY (id_evidencia_dba) REFERENCES public.evidencias_dba(id_evidencia_dba) ON DELETE SET NULL;
+
+
+--
+-- Name: evidencias_dba evidencias_dba_id_dba_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.evidencias_dba
+    ADD CONSTRAINT evidencias_dba_id_dba_fkey FOREIGN KEY (id_dba) REFERENCES public.dba(id_dba) ON DELETE CASCADE;
+
+
+--
+-- Name: actividad_materia fk_actividad_materia_competencias; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.actividad_materia
+    ADD CONSTRAINT fk_actividad_materia_competencias FOREIGN KEY (id_competencia) REFERENCES public.competencias(id_competencia) ON DELETE RESTRICT;
+
+
+--
+-- Name: actividad_materia fk_actividad_materia_detalle_grados; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.actividad_materia
+    ADD CONSTRAINT fk_actividad_materia_detalle_grados FOREIGN KEY (id_detallegrado) REFERENCES public.detalle_grados(id_detallegrado) ON DELETE RESTRICT;
+
+
+--
+-- Name: registro_asistencia_detalle fk_asistencia_detalle_padre; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.registro_asistencia_detalle
+    ADD CONSTRAINT fk_asistencia_detalle_padre FOREIGN KEY (id_registroasistencia) REFERENCES public.registro_asistencia(id_registroasistencia) ON DELETE CASCADE;
+
+
+--
+-- Name: auditoria_supervision fk_auditoria_supervision_admin; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.auditoria_supervision
+    ADD CONSTRAINT fk_auditoria_supervision_admin FOREIGN KEY (id_admin_general) REFERENCES public.usuario(id_usuario) ON DELETE CASCADE;
+
+
+--
+-- Name: configuracion_inscripcion fk_configuracion_inscripcion_anio; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.configuracion_inscripcion
+    ADD CONSTRAINT fk_configuracion_inscripcion_anio FOREIGN KEY (id_anio) REFERENCES public.anio_lectivo(id_anio) ON DELETE CASCADE;
+
+
+--
+-- Name: criterio_evaluacion fk_criterio_evaluacion_tenant; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.criterio_evaluacion
+    ADD CONSTRAINT fk_criterio_evaluacion_tenant FOREIGN KEY (id_actividadmateria, id_colegio) REFERENCES public.actividad_materia(id_actividadmateria, id_colegio) ON DELETE CASCADE;
+
+
+--
+-- Name: decision_promocion_directivo fk_decision_promocion_tg_anterior; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.decision_promocion_directivo
+    ADD CONSTRAINT fk_decision_promocion_tg_anterior FOREIGN KEY (id_tipo_grado_anterior) REFERENCES public.tipo_grado(id_tipo_grado) ON DELETE RESTRICT;
+
+
+--
+-- Name: decision_promocion_directivo fk_decision_promocion_tg_asignado; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.decision_promocion_directivo
+    ADD CONSTRAINT fk_decision_promocion_tg_asignado FOREIGN KEY (id_tipo_grado_asignado) REFERENCES public.tipo_grado(id_tipo_grado) ON DELETE RESTRICT;
+
+
+--
+-- Name: decision_promocion_directivo fk_decision_promocion_usuario; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.decision_promocion_directivo
+    ADD CONSTRAINT fk_decision_promocion_usuario FOREIGN KEY (id_usuario_decision) REFERENCES public.usuario(id_usuario) ON DELETE CASCADE;
+
+
+--
+-- Name: detalle_grados fk_detalle_grupo; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.detalle_grados
+    ADD CONSTRAINT fk_detalle_grupo FOREIGN KEY (id_grupo) REFERENCES public.grupos(id_grupo);
+
+
+--
+-- Name: documento_matriculas fk_documento_matriculas_tenant; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.documento_matriculas
+    ADD CONSTRAINT fk_documento_matriculas_tenant FOREIGN KEY (id_matricula, id_colegio) REFERENCES public.matricula(id_matricula, id_colegio) ON DELETE CASCADE;
+
+
+--
+-- Name: grupos fk_grupo_colegio; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.grupos
+    ADD CONSTRAINT fk_grupo_colegio FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio);
+
+
+--
+-- Name: grupos fk_grupo_jornada; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.grupos
+    ADD CONSTRAINT fk_grupo_jornada FOREIGN KEY (id_jornada) REFERENCES public.jornada(id_jornada);
+
+
+--
+-- Name: grupos fk_grupo_seccion; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.grupos
+    ADD CONSTRAINT fk_grupo_seccion FOREIGN KEY (id_seccion) REFERENCES public.secciones(id_seccion);
+
+
+--
+-- Name: grupos fk_grupos_tipo_grado; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.grupos
+    ADD CONSTRAINT fk_grupos_tipo_grado FOREIGN KEY (id_tipo_grado) REFERENCES public.tipo_grado(id_tipo_grado);
+
+
+--
+-- Name: matricula fk_matricula_anio; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.matricula
+    ADD CONSTRAINT fk_matricula_anio FOREIGN KEY (id_anio) REFERENCES public.anio_lectivo(id_anio) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: matricula fk_matricula_estudiante; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.matricula
+    ADD CONSTRAINT fk_matricula_estudiante FOREIGN KEY (id_estudiante) REFERENCES public.estudiante(id_estudiante) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: matricula fk_matricula_grupo; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.matricula
+    ADD CONSTRAINT fk_matricula_grupo FOREIGN KEY (id_grupo) REFERENCES public.grupos(id_grupo);
+
+
+--
+-- Name: nota_criterio fk_nota_criterio_tenant; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.nota_criterio
+    ADD CONSTRAINT fk_nota_criterio_tenant FOREIGN KEY (id_criterio, id_colegio) REFERENCES public.criterio_evaluacion(id_criterio, id_colegio) ON DELETE CASCADE;
+
+
+--
+-- Name: notas_actividad fk_notas_actividad_tenant; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notas_actividad
+    ADD CONSTRAINT fk_notas_actividad_tenant FOREIGN KEY (id_actividadmateria, id_colegio) REFERENCES public.actividad_materia(id_actividadmateria, id_colegio) ON DELETE CASCADE;
+
+
+--
+-- Name: password_reset_tokens fk_password_reset_tokens_usuario; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.password_reset_tokens
+    ADD CONSTRAINT fk_password_reset_tokens_usuario FOREIGN KEY (id_usuario) REFERENCES public.usuario(id_usuario) ON DELETE CASCADE;
+
+
+--
+-- Name: registro_graduados fk_registro_graduados_anio; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.registro_graduados
+    ADD CONSTRAINT fk_registro_graduados_anio FOREIGN KEY (id_anio) REFERENCES public.anio_lectivo(id_anio);
+
+
+--
+-- Name: registro_graduados fk_registro_graduados_usuario; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.registro_graduados
+    ADD CONSTRAINT fk_registro_graduados_usuario FOREIGN KEY (id_usuario_registro) REFERENCES public.usuario(id_usuario) ON DELETE SET NULL;
+
+
+--
+-- Name: solicitud_traslado fk_solicitud_traslado_creador; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.solicitud_traslado
+    ADD CONSTRAINT fk_solicitud_traslado_creador FOREIGN KEY (creado_por) REFERENCES public.usuario(id_usuario) ON DELETE CASCADE;
+
+
+--
+-- Name: solicitud_traslado fk_solicitud_traslado_usuario; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.solicitud_traslado
+    ADD CONSTRAINT fk_solicitud_traslado_usuario FOREIGN KEY (id_usuario) REFERENCES public.usuario(id_usuario) ON DELETE CASCADE;
+
+
+--
+-- Name: ticket_observaciones fk_ticket_obs_ticket; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ticket_observaciones
+    ADD CONSTRAINT fk_ticket_obs_ticket FOREIGN KEY (id_ticket) REFERENCES public.tickets_soporte(id_ticket) ON DELETE CASCADE;
+
+
+--
+-- Name: ticket_observaciones fk_ticket_obs_usuario; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ticket_observaciones
+    ADD CONSTRAINT fk_ticket_obs_usuario FOREIGN KEY (id_usuario) REFERENCES public.usuario(id_usuario) ON DELETE SET NULL;
+
+
+--
+-- Name: tickets_soporte fk_tickets_soporte_usuario; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tickets_soporte
+    ADD CONSTRAINT fk_tickets_soporte_usuario FOREIGN KEY (id_usuario) REFERENCES public.usuario(id_usuario) ON DELETE SET NULL;
+
+
+--
+-- Name: tipo_grado fk_tipo_grado_nivel; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tipo_grado
+    ADD CONSTRAINT fk_tipo_grado_nivel FOREIGN KEY (id_nivel) REFERENCES public.nivel_escolar(id_nivel);
+
+
+--
+-- Name: traslado_aprobacion fk_traslado_aprobacion_usuario; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.traslado_aprobacion
+    ADD CONSTRAINT fk_traslado_aprobacion_usuario FOREIGN KEY (id_usuario) REFERENCES public.usuario(id_usuario) ON DELETE CASCADE;
+
+
+--
+-- Name: grupos grupos_id_docente_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.grupos
+    ADD CONSTRAINT grupos_id_docente_fkey FOREIGN KEY (id_docente) REFERENCES public.docente(id_docente);
+
+
+--
+-- Name: jornada jornada_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.jornada
+    ADD CONSTRAINT jornada_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
+
+
+--
+-- Name: materias materias_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.materias
+    ADD CONSTRAINT materias_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
+
+
+--
+-- Name: matricula matricula_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.matricula
+    ADD CONSTRAINT matricula_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio);
+
+
+--
+-- Name: matricula matricula_id_nivel_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.matricula
+    ADD CONSTRAINT matricula_id_nivel_fkey FOREIGN KEY (id_nivel) REFERENCES public.nivel_escolar(id_nivel);
+
+
+--
+-- Name: matricula matricula_id_ticket_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.matricula
+    ADD CONSTRAINT matricula_id_ticket_fkey FOREIGN KEY (id_ticket) REFERENCES public.tickets_soporte(id_ticket) ON DELETE SET NULL;
+
+
+--
+-- Name: nivel_escolar nivel_escolar_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.nivel_escolar
+    ADD CONSTRAINT nivel_escolar_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
+
+
+--
+-- Name: nota_criterio nota_criterio_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.nota_criterio
+    ADD CONSTRAINT nota_criterio_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
+
+
+--
+-- Name: nota_criterio nota_criterio_id_estudiante_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.nota_criterio
+    ADD CONSTRAINT nota_criterio_id_estudiante_fkey FOREIGN KEY (id_estudiante) REFERENCES public.estudiante(id_estudiante) ON DELETE CASCADE;
+
+
+--
+-- Name: notas_actividad notas_actividad_id_escalavaloracion_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notas_actividad
+    ADD CONSTRAINT notas_actividad_id_escalavaloracion_fkey FOREIGN KEY (id_escalavaloracion) REFERENCES public.escala_valoracion(id_escalavaloracion);
+
+
+--
+-- Name: notas_actividad notas_actividad_id_estudiante_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notas_actividad
+    ADD CONSTRAINT notas_actividad_id_estudiante_fkey FOREIGN KEY (id_estudiante) REFERENCES public.estudiante(id_estudiante) ON DELETE CASCADE;
+
+
+--
+-- Name: notificacion_colegio notificacion_colegio_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notificacion_colegio
+    ADD CONSTRAINT notificacion_colegio_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio);
+
+
+--
+-- Name: notificacion_colegio notificacion_colegio_id_directivo_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notificacion_colegio
+    ADD CONSTRAINT notificacion_colegio_id_directivo_fkey FOREIGN KEY (id_directivo) REFERENCES public.directivo(id);
+
+
+--
+-- Name: notificacion_supervision notificacion_supervision_id_auditoria_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notificacion_supervision
+    ADD CONSTRAINT notificacion_supervision_id_auditoria_fkey FOREIGN KEY (id_auditoria) REFERENCES public.auditoria_supervision(id_auditoria);
+
+
+--
+-- Name: notificacion_supervision notificacion_supervision_id_directivo_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notificacion_supervision
+    ADD CONSTRAINT notificacion_supervision_id_directivo_fkey FOREIGN KEY (id_directivo) REFERENCES public.directivo(id);
+
+
+--
+-- Name: observacion_estudiante observacion_estudiante_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.observacion_estudiante
+    ADD CONSTRAINT observacion_estudiante_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio);
+
+
+--
+-- Name: observacion_estudiante observacion_estudiante_id_detallegrado_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.observacion_estudiante
+    ADD CONSTRAINT observacion_estudiante_id_detallegrado_fkey FOREIGN KEY (id_detallegrado) REFERENCES public.detalle_grados(id_detallegrado);
+
+
+--
+-- Name: observacion_estudiante observacion_estudiante_id_estudiante_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.observacion_estudiante
+    ADD CONSTRAINT observacion_estudiante_id_estudiante_fkey FOREIGN KEY (id_estudiante) REFERENCES public.estudiante(id_estudiante);
+
+
+--
+-- Name: observacion_estudiante observacion_estudiante_id_periodo_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.observacion_estudiante
+    ADD CONSTRAINT observacion_estudiante_id_periodo_fkey FOREIGN KEY (id_periodo) REFERENCES public.periodo_academico(id_periodo);
+
+
+--
+-- Name: padre_familia padre_familia_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.padre_familia
+    ADD CONSTRAINT padre_familia_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
+
+
+--
+-- Name: periodo_academico periodo_academico_id_año_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.periodo_academico
+    ADD CONSTRAINT "periodo_academico_id_año_fkey" FOREIGN KEY (id_anio) REFERENCES public.anio_lectivo(id_anio);
+
+
+--
+-- Name: periodo_academico periodo_academico_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.periodo_academico
+    ADD CONSTRAINT periodo_academico_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio);
+
+
+--
+-- Name: registro_asistencia registro_asistencia_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.registro_asistencia
+    ADD CONSTRAINT registro_asistencia_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio);
+
+
+--
+-- Name: registro_asistencia registro_asistencia_id_detallegrado_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.registro_asistencia
+    ADD CONSTRAINT registro_asistencia_id_detallegrado_fkey FOREIGN KEY (id_detallegrado) REFERENCES public.detalle_grados(id_detallegrado);
+
+
+--
+-- Name: registro_asistencia registro_asistencia_id_estudiante_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.registro_asistencia
+    ADD CONSTRAINT registro_asistencia_id_estudiante_fkey FOREIGN KEY (id_estudiante) REFERENCES public.estudiante(id_estudiante);
+
+
+--
+-- Name: registro_graduados registro_graduados_id_estudiante_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.registro_graduados
+    ADD CONSTRAINT registro_graduados_id_estudiante_fkey FOREIGN KEY (id_estudiante) REFERENCES public.estudiante(id_estudiante) ON DELETE CASCADE;
+
+
+--
+-- Name: resultado_academico resultado_academico_id_detallegrado_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.resultado_academico
+    ADD CONSTRAINT resultado_academico_id_detallegrado_fkey FOREIGN KEY (id_detallegrado) REFERENCES public.detalle_grados(id_detallegrado);
+
+
+--
+-- Name: resultado_academico resultado_academico_id_docente_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.resultado_academico
+    ADD CONSTRAINT resultado_academico_id_docente_fkey FOREIGN KEY (id_docente) REFERENCES public.docente(id_docente);
+
+
+--
+-- Name: resultado_academico resultado_academico_id_estudiante_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.resultado_academico
+    ADD CONSTRAINT resultado_academico_id_estudiante_fkey FOREIGN KEY (id_estudiante) REFERENCES public.estudiante(id_estudiante);
+
+
+--
+-- Name: resultado_academico resultado_academico_id_periodo_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.resultado_academico
+    ADD CONSTRAINT resultado_academico_id_periodo_fkey FOREIGN KEY (id_periodo) REFERENCES public.periodo_academico(id_periodo);
+
+
+--
+-- Name: sancion sancion_id_directivo_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.sancion
+    ADD CONSTRAINT sancion_id_directivo_fkey FOREIGN KEY (id_directivo) REFERENCES public.directivo(id) ON DELETE CASCADE;
+
+
+--
+-- Name: sancion sancion_id_estudiante_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.sancion
+    ADD CONSTRAINT sancion_id_estudiante_fkey FOREIGN KEY (id_estudiante) REFERENCES public.estudiante(id_estudiante) ON DELETE CASCADE;
+
+
+--
+-- Name: sancion sancion_id_tipo_sancion_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.sancion
+    ADD CONSTRAINT sancion_id_tipo_sancion_fkey FOREIGN KEY (id_tipo_sancion) REFERENCES public.tipo_sancion(id_tipo_sancion);
+
+
+--
+-- Name: solicitud_traslado solicitud_traslado_id_colegio_destino_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.solicitud_traslado
+    ADD CONSTRAINT solicitud_traslado_id_colegio_destino_fkey FOREIGN KEY (id_colegio_destino) REFERENCES public.colegio(id_colegio);
+
+
+--
+-- Name: solicitud_traslado solicitud_traslado_id_colegio_origen_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.solicitud_traslado
+    ADD CONSTRAINT solicitud_traslado_id_colegio_origen_fkey FOREIGN KEY (id_colegio_origen) REFERENCES public.colegio(id_colegio);
+
+
+--
+-- Name: solicitud_traslado solicitud_traslado_id_grupo_destino_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.solicitud_traslado
+    ADD CONSTRAINT solicitud_traslado_id_grupo_destino_fkey FOREIGN KEY (id_grupo_destino) REFERENCES public.grupos(id_grupo) ON DELETE SET NULL;
+
+
+--
+-- Name: solicitud_traslado solicitud_traslado_id_matricula_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.solicitud_traslado
+    ADD CONSTRAINT solicitud_traslado_id_matricula_fkey FOREIGN KEY (id_matricula) REFERENCES public.matricula(id_matricula) ON DELETE SET NULL;
+
+
+--
+-- Name: tickets_soporte tickets_soporte_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tickets_soporte
+    ADD CONSTRAINT tickets_soporte_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
+
+
+--
+-- Name: tickets_soporte tickets_soporte_id_estudiante_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tickets_soporte
+    ADD CONSTRAINT tickets_soporte_id_estudiante_fkey FOREIGN KEY (id_estudiante) REFERENCES public.estudiante(id_estudiante) ON DELETE SET NULL;
+
+
+--
+-- Name: tokens_verificacion tokens_verificacion_id_usuario_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tokens_verificacion
+    ADD CONSTRAINT tokens_verificacion_id_usuario_fkey FOREIGN KEY (id_usuario) REFERENCES public.usuario(id_usuario) ON DELETE CASCADE;
+
+
+--
+-- Name: traslado_aprobacion traslado_aprobacion_id_grupo_destino_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.traslado_aprobacion
+    ADD CONSTRAINT traslado_aprobacion_id_grupo_destino_fkey FOREIGN KEY (id_grupo_destino) REFERENCES public.grupos(id_grupo) ON DELETE SET NULL;
+
+
+--
+-- Name: traslado_aprobacion traslado_aprobacion_id_solicitud_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.traslado_aprobacion
+    ADD CONSTRAINT traslado_aprobacion_id_solicitud_fkey FOREIGN KEY (id_solicitud) REFERENCES public.solicitud_traslado(id_solicitud) ON DELETE CASCADE;
+
+
+--
+-- Name: usuario usuario_baneado_por_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.usuario
+    ADD CONSTRAINT usuario_baneado_por_fkey FOREIGN KEY (baneado_por) REFERENCES public.usuario(id_usuario);
+
+
+--
+-- Name: usuario_colegio_email usuario_colegio_email_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.usuario_colegio_email
+    ADD CONSTRAINT usuario_colegio_email_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
+
+
+--
+-- Name: usuario_colegio_email usuario_colegio_email_id_usuario_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.usuario_colegio_email
+    ADD CONSTRAINT usuario_colegio_email_id_usuario_fkey FOREIGN KEY (id_usuario) REFERENCES public.usuario(id_usuario) ON DELETE CASCADE;
+
+
+--
+-- Name: usuario_colegio usuario_colegio_id_colegio_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.usuario_colegio
+    ADD CONSTRAINT usuario_colegio_id_colegio_fkey FOREIGN KEY (id_colegio) REFERENCES public.colegio(id_colegio) ON DELETE CASCADE;
+
+
+--
+-- Name: usuario usuario_id_tipodocumento_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.usuario
+    ADD CONSTRAINT usuario_id_tipodocumento_fkey FOREIGN KEY (id_tipodocumento) REFERENCES public.tipo_documento(id_tipodocumento);
+
+
+--
+-- Name: usuario_rol usuario_rol_id_rol_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.usuario_rol
+    ADD CONSTRAINT usuario_rol_id_rol_fkey FOREIGN KEY (id_rol) REFERENCES public.rol(id_rol) ON DELETE CASCADE;
+
+
+--
+-- Name: usuario_rol usuario_rol_id_usuario_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.usuario_rol
+    ADD CONSTRAINT usuario_rol_id_usuario_fkey FOREIGN KEY (id_usuario) REFERENCES public.usuario(id_usuario) ON DELETE CASCADE;
+
+
+--
+-- PostgreSQL database dump complete
+--
+
+\unrestrict vp5RZA4BMnmwlbdMwNDLvdwNgk4X6YDOcahpzhvhs8XmVgM6hM0dYJVqQ7zAdu1
+

@@ -47,6 +47,9 @@ uploads/
 *.sql.bak
 *.dump
 *.bak
+*.sql.gz
+backend/init_scripts/AcademiaNeivaBDpoblate.sql
+!backend/init_scripts/01_schema.sql
 
 # ---- Docker volumes locales ----
 pgdata/
