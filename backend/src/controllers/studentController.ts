@@ -37,10 +37,10 @@ export const getAllStudents = async (req: Request, res: Response) => {
         return j;
       })
       .leftJoin("grupos as g", "m.id_grupo", "g.id_grupo")
-      .leftJoin("nivel_escolar as n", (join) =>
-        join.onRef("n.id_nivel", "=", sql<number>`COALESCE(m.id_nivel, g.id_nivel)`)
-      )
       .leftJoin("tipo_grado as tg", "g.id_tipo_grado", "tg.id_tipo_grado")
+      .leftJoin("nivel_escolar as n", (join) =>
+        join.onRef("n.id_nivel", "=", sql<number>`COALESCE(m.id_nivel, tg.id_nivel)`)
+      )
       .leftJoin("secciones as s", "g.id_seccion", "s.id_seccion")
       .leftJoin("jornada as j", "g.id_jornada", "j.id_jornada")
       .leftJoin(
@@ -159,7 +159,7 @@ export const getAllStudents = async (req: Request, res: Response) => {
 
     const levelId = id_nivel || grado;
     if (levelId) {
-      query = query.where(sql<number>`COALESCE(m.id_nivel, g.id_nivel)`, "=", Number(levelId));
+      query = query.where(sql<number>`COALESCE(m.id_nivel, tg.id_nivel)`, "=", Number(levelId));
     }
 
     if (id_tipo_grado) {
@@ -816,7 +816,7 @@ export const getStudentSummary = async (req: Request, res: Response) => {
       .leftJoin("secciones as s", "g.id_seccion", "s.id_seccion")
       .leftJoin("jornada as j", "g.id_jornada", "j.id_jornada")
       .leftJoin("nivel_escolar as n", (join) =>
-        join.onRef("n.id_nivel", "=", sql<number>`COALESCE(m.id_nivel, g.id_nivel)`)
+        join.onRef("n.id_nivel", "=", sql<number>`COALESCE(m.id_nivel, tg.id_nivel)`)
       )
       .select([
         "m.id_matricula",
@@ -849,7 +849,7 @@ export const getStudentSummary = async (req: Request, res: Response) => {
         .leftJoin("secciones as s", "g.id_seccion", "s.id_seccion")
         .leftJoin("jornada as j", "g.id_jornada", "j.id_jornada")
         .leftJoin("nivel_escolar as n", (join) =>
-          join.onRef("n.id_nivel", "=", sql<number>`COALESCE(m.id_nivel, g.id_nivel)`)
+          join.onRef("n.id_nivel", "=", sql<number>`COALESCE(m.id_nivel, tg.id_nivel)`)
         )
         .select([
           "m.id_matricula",

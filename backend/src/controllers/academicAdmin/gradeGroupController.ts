@@ -1005,7 +1005,6 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
                  WHERE c2.id_colegio = c.id_colegio
                    AND c2.id_materia = c.id_materia
                    AND c2.id_periodo = c.id_periodo
-                   AND g2.id_nivel = g.id_nivel
                    AND g2.id_tipo_grado = g.id_tipo_grado
                    AND UPPER(TRIM(TRAILING '.' FROM c2.descripcion)) <> UPPER(TRIM(TRAILING '.' FROM ${DEFAULT_COMPETENCY_TEXT}))
                ) THEN 'DEFINIDA'
@@ -1041,8 +1040,8 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
            JOIN materias m ON m.id_materia = c.id_materia
            JOIN periodo_academico p ON p.id_periodo = c.id_periodo
            JOIN grupos g ON g.id_grupo = c.id_grupo
-           JOIN nivel_escolar ne ON ne.id_nivel = g.id_nivel
            JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado
+           JOIN nivel_escolar ne ON ne.id_nivel = tg.id_nivel
            JOIN secciones s ON s.id_seccion = g.id_seccion
            JOIN jornada j ON j.id_jornada = g.id_jornada
            LEFT JOIN dimensiones_preescolar dp ON dp.id_dimension = c.id_dimension

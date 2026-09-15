@@ -193,7 +193,7 @@ export const getParentsManagementData = async (req: Request, res: Response): Pro
             )
           ) AS tiene_hijo_riesgo,
 
-          ARRAY_REMOVE(ARRAY_AGG(DISTINCT COALESCE(m.id_nivel, g.id_nivel, tg.id_nivel)), NULL) AS niveles_hijos,
+          ARRAY_REMOVE(ARRAY_AGG(DISTINCT COALESCE(m.id_nivel, tg.id_nivel)), NULL) AS niveles_hijos,
           ARRAY_REMOVE(ARRAY_AGG(DISTINCT ne.nombre), NULL) AS nombres_niveles_hijos,
           ARRAY_REMOVE(ARRAY_AGG(DISTINCT g.id_tipo_grado), NULL) AS grados_hijos,
           ARRAY_REMOVE(ARRAY_AGG(DISTINCT tg.nombre), NULL) AS nombres_grados_hijos,
@@ -211,7 +211,7 @@ export const getParentsManagementData = async (req: Request, res: Response): Pro
         LEFT JOIN matricula m ON (m.id_estudiante = e.id_estudiante AND m.id_colegio = $1 AND ($2::int IS NULL OR m.id_anio = $2::int))
         LEFT JOIN grupos g ON g.id_grupo = m.id_grupo
         LEFT JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado
-        LEFT JOIN nivel_escolar ne ON ne.id_nivel = COALESCE(m.id_nivel, g.id_nivel, tg.id_nivel)
+        LEFT JOIN nivel_escolar ne ON ne.id_nivel = COALESCE(m.id_nivel, tg.id_nivel)
         WHERE (
           pf.id_colegio = $1 
           OR EXISTS (SELECT 1 FROM usuario_colegio uc WHERE uc.id_usuario = u.id_usuario AND uc.id_colegio = $1 AND uc.estado = 'ACTIVO')
@@ -351,7 +351,7 @@ export const getParentDetail = async (req: Request, res: Response): Promise<void
       .leftJoin("secciones as sec", "sec.id_seccion", "g.id_seccion")
       .leftJoin("jornada as j", "j.id_jornada", "g.id_jornada")
       .leftJoin("nivel_escolar as n", (join) =>
-        join.onRef("n.id_nivel", "=", sql<number>`COALESCE(m.id_nivel, g.id_nivel, tg.id_nivel)`)
+        join.onRef("n.id_nivel", "=", sql<number>`COALESCE(m.id_nivel, tg.id_nivel)`)
       )
       .leftJoin("anio_lectivo as al", "al.id_anio", "m.id_anio")
       .select([

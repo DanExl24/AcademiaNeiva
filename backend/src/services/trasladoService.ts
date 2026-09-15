@@ -464,7 +464,7 @@ export class TrasladoService {
         .leftJoin('grupos as g', 'm.id_grupo', 'g.id_grupo')
         .leftJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
         .leftJoin('nivel_escolar as ne', (join) =>
-          join.onRef('ne.id_nivel', '=', sql<number>`COALESCE(m.id_nivel, g.id_nivel, tg.id_nivel)`)
+          join.onRef('ne.id_nivel', '=', sql<number>`COALESCE(m.id_nivel, tg.id_nivel)`)
         )
         .select([
           'm.id_matricula',
@@ -497,7 +497,7 @@ export class TrasladoService {
           .leftJoin('grupos as g', 'm.id_grupo', 'g.id_grupo')
           .leftJoin('tipo_grado as tg', 'g.id_tipo_grado', 'tg.id_tipo_grado')
           .leftJoin('nivel_escolar as ne', (join) =>
-            join.onRef('ne.id_nivel', '=', sql<number>`COALESCE(m.id_nivel, g.id_nivel, tg.id_nivel)`)
+            join.onRef('ne.id_nivel', '=', sql<number>`COALESCE(m.id_nivel, tg.id_nivel)`)
           )
           .select([
             'm.id_matricula',
@@ -860,7 +860,7 @@ export class TrasladoService {
               .leftJoin('jornada as j', 'g.id_jornada', 'j.id_jornada')
               .select([
                 'g.id_grupo',
-                'g.id_nivel',
+                'tg.id_nivel',
                 'tg.nombre as grado_nombre',
                 's.nombre as seccion_nombre',
                 'j.nombre as jornada_nombre'
@@ -1367,7 +1367,7 @@ export class TrasladoService {
           .leftJoin('tipo_grado as tg', 'tg.id_tipo_grado', 'g.id_tipo_grado')
           .leftJoin('jornada as j', 'j.id_jornada', 'g.id_jornada')
           .leftJoin('nivel_escolar as n', (join) =>
-            join.onRef('n.id_nivel', '=', sql<number>`COALESCE(m.id_nivel, g.id_nivel, tg.id_nivel)`)
+            join.onRef('n.id_nivel', '=', sql<number>`COALESCE(m.id_nivel, tg.id_nivel)`)
           )
           .select([
             'tg.nombre as grado',
@@ -1402,7 +1402,7 @@ export class TrasladoService {
             .leftJoin('tipo_grado as tg', 'tg.id_tipo_grado', 'g.id_tipo_grado')
             .leftJoin('jornada as j', 'j.id_jornada', 'g.id_jornada')
             .leftJoin('nivel_escolar as n', (join) =>
-              join.onRef('n.id_nivel', '=', sql<number>`COALESCE(m.id_nivel, g.id_nivel, tg.id_nivel)`)
+              join.onRef('n.id_nivel', '=', sql<number>`COALESCE(m.id_nivel, tg.id_nivel)`)
             )
             .select([
               sql<string | null>`tg.nombre`.as('grado'),
