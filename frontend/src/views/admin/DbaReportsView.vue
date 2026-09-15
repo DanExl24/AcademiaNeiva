@@ -80,6 +80,10 @@ interface CoherenciaRow {
   estado_coherencia: 'PLANEADA' | 'EXTRA'
   motivo_extra?: string
   justificacion_extra?: string
+  total_estudiantes?: number
+  estudiantes_calificados?: number
+  estudiantes_pendientes?: number
+  estado_calificacion?: 'COMPLETO' | 'PARCIAL' | 'SIN_CALIFICAR'
 }
 
 interface CoberturaResumen {
@@ -106,6 +110,9 @@ interface CoberturaDetalle {
     grupo_nombre: string
     docente_nombre: string
     periodo_nombre?: string
+    total_estudiantes?: number
+    estudiantes_calificados?: number
+    estado_calificacion?: 'COMPLETO' | 'PARCIAL' | 'SIN_CALIFICAR'
   }[]
 }
 
@@ -306,6 +313,7 @@ const filterTeacher = ref<string>('TODOS')
 const filterCoherenciaStatus = ref<string>('TODOS')
 const presetCoherenciaExtrasOnly = ref<boolean>(false)
 const presetCoherenciaPlaneadasOnly = ref<boolean>(false)
+const presetCoherenciaPendientesOnly = ref<boolean>(false)
 const searchTerm = ref<string>('')
 
 // Collapsible Accordion State for Activity Cards
@@ -639,6 +647,7 @@ const activeCoherenciaFiltersCount = computed(() => {
   if (filterCoherenciaStatus.value !== 'TODOS') count++
   if (presetCoherenciaExtrasOnly.value) count++
   if (presetCoherenciaPlaneadasOnly.value) count++
+  if (presetCoherenciaPendientesOnly.value) count++
   if (searchTerm.value.trim()) count++
   return count
 })
@@ -654,6 +663,7 @@ const clearCoherenciaFilters = () => {
   filterCoherenciaStatus.value = 'TODOS'
   presetCoherenciaExtrasOnly.value = false
   presetCoherenciaPlaneadasOnly.value = false
+  presetCoherenciaPendientesOnly.value = false
   searchTerm.value = ''
 }
 
@@ -663,6 +673,7 @@ const toggleCoherenciaExtrasPreset = () => {
   } else {
     presetCoherenciaExtrasOnly.value = true
     presetCoherenciaPlaneadasOnly.value = false
+    presetCoherenciaPendientesOnly.value = false
   }
 }
 
@@ -672,6 +683,17 @@ const toggleCoherenciaPlaneadasPreset = () => {
   } else {
     presetCoherenciaPlaneadasOnly.value = true
     presetCoherenciaExtrasOnly.value = false
+    presetCoherenciaPendientesOnly.value = false
+  }
+}
+
+const toggleCoherenciaPendientesPreset = () => {
+  if (presetCoherenciaPendientesOnly.value) {
+    presetCoherenciaPendientesOnly.value = false
+  } else {
+    presetCoherenciaPendientesOnly.value = true
+    presetCoherenciaExtrasOnly.value = false
+    presetCoherenciaPlaneadasOnly.value = false
   }
 }
 
@@ -679,6 +701,7 @@ const selectCoherenciaStatusFromCard = (status: 'TODOS' | 'PLANEADAS' | 'EXTRAS'
   filterCoherenciaStatus.value = status
   presetCoherenciaExtrasOnly.value = false
   presetCoherenciaPlaneadasOnly.value = false
+  presetCoherenciaPendientesOnly.value = false
 }
 
 // Search & Preset filtering for coherencia
@@ -691,6 +714,10 @@ const filteredCoherencia = computed(() => {
 
   if (presetCoherenciaPlaneadasOnly.value) {
     list = list.filter(r => r.estado_coherencia === 'PLANEADA')
+  }
+
+  if (presetCoherenciaPendientesOnly.value) {
+    list = list.filter(r => (r.estado_calificacion || 'SIN_CALIFICAR') !== 'COMPLETO')
   }
 
   const query = searchTerm.value.trim().toLowerCase()
@@ -741,6 +768,10 @@ const groupedCoherenciaByActivity = computed(() => {
     materia_nombre: string
     periodo_nombre: string
     tiene_extras: boolean
+    total_estudiantes: number
+    estudiantes_calificados: number
+    estudiantes_pendientes: number
+    estado_calificacion: 'COMPLETO' | 'PARCIAL' | 'SIN_CALIFICAR'
     evidencias: Array<{
       id_evidencia_dba: number
       evidencia_descripcion: string
@@ -766,6 +797,10 @@ const groupedCoherenciaByActivity = computed(() => {
         materia_nombre: row.materia_nombre,
         periodo_nombre: row.periodo_nombre,
         tiene_extras: false,
+        total_estudiantes: row.total_estudiantes || 0,
+        estudiantes_calificados: row.estudiantes_calificados || 0,
+        estudiantes_pendientes: row.estudiantes_pendientes || 0,
+        estado_calificacion: row.estado_calificacion || 'SIN_CALIFICAR',
         evidencias: []
       })
     }
@@ -1197,6 +1232,17 @@ onMounted(() => {
                 <span>Solo Planeadas</span>
               </button>
 
+              <!-- Preset 3: Pendientes de Calificar (Seguimiento Directivo) -->
+              <button 
+                @click="toggleCoherenciaPendientesPreset"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer"
+                :class="presetCoherenciaPendientesOnly ? 'bg-rose-600 text-white border-rose-600 shadow-sm' : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'"
+                title="Mostrar solo actividades donde los docentes tienen notas pendientes por asentar"
+              >
+                <AlertTriangle class="w-3.5 h-3.5 text-rose-300" :class="presetCoherenciaPendientesOnly ? 'text-white' : ''" />
+                <span>Pendientes por Evaluar</span>
+              </button>
+
               <!-- Teacher Select Dropdown -->
               <select v-model="filterTeacher" class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:border-amber-300">
                 <option value="TODOS">Todos los docentes</option>
@@ -1368,6 +1414,29 @@ onMounted(() => {
                       class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 flex items-center gap-1"
                     >
                       <Zap class="w-3 h-3" /> Contiene Desvíos Extras
+                    </span>
+
+                    <!-- Badge de Calificación Docente en Aula -->
+                    <span 
+                      v-if="actGroup.estado_calificacion === 'COMPLETO'" 
+                      class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 flex items-center gap-1 shadow-xs"
+                      :title="`Todos los estudiantes tienen nota asentada (${actGroup.estudiantes_calificados} de ${actGroup.total_estudiantes})`"
+                    >
+                      <Check class="w-3 h-3 text-emerald-600" /> {{ actGroup.estudiantes_calificados }}/{{ actGroup.total_estudiantes }} Evaluados (100%)
+                    </span>
+                    <span 
+                      v-else-if="actGroup.estado_calificacion === 'PARCIAL'" 
+                      class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200 flex items-center gap-1 shadow-xs border border-amber-300/40"
+                      :title="`Evaluación parcial: Faltan ${actGroup.estudiantes_pendientes} estudiantes por calificar`"
+                    >
+                      <AlertTriangle class="w-3 h-3 text-amber-600" /> {{ actGroup.estudiantes_calificados }}/{{ actGroup.total_estudiantes }} Evaluados · Faltan {{ actGroup.estudiantes_pendientes }}
+                    </span>
+                    <span 
+                      v-else 
+                      class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 flex items-center gap-1 shadow-xs border border-rose-300/40"
+                      :title="`El docente creó la actividad pero no ha calificado a ningún estudiante (0 de ${actGroup.total_estudiantes})`"
+                    >
+                      <AlertTriangle class="w-3 h-3 text-rose-600" /> 0/{{ actGroup.total_estudiantes }} Evaluados · Sin Calificar
                     </span>
                   </div>
                   <div class="flex flex-wrap items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400">
@@ -1795,10 +1864,19 @@ onMounted(() => {
                     <div 
                       v-for="(ev, idx) in det.evaluaciones" 
                       :key="idx" 
-                      class="flex flex-wrap items-center justify-between text-xs bg-slate-50 dark:bg-slate-800/40 px-3 py-1.5 rounded-xl text-slate-600 dark:text-slate-300"
+                      class="flex flex-wrap items-center justify-between gap-2 text-xs bg-slate-50 dark:bg-slate-800/40 px-3 py-1.5 rounded-xl text-slate-600 dark:text-slate-300"
                     >
                       <span class="font-bold">{{ ev.actividad_nombre }} ({{ ev.actividad_porcentaje }}%)</span>
-                      <span>{{ ev.docente_nombre }} — {{ ev.grupo_nombre }} <span v-if="ev.periodo_nombre" class="text-slate-400 font-normal">({{ ev.periodo_nombre }})</span></span>
+                      <div class="flex items-center gap-2">
+                        <span>{{ ev.docente_nombre }} — {{ ev.grupo_nombre }} <span v-if="ev.periodo_nombre" class="text-slate-400 font-normal">({{ ev.periodo_nombre }})</span></span>
+                        <span 
+                          v-if="ev.total_estudiantes" 
+                          :class="ev.estado_calificacion === 'COMPLETO' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300' : ev.estado_calificacion === 'PARCIAL' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300' : 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'"
+                          class="px-2 py-0.5 rounded-md text-[10px] font-black"
+                        >
+                          {{ ev.estudiantes_calificados || 0 }}/{{ ev.total_estudiantes }} notas
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>

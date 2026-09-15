@@ -225,3 +225,48 @@ graph TD
 | **3. Evidencias Pendientes** | `coberturaStats.pending` | Diferencia entre el catálogo oficial y lo evaluado. | $$\text{Pendientes} = \text{Total Catálogo} - \text{Cubiertas}$$ | Evidencias oficiales que aún no registran ninguna actividad evaluativa en el año. |
 | **4. Cobertura del Catálogo (%)** | `coberturaStats.pct` | Ratio matemático global de cobertura. | $$\text{Cobertura} = \text{round}\left(\frac{\text{Cubiertas}}{\text{Total Catálogo}} \times 100\right)$$ | **Porcentaje de avance del estándar nacional.** Escala: $\ge 75\%$ Excelente (Verde), $\ge 50\%$ Regular (Ámbar), $< 50\%$ Crítica (Rojo). |
 
+---
+
+### 🕵️ 5. Supervisión y Auditoría Docente: Estudiantes Calificados vs Matriculados
+
+Para responder a la necesidad de supervisión directiva (*«¿Cómo sabe un directivo si un profesor ya evaluó realmente a sus alumnos o si solo creó la actividad y la dejó sin notas?»*), el módulo incorpora trazabilidad granular entre la planeación DBA y las notas reales de aula:
+
+```mermaid
+graph LR
+    subgraph Docente_Planeacion ["1. Planeación en Aula"]
+        AM["Actividad Materia<br>(Peso %, Periodo)"]
+        AEDBA["Vínculo con Evidencias DBA<br>(actividad_evidencia_dba)"]
+        AM --> AEDBA
+    end
+
+    subgraph Matricula_Grupo ["2. Censo del Curso"]
+        MAT["Estudiantes Matriculados Activos<br>(total_estudiantes)"]
+    end
+
+    subgraph Registro_Notas ["3. Evaluación Efectiva"]
+        NA["Notas Asentadas<br>(notas_actividad)"]
+    end
+
+    AM --> NA
+    MAT -.->|"Compara con"| NA
+
+    NA -->|"Cálculo de Auditoría"| RES["Estado de Calificación Docente:<br>• COMPLETO (100% evaluados)<br>• PARCIAL (Faltan N estudiantes)<br>• SIN CALIFICAR (0 notas registradas)"]
+```
+
+#### Métricas de Seguimiento por Actividad:
+1. **`total_estudiantes`**: Conteo de estudiantes con matrícula activa (`estado = 'ACTIVA'`) en el grupo y año lectivo correspondiente a la asignatura.
+2. **`estudiantes_calificados`**: Conteo de estudiantes únicos que tienen una nota registrada (`nota IS NOT NULL`) en `notas_actividad` para dicha actividad.
+3. **`estudiantes_pendientes`**: Diferencia calculada como `GREATEST(0, total_estudiantes - estudiantes_calificados)`.
+4. **`estado_calificacion`**:
+   - 🟢 **`COMPLETO`**: Todos los estudiantes matriculados poseen nota (`calificados >= total` y `total > 0`).
+   - 🟡 **`PARCIAL`**: El docente inició la calificación, pero faltan estudiantes del curso.
+   - 🔴 **`SIN_CALIFICAR`**: La actividad está vinculada a DBA, pero el docente no ha asentado ninguna nota (`calificados = 0`).
+
+#### Herramientas para el Directivo en la Interfaz:
+- **Badge en Cada Tarjeta de Actividad:** En la vista agrupada de *Coherencia Curricular*, cada actividad muestra su estado con colores contrastados:
+  - 🟢 `[✓] 30/30 Evaluados (100%)`
+  - 🟡 `[⚠] 12/30 Evaluados · Faltan 18`
+  - 🔴 `[⚠] 0/30 Evaluados · Sin Calificar`
+- **Preset de Filtro Rápido:** Botón `🚨 Pendientes por Evaluar` en la barra de auditoría. Permite al directivo aislar en 1 clic todas las actividades donde los profesores adeudan calificaciones.
+- **Desglose en Cobertura:** Al desplegar cualquier evidencia DBA en la pestaña de *Cobertura del Catálogo*, cada actividad listada muestra el indicador `X/Y notas` junto al nombre del docente y grupo evaluador.
+

@@ -90,7 +90,61 @@ export const obtenerReporteCoherenciaCurricular = async (req: Request, res: Resp
             ) THEN 'PLANEADA'
             ELSE 'EXTRA'
           END
-        `.as("estado_coherencia")
+        `.as("estado_coherencia"),
+        sql<number>`COALESCE((
+          SELECT COUNT(*)::int
+          FROM matricula m_sub
+          WHERE m_sub.id_grupo = g.id_grupo
+            AND m_sub.id_anio = c.id_anio
+            AND m_sub.estado = 'ACTIVA'
+        ), 0)`.as("total_estudiantes"),
+        sql<number>`COALESCE((
+          SELECT COUNT(DISTINCT na_sub.id_estudiante)::int
+          FROM notas_actividad na_sub
+          WHERE na_sub.id_actividadmateria = am.id_actividadmateria
+            AND na_sub.nota IS NOT NULL
+        ), 0)`.as("estudiantes_calificados"),
+        sql<number>`GREATEST(0, COALESCE((
+          SELECT COUNT(*)::int
+          FROM matricula m_sub
+          WHERE m_sub.id_grupo = g.id_grupo
+            AND m_sub.id_anio = c.id_anio
+            AND m_sub.estado = 'ACTIVA'
+        ), 0) - COALESCE((
+          SELECT COUNT(DISTINCT na_sub.id_estudiante)::int
+          FROM notas_actividad na_sub
+          WHERE na_sub.id_actividadmateria = am.id_actividadmateria
+            AND na_sub.nota IS NOT NULL
+        ), 0))`.as("estudiantes_pendientes"),
+        sql<string>`
+          CASE
+            WHEN (
+              SELECT COUNT(DISTINCT na_sub.id_estudiante)::int
+              FROM notas_actividad na_sub
+              WHERE na_sub.id_actividadmateria = am.id_actividadmateria
+                AND na_sub.nota IS NOT NULL
+            ) >= (
+              SELECT COUNT(*)::int
+              FROM matricula m_sub
+              WHERE m_sub.id_grupo = g.id_grupo
+                AND m_sub.id_anio = c.id_anio
+                AND m_sub.estado = 'ACTIVA'
+            ) AND (
+              SELECT COUNT(*)::int
+              FROM matricula m_sub
+              WHERE m_sub.id_grupo = g.id_grupo
+                AND m_sub.id_anio = c.id_anio
+                AND m_sub.estado = 'ACTIVA'
+            ) > 0 THEN 'COMPLETO'
+            WHEN (
+              SELECT COUNT(DISTINCT na_sub.id_estudiante)::int
+              FROM notas_actividad na_sub
+              WHERE na_sub.id_actividadmateria = am.id_actividadmateria
+                AND na_sub.nota IS NOT NULL
+            ) > 0 THEN 'PARCIAL'
+            ELSE 'SIN_CALIFICAR'
+          END
+        `.as("estado_calificacion")
       ]);
 
     if (targetYear && targetYear !== "TODOS") {
@@ -345,7 +399,49 @@ export const obtenerReporteCoberturaDba = async (req: Request, res: Response): P
         "am.porcentaje as actividad_porcentaje",
         sql<string>`ne.nombre || ' - ' || tg.nombre || COALESCE(' (' || s.nombre || ')', '')`.as("grupo_nombre"),
         sql<string>`u.nombre || ' ' || u.apellido`.as("docente_nombre"),
-        "p.nombre as periodo_nombre"
+        "p.nombre as periodo_nombre",
+        sql<number>`COALESCE((
+          SELECT COUNT(*)::int
+          FROM matricula m_sub
+          WHERE m_sub.id_grupo = g.id_grupo
+            AND m_sub.id_anio = c.id_anio
+            AND m_sub.estado = 'ACTIVA'
+        ), 0)`.as("total_estudiantes"),
+        sql<number>`COALESCE((
+          SELECT COUNT(DISTINCT na_sub.id_estudiante)::int
+          FROM notas_actividad na_sub
+          WHERE na_sub.id_actividadmateria = am.id_actividadmateria
+            AND na_sub.nota IS NOT NULL
+        ), 0)`.as("estudiantes_calificados"),
+        sql<string>`
+          CASE
+            WHEN (
+              SELECT COUNT(DISTINCT na_sub.id_estudiante)::int
+              FROM notas_actividad na_sub
+              WHERE na_sub.id_actividadmateria = am.id_actividadmateria
+                AND na_sub.nota IS NOT NULL
+            ) >= (
+              SELECT COUNT(*)::int
+              FROM matricula m_sub
+              WHERE m_sub.id_grupo = g.id_grupo
+                AND m_sub.id_anio = c.id_anio
+                AND m_sub.estado = 'ACTIVA'
+            ) AND (
+              SELECT COUNT(*)::int
+              FROM matricula m_sub
+              WHERE m_sub.id_grupo = g.id_grupo
+                AND m_sub.id_anio = c.id_anio
+                AND m_sub.estado = 'ACTIVA'
+            ) > 0 THEN 'COMPLETO'
+            WHEN (
+              SELECT COUNT(DISTINCT na_sub.id_estudiante)::int
+              FROM notas_actividad na_sub
+              WHERE na_sub.id_actividadmateria = am.id_actividadmateria
+                AND na_sub.nota IS NOT NULL
+            ) > 0 THEN 'PARCIAL'
+            ELSE 'SIN_CALIFICAR'
+          END
+        `.as("estado_calificacion")
       ])
       .distinct();
 
@@ -361,7 +457,10 @@ export const obtenerReporteCoberturaDba = async (req: Request, res: Response): P
               'actividad_porcentaje', sub.actividad_porcentaje,
               'grupo_nombre', sub.grupo_nombre,
               'docente_nombre', sub.docente_nombre,
-              'periodo_nombre', sub.periodo_nombre
+              'periodo_nombre', sub.periodo_nombre,
+              'total_estudiantes', sub.total_estudiantes,
+              'estudiantes_calificados', sub.estudiantes_calificados,
+              'estado_calificacion', sub.estado_calificacion
             )
           )
         `.as("evaluaciones")

@@ -84,9 +84,26 @@ Este documento detalla las reglas de negocio técnicas y funcionales del módulo
   - Fórmula: `Cobertura (%) = (Evidencias Cubiertas / Total Evidencias Catálogo) * 100`.
 - **Motivo:** Permite a la rectoría y directivos medir el porcentaje de avance del programa pedagógico nacional a lo largo del año lectivo.
 - **Módulos afectados:** Catálogo DBA, Calificaciones.
+- **Historias de usuario relacionadas:** HU-DBA-004
+
+---
+
+### RN-DBA-007: Supervisión de Efectividad Evaluativa en Aula (Estudiantes Calificados vs Matriculados)
+- **Descripción:** Toda actividad vinculada a evidencias DBA en el reporte de Coherencia y Cobertura debe reflejar el avance real de calificación sobre el censo de estudiantes del curso:
+  - `Total Estudiantes`: Estudiantes con matrícula `ACTIVA` en el grupo y año lectivo de la materia.
+  - `Estudiantes Calificados`: Estudiantes con registro numérico de calificación (`nota IS NOT NULL`) en `notas_actividad`.
+  - `Estado Evaluativo`:
+    - `COMPLETO`: Calificados $\ge$ Total (100% de notas asentadas).
+    - `PARCIAL`: Calificados $> 0$ pero $<$ Total (faltan alumnos por calificar).
+    - `SIN_CALIFICAR`: 0 notas registradas en el sistema.
+- **Motivo:** Evita falsos positivos donde una actividad parece haber cumplido con el DBA por haber sido creada, pero el docente no ha evaluado ni asentado notas a los estudiantes.
+- **Módulos afectados:** Catálogo DBA, Calificaciones, Matrículas.
 - **Archivos donde se implementa:** 
-  - [dbaReportsController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/dbaReportsController.ts) (`obtenerReporteCoberturaDba`)
+  - [dbaReportsController.ts](file:///c:/Users/alejo/Downloads/proyectos-dev/AcademiaNeiva/backend/src/controllers/dbaReportsController.ts) (`obtenerReporteCoherenciaCurricular`, `obtenerReporteCoberturaDba`)
+  - [DbaReportsView.vue](file:///c:/Users/alejo/Downloads/proyectos-dev/AcademiaNeiva/frontend/src/views/admin/DbaReportsView.vue) (Badge interactivo y preset `🚨 Pendientes por Evaluar`)
 - **Endpoints relacionados:** 
+  - `GET /api/academic-admin/settings/dba-reportes/coherencia/:schoolId`
   - `GET /api/academic-admin/settings/dba-reportes/cobertura/:schoolId`
 - **Historias de usuario relacionadas:** HU-DBA-004
+
 
