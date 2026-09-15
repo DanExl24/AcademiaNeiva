@@ -22,7 +22,10 @@ import {
   ChevronDown,
   ChevronUp,
   ChevronsDown,
-  ChevronsUp
+  ChevronsUp,
+  Users,
+  HelpCircle,
+  Target
 } from 'lucide-vue-next'
 import { useAuthStore } from '../../stores/auth'
 import { useAcademicYearStore } from '../../stores/academicYear'
@@ -80,6 +83,7 @@ interface CoherenciaRow {
   estado_coherencia: 'PLANEADA' | 'EXTRA'
   motivo_extra?: string
   justificacion_extra?: string
+  jornada_nombre?: string
   total_estudiantes?: number
   estudiantes_calificados?: number
   estudiantes_pendientes?: number
@@ -304,7 +308,7 @@ const coberturaResumen = ref<CoberturaResumen[]>([])
 const coberturaDetalles = ref<CoberturaDetalle[]>([])
 
 // Coherencia Filter Selections & View Mode
-const coherenciaViewMode = ref<'groupedActivity' | 'groupedDba' | 'table'>('groupedActivity')
+const coherenciaViewMode = ref<'groupedActivity' | 'groupedDba' | 'groupedTeacher' | 'table'>('groupedActivity')
 const filterPeriod = ref<string>('TODOS')
 const filterGroup = ref<string>('TODOS')
 const filterCoherenciaGrade = ref<string>('TODOS')
@@ -314,10 +318,54 @@ const filterCoherenciaStatus = ref<string>('TODOS')
 const presetCoherenciaExtrasOnly = ref<boolean>(false)
 const presetCoherenciaPlaneadasOnly = ref<boolean>(false)
 const presetCoherenciaPendientesOnly = ref<boolean>(false)
+const filterHideEmptyGroups = ref<boolean>(true)
+const showExecutiveGuide = ref<boolean>(false)
 const searchTerm = ref<string>('')
 
 // Collapsible Accordion State for Activity Cards
 const collapsedActivityCards = ref<Set<string>>(new Set())
+
+// Collapsible Accordion State for Teacher Cards (Matriz Ejecutiva)
+const collapsedTeacherCards = ref<Set<string>>(new Set())
+
+const toggleTeacherCard = (docenteNombre: string) => {
+  const set = new Set(collapsedTeacherCards.value)
+  if (set.has(docenteNombre)) {
+    set.delete(docenteNombre)
+  } else {
+    set.add(docenteNombre)
+  }
+  collapsedTeacherCards.value = set
+}
+
+const isTeacherCardCollapsed = (docenteNombre: string) => collapsedTeacherCards.value.has(docenteNombre)
+
+const expandAllTeachers = () => {
+  collapsedTeacherCards.value = new Set()
+}
+
+const collapseAllTeachers = () => {
+  const set = new Set<string>()
+  groupedCoherenciaByTeacher.value.forEach(t => set.add(t.docente_nombre))
+  collapsedTeacherCards.value = set
+}
+
+const getTeacherInitials = (name: string): string => {
+  if (!name) return 'DO'
+  const parts = name.trim().split(/\s+/)
+  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase()
+  return (parts[0][0] + parts[1][0]).toUpperCase()
+}
+
+const filterByTeacherAndSwitch = (docenteNombre: string) => {
+  const teacherObj = teachers.value.find(t => `${t.nombre} ${t.apellido}`.trim().toLowerCase() === docenteNombre.trim().toLowerCase())
+  if (teacherObj) {
+    filterTeacher.value = String(teacherObj.id_docente)
+  } else {
+    searchTerm.value = docenteNombre
+  }
+  coherenciaViewMode.value = 'groupedActivity'
+}
 
 const toggleActivityCard = (key: string) => {
   const set = new Set(collapsedActivityCards.value)
@@ -648,6 +696,7 @@ const activeCoherenciaFiltersCount = computed(() => {
   if (presetCoherenciaExtrasOnly.value) count++
   if (presetCoherenciaPlaneadasOnly.value) count++
   if (presetCoherenciaPendientesOnly.value) count++
+  if (!filterHideEmptyGroups.value) count++
   if (searchTerm.value.trim()) count++
   return count
 })
@@ -664,6 +713,7 @@ const clearCoherenciaFilters = () => {
   presetCoherenciaExtrasOnly.value = false
   presetCoherenciaPlaneadasOnly.value = false
   presetCoherenciaPendientesOnly.value = false
+  filterHideEmptyGroups.value = true
   searchTerm.value = ''
 }
 
@@ -708,6 +758,10 @@ const selectCoherenciaStatusFromCard = (status: 'TODOS' | 'PLANEADAS' | 'EXTRAS'
 const filteredCoherencia = computed(() => {
   let list = coherenciaData.value
 
+  if (filterHideEmptyGroups.value) {
+    list = list.filter(r => (r.total_estudiantes || 0) > 0)
+  }
+
   if (presetCoherenciaExtrasOnly.value) {
     list = list.filter(r => r.estado_coherencia === 'EXTRA')
   }
@@ -728,6 +782,7 @@ const filteredCoherencia = computed(() => {
       const desc = (row.evidencia_descripcion || '').toLowerCase()
       const dba = (row.dba_enunciado || '').toLowerCase()
       const comp = (row.competencia_descripcion || '').toLowerCase()
+      const compNom = (row.competencia_nombre || '').toLowerCase()
       const subj = (row.materia_nombre || '').toLowerCase()
       const group = (row.grupo_nombre || '').toLowerCase()
       
@@ -736,6 +791,7 @@ const filteredCoherencia = computed(() => {
              desc.includes(query) || 
              dba.includes(query) || 
              comp.includes(query) ||
+             compNom.includes(query) ||
              subj.includes(query) ||
              group.includes(query)
     })
@@ -765,6 +821,9 @@ const groupedCoherenciaByActivity = computed(() => {
     actividad_fecha: string
     docente_nombre: string
     grupo_nombre: string
+    jornada_nombre?: string
+    competencia_nombre?: string | null
+    competencia_descripcion?: string
     materia_nombre: string
     periodo_nombre: string
     tiene_extras: boolean
@@ -794,6 +853,9 @@ const groupedCoherenciaByActivity = computed(() => {
         actividad_fecha: row.actividad_fecha,
         docente_nombre: row.docente_nombre,
         grupo_nombre: row.grupo_nombre,
+        jornada_nombre: row.jornada_nombre,
+        competencia_nombre: row.competencia_nombre,
+        competencia_descripcion: row.competencia_descripcion,
         materia_nombre: row.materia_nombre,
         periodo_nombre: row.periodo_nombre,
         tiene_extras: false,
@@ -870,6 +932,132 @@ const groupedCoherenciaByDba = computed(() => {
     dba_enunciado: dba.dba_enunciado,
     actividades: Array.from(dba.actividadesMap.values())
   })).sort((a, b) => a.numero_dba - b.numero_dba)
+})
+
+// GROUPING 3: Grouped by Teacher (Executive Directorial Matrix)
+export interface TeacherExecutiveActivity {
+  id_actividadmateria: number
+  actividad_nombre: string
+  materia_nombre: string
+  grupo_nombre: string
+  jornada_nombre?: string
+  periodo_nombre: string
+  competencia_nombre?: string | null
+  competencia_descripcion?: string
+  total_estudiantes: number
+  estudiantes_calificados: number
+  estudiantes_pendientes: number
+  estado_calificacion: 'COMPLETO' | 'PARCIAL' | 'SIN_CALIFICAR'
+}
+
+export interface TeacherExecutiveStats {
+  id_docente: number
+  docente_nombre: string
+  materias: string[]
+  grupos: string[]
+  total_actividades: number
+  total_estudiantes_evaluables: number
+  total_estudiantes_calificados: number
+  total_estudiantes_pendientes: number
+  tasa_calificacion: number
+  estado_general: 'COMPLETO' | 'PARCIAL' | 'SIN_CALIFICAR'
+  actividades: TeacherExecutiveActivity[]
+}
+
+const groupedCoherenciaByTeacher = computed<TeacherExecutiveStats[]>(() => {
+  const map = new Map<string, TeacherExecutiveStats>()
+
+  groupedCoherenciaByActivity.value.forEach(act => {
+    const teacherName = (act.docente_nombre || 'Docente no asignado').trim()
+    if (!map.has(teacherName)) {
+      map.set(teacherName, {
+        id_docente: 0,
+        docente_nombre: teacherName,
+        materias: [],
+        grupos: [],
+        total_actividades: 0,
+        total_estudiantes_evaluables: 0,
+        total_estudiantes_calificados: 0,
+        total_estudiantes_pendientes: 0,
+        tasa_calificacion: 0,
+        estado_general: 'COMPLETO',
+        actividades: []
+      })
+    }
+    const t = map.get(teacherName)!
+    if (act.materia_nombre && !t.materias.includes(act.materia_nombre)) {
+      t.materias.push(act.materia_nombre)
+    }
+    if (act.grupo_nombre && !t.grupos.includes(act.grupo_nombre)) {
+      t.grupos.push(act.grupo_nombre)
+    }
+    t.total_actividades++
+    t.total_estudiantes_evaluables += act.total_estudiantes || 0
+    t.total_estudiantes_calificados += act.estudiantes_calificados || 0
+    t.total_estudiantes_pendientes += act.estudiantes_pendientes || 0
+    t.actividades.push({
+      id_actividadmateria: act.id_actividadmateria,
+      actividad_nombre: act.actividad_nombre,
+      materia_nombre: act.materia_nombre,
+      grupo_nombre: act.grupo_nombre,
+      jornada_nombre: act.jornada_nombre,
+      periodo_nombre: act.periodo_nombre,
+      competencia_nombre: act.competencia_nombre,
+      competencia_descripcion: act.competencia_descripcion,
+      total_estudiantes: act.total_estudiantes || 0,
+      estudiantes_calificados: act.estudiantes_calificados || 0,
+      estudiantes_pendientes: act.estudiantes_pendientes || 0,
+      estado_calificacion: act.estado_calificacion
+    })
+  })
+
+  const result = Array.from(map.values()).map(t => {
+    const tasa = t.total_estudiantes_evaluables > 0
+      ? Math.round((t.total_estudiantes_calificados / t.total_estudiantes_evaluables) * 100)
+      : (t.total_actividades > 0 ? 0 : 100)
+
+    let estado: 'COMPLETO' | 'PARCIAL' | 'SIN_CALIFICAR' = 'COMPLETO'
+    if (t.total_estudiantes_calificados === 0 && t.total_estudiantes_evaluables > 0) {
+      estado = 'SIN_CALIFICAR'
+    } else if (t.total_estudiantes_pendientes > 0) {
+      estado = 'PARCIAL'
+    }
+
+    return {
+      ...t,
+      tasa_calificacion: tasa,
+      estado_general: estado
+    }
+  })
+
+  return result.sort((a, b) => {
+    if (a.estado_general !== 'COMPLETO' && b.estado_general === 'COMPLETO') return -1
+    if (a.estado_general === 'COMPLETO' && b.estado_general !== 'COMPLETO') return 1
+    return a.docente_nombre.localeCompare(b.docente_nombre)
+  })
+})
+
+const directivosComplianceStats = computed(() => {
+  const teacherList = groupedCoherenciaByTeacher.value
+  const totalTeachers = teacherList.length
+  const teachersAlDia = teacherList.filter(t => t.estado_general === 'COMPLETO').length
+  const teachersPendientes = totalTeachers - teachersAlDia
+
+  let totalEstudiantes = 0
+  let totalCalificados = 0
+  teacherList.forEach(t => {
+    totalEstudiantes += t.total_estudiantes_evaluables
+    totalCalificados += t.total_estudiantes_calificados
+  })
+
+  const tasaGlobal = totalEstudiantes > 0 ? Math.round((totalCalificados / totalEstudiantes) * 100) : 100
+
+  return {
+    totalTeachers,
+    teachersAlDia,
+    teachersPendientes,
+    tasaGlobal
+  }
 })
 
 // Coherencia Statistics
@@ -985,6 +1173,14 @@ onMounted(() => {
               <BookOpen class="h-3.5 w-3.5" />
               <span>Ver Catálogo Global</span>
             </button>
+            <button
+              @click="showExecutiveGuide = !showExecutiveGuide"
+              type="button"
+              class="inline-flex items-center gap-1.5 rounded-lg sm:rounded-xl bg-indigo-50 px-2.5 sm:px-3 py-1 text-[11px] sm:text-xs font-black text-indigo-700 hover:bg-indigo-100 transition border border-indigo-200/50 dark:bg-indigo-950/40 dark:text-indigo-400 dark:border-indigo-900/40 cursor-pointer"
+            >
+              <HelpCircle class="h-3.5 w-3.5" />
+              <span>{{ showExecutiveGuide ? 'Ocultar Guía' : 'ℹ️ Guía Directiva' }}</span>
+            </button>
             <span v-if="fetchingReports && !isCurrentTabLoading" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 text-xs font-bold border border-amber-200/40 animate-pulse">
               <RefreshCw class="w-3.5 h-3.5 animate-spin" />
               <span>Actualizando datos...</span>
@@ -1032,6 +1228,71 @@ onMounted(() => {
       <!-- SECTION 1: COHERENCIA CURRICULAR -->
       <div v-if="activeTab === 'coherencia'" class="space-y-6 sm:space-y-8 animate-in fade-in duration-300">
         
+        <!-- EXECUTIVE GUIDANCE BANNER FOR DIRECTORS -->
+        <div v-if="showExecutiveGuide" class="p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-indigo-900/90 via-slate-900/90 to-amber-950/80 text-white shadow-xl border border-indigo-500/20 space-y-4 animate-in fade-in duration-300">
+          <div class="flex items-start justify-between gap-4">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-2xl bg-white/10 flex items-center justify-center text-amber-400 border border-white/10">
+                <HelpCircle class="w-5 h-5" />
+              </div>
+              <div>
+                <h3 class="text-base font-black tracking-wide">Guía de Interpretación para Directivos y Coordinación</h3>
+                <p class="text-xs text-indigo-200">Conceptos clave para auditar el cumplimiento pedagógico y normativo en el colegio</p>
+              </div>
+            </div>
+            <button @click="showExecutiveGuide = false" class="text-white/60 hover:text-white p-1 rounded-lg hover:bg-white/10 transition cursor-pointer">
+              <X class="w-4 h-4" />
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+            <!-- Card 1: Coherencia -->
+            <div class="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-2">
+              <div class="flex items-center gap-2 text-emerald-400 text-xs font-black uppercase tracking-wider">
+                <Layers class="w-4 h-4" />
+                <span>1. Coherencia Curricular</span>
+              </div>
+              <p class="text-xs text-slate-300 leading-relaxed">
+                Compara lo que el docente planificó en el plan de estudios frente a lo que efectivamente evalúa en el aula.
+              </p>
+              <ul class="text-[11px] text-slate-300/90 space-y-1">
+                <li><b class="text-emerald-400">Planeada:</b> La actividad evalúa exactamente una evidencia aprobada en la planeación curricular.</li>
+                <li><b class="text-amber-400">Desvío / Extra:</b> Evidencia evaluada fuera de planeación (requiere justificación pedagógica registrada).</li>
+              </ul>
+            </div>
+
+            <!-- Card 2: Cobertura DBA -->
+            <div class="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-2">
+              <div class="flex items-center gap-2 text-amber-400 text-xs font-black uppercase tracking-wider">
+                <BookOpen class="w-4 h-4" />
+                <span>2. Cobertura del Catálogo</span>
+              </div>
+              <p class="text-xs text-slate-300 leading-relaxed">
+                Mide el avance institucional frente a los Derechos Básicos de Aprendizaje (DBA) expedidos por el MEN para cada grado y área.
+              </p>
+              <p class="text-[11px] text-slate-300/90">
+                Permite verificar con certeza que todos los estudiantes fueron evaluados en las competencias mínimas nacionales.
+              </p>
+            </div>
+
+            <!-- Card 3: Auditoría de Calificación -->
+            <div class="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-2">
+              <div class="flex items-center gap-2 text-rose-400 text-xs font-black uppercase tracking-wider">
+                <AlertTriangle class="w-4 h-4" />
+                <span>3. Auditoría de Calificación</span>
+              </div>
+              <p class="text-xs text-slate-300 leading-relaxed">
+                Supervisa si los docentes ya asentaron notas definitivas a los estudiantes en las actividades creadas.
+              </p>
+              <ul class="text-[11px] text-slate-300/90 space-y-1">
+                <li><b class="text-emerald-400">Completo (100%):</b> Todos los alumnos matriculados tienen nota.</li>
+                <li><b class="text-amber-400">Parcial:</b> Hay alumnos pendientes de asentar nota.</li>
+                <li><b class="text-rose-400">Sin Calificar:</b> Cero notas asentadas en el sistema.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         <!-- Interactive KPI Cards Grid -->
         <div class="grid grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-4">
           <!-- Total Card -->
@@ -1096,6 +1357,40 @@ onMounted(() => {
           </div>
         </div>
 
+        <!-- EXECUTIVE COMPLIANCE SEMAPHORE BAR -->
+        <div class="p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 flex flex-wrap items-center justify-between gap-4 shadow-xs">
+          <div class="flex flex-wrap items-center gap-3">
+            <span class="text-xs font-black text-slate-400 uppercase tracking-wider">Auditoría Docente Institucional:</span>
+            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 text-xs font-black shadow-xs">
+              <Check class="w-3.5 h-3.5 text-emerald-600" /> {{ directivosComplianceStats.teachersAlDia }} Docentes al Día
+            </span>
+            <button 
+              @click="toggleCoherenciaPendientesPreset"
+              type="button"
+              class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-black transition-transform hover:scale-105 cursor-pointer shadow-xs border"
+              :class="directivosComplianceStats.teachersPendientes > 0 
+                ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border-rose-300/40' 
+                : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700'"
+              title="Clic para filtrar solo actividades pendientes por evaluar"
+            >
+              <AlertTriangle class="w-3.5 h-3.5 text-rose-600" /> 
+              <span>{{ directivosComplianceStats.teachersPendientes }} Docentes con Pendientes</span>
+            </button>
+          </div>
+
+          <div class="flex items-center gap-3 text-xs font-bold text-slate-600 dark:text-slate-300">
+            <span>Tasa Global de Calificación:</span>
+            <span class="font-black text-slate-900 dark:text-white text-sm">{{ directivosComplianceStats.tasaGlobal }}%</span>
+            <div class="w-24 bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+              <div 
+                class="h-2 rounded-full transition-all duration-500" 
+                :class="directivosComplianceStats.tasaGlobal >= 85 ? 'bg-emerald-500' : directivosComplianceStats.tasaGlobal >= 60 ? 'bg-amber-500' : 'bg-rose-500'"
+                :style="{ width: `${directivosComplianceStats.tasaGlobal}%` }"
+              ></div>
+            </div>
+          </div>
+        </div>
+
         <!-- MULTI-DIMENSIONAL INTERACTIVE FILTER PANEL -->
         <div class="rounded-2xl sm:rounded-3xl border border-slate-100 bg-white p-4 sm:p-6 shadow-sm dark:bg-slate-900 dark:border-slate-800 space-y-4 sm:space-y-5">
           
@@ -1119,7 +1414,7 @@ onMounted(() => {
                   title="Vista agrupada por actividad evaluativa (sin repetición)"
                 >
                   <Layers class="w-3.5 h-3.5" />
-                  <span>Por Actividad (Limpio)</span>
+                  <span>Por Actividad</span>
                 </button>
 
                 <button 
@@ -1130,6 +1425,16 @@ onMounted(() => {
                 >
                   <BookOpen class="w-3.5 h-3.5" />
                   <span>Por DBA</span>
+                </button>
+
+                <button 
+                  @click="coherenciaViewMode = 'groupedTeacher'"
+                  class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                  :class="coherenciaViewMode === 'groupedTeacher' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'"
+                  title="Matriz Ejecutiva de Supervisión Docente"
+                >
+                  <Users class="w-3.5 h-3.5" />
+                  <span>Por Docente (Matriz)</span>
                 </button>
 
                 <button 
@@ -1243,6 +1548,18 @@ onMounted(() => {
                 <span>Pendientes por Evaluar</span>
               </button>
 
+              <!-- Preset 4: Ocultar grupos sin estudiantes -->
+              <button 
+                @click="filterHideEmptyGroups = !filterHideEmptyGroups"
+                type="button"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer"
+                :class="filterHideEmptyGroups ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'"
+                title="Ocultar actividades de grupos sin alumnos matriculados (0/0 evaluados)"
+              >
+                <Users class="w-3.5 h-3.5" :class="filterHideEmptyGroups ? 'text-indigo-200' : 'text-slate-400'" />
+                <span>{{ filterHideEmptyGroups ? 'Ocultando cursos vacíos' : 'Mostrando cursos vacíos' }}</span>
+              </button>
+
               <!-- Teacher Select Dropdown -->
               <select v-model="filterTeacher" class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:border-amber-300">
                 <option value="TODOS">Todos los docentes</option>
@@ -1300,6 +1617,16 @@ onMounted(() => {
               <X @click="presetCoherenciaPlaneadasOnly = false" class="w-3 h-3 cursor-pointer hover:text-amber-500" />
             </span>
 
+            <span v-if="presetCoherenciaPendientesOnly" class="inline-flex items-center gap-1 bg-rose-100 dark:bg-rose-950/60 px-2.5 py-1 rounded-lg text-xs font-bold text-rose-800 dark:text-rose-300">
+              Pendientes de Calificar
+              <X @click="presetCoherenciaPendientesOnly = false" class="w-3 h-3 cursor-pointer hover:text-amber-500" />
+            </span>
+
+            <span v-if="!filterHideEmptyGroups" class="inline-flex items-center gap-1 bg-indigo-100 dark:bg-indigo-950/60 px-2.5 py-1 rounded-lg text-xs font-bold text-indigo-800 dark:text-indigo-300">
+              Incluyendo cursos vacíos
+              <X @click="filterHideEmptyGroups = true" class="w-3 h-3 cursor-pointer hover:text-amber-500" />
+            </span>
+
             <span v-if="searchTerm" class="inline-flex items-center gap-1 bg-indigo-50 dark:bg-indigo-950/60 px-2.5 py-1 rounded-lg text-xs font-bold text-indigo-700 dark:text-indigo-300">
               "{{ searchTerm }}"
               <X @click="searchTerm = ''" class="w-3 h-3 cursor-pointer hover:text-amber-500" />
@@ -1319,6 +1646,9 @@ onMounted(() => {
                 </template>
                 <template v-else-if="coherenciaViewMode === 'groupedDba'">
                   {{ groupedCoherenciaByDba.length }} Derechos Básicos de Aprendizaje con evaluaciones en aula.
+                </template>
+                <template v-else-if="coherenciaViewMode === 'groupedTeacher'">
+                  {{ groupedCoherenciaByTeacher.length }} docentes supervisados en su avance evaluativo institucional.
                 </template>
                 <template v-else>
                   {{ filteredCoherencia.length }} registros detallados disponibles.
@@ -1368,6 +1698,27 @@ onMounted(() => {
                 </button>
               </template>
 
+              <template v-else-if="coherenciaViewMode === 'groupedTeacher'">
+                <button 
+                  @click="expandAllTeachers"
+                  type="button"
+                  class="inline-flex items-center gap-1 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs hover:bg-slate-200 transition cursor-pointer"
+                  title="Desplegar todas las fichas de docentes"
+                >
+                  <ChevronsDown class="w-3.5 h-3.5" />
+                  <span>Expandir todo</span>
+                </button>
+                <button 
+                  @click="collapseAllTeachers"
+                  type="button"
+                  class="inline-flex items-center gap-1 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs hover:bg-slate-200 transition cursor-pointer"
+                  title="Plegar todas las fichas de docentes"
+                >
+                  <ChevronsUp class="w-3.5 h-3.5" />
+                  <span>Colapsar todo</span>
+                </button>
+              </template>
+
               <button
                 v-if="filteredCoherencia.length > 0"
                 @click="exportCoherenciaCSV"
@@ -1383,7 +1734,7 @@ onMounted(() => {
           <div v-if="filteredCoherencia.length === 0" class="py-16 text-center">
             <AlertTriangle class="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600 mb-4" />
             <p class="text-base font-black text-slate-700 dark:text-slate-400">No se encontraron registros de coherencia.</p>
-            <p class="text-sm font-semibold text-slate-400 dark:text-slate-500 max-w-md mx-auto mt-1">Ajusta los filtros de búsqueda o asegúrate de que los docentes hayan calificado actividades asociadas a evidencias DBA.</p>
+            <p class="text-sm font-semibold text-slate-400 dark:text-slate-500 max-w-md mx-auto mt-1">Ajusta los filtros de búsqueda o desactiva "Ocultar cursos vacíos" para revisar grupos sin matriculados.</p>
             <button @click="clearCoherenciaFilters" class="mt-4 inline-flex items-center gap-2 px-5 py-2 rounded-2xl bg-amber-600 text-white font-bold text-xs hover:bg-amber-500 transition-colors cursor-pointer">
               <RotateCcw class="w-4 h-4" />
               <span>Limpiar filtros</span>
@@ -1403,7 +1754,7 @@ onMounted(() => {
                 class="flex flex-col md:flex-row md:items-center justify-between gap-3 cursor-pointer select-none group"
                 :class="!isActivityCardCollapsed(`${actGroup.id_actividadmateria}_${actGroup.docente_nombre}_${actGroup.grupo_nombre}_${actGroup.materia_nombre}`) ? 'pb-4 border-b border-slate-200/60 dark:border-slate-800' : ''"
               >
-                <div class="space-y-1">
+                <div class="space-y-1.5">
                   <div class="flex flex-wrap items-center gap-2">
                     <span class="font-extrabold text-slate-900 dark:text-white text-base group-hover:text-amber-600 transition-colors">{{ actGroup.actividad_nombre }}</span>
                     <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-300">
@@ -1439,10 +1790,19 @@ onMounted(() => {
                       <AlertTriangle class="w-3 h-3 text-rose-600" /> 0/{{ actGroup.total_estudiantes }} Evaluados · Sin Calificar
                     </span>
                   </div>
+
+                  <!-- Competencia Asociada Pill -->
+                  <div v-if="actGroup.competencia_nombre || actGroup.competencia_descripcion" class="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300 font-medium bg-slate-100/70 dark:bg-slate-800/70 px-2.5 py-1 rounded-xl w-fit">
+                    <Target class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                    <span class="font-extrabold text-slate-800 dark:text-slate-200">{{ actGroup.competencia_nombre || 'Competencia' }}:</span>
+                    <span class="line-clamp-1 max-w-xl text-[11px]">{{ actGroup.competencia_descripcion }}</span>
+                  </div>
+
+                  <!-- Meta Info Line con Jornada explícita -->
                   <div class="flex flex-wrap items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400">
                     <span class="text-slate-800 dark:text-slate-200 font-extrabold">{{ actGroup.docente_nombre }}</span>
                     <span>·</span>
-                    <span class="text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-lg border border-indigo-100/30">{{ actGroup.grupo_nombre }}</span>
+                    <span class="text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-2.5 py-0.5 rounded-lg border border-indigo-100/30 font-extrabold">{{ actGroup.grupo_nombre }}</span>
                     <span>·</span>
                     <span class="text-amber-700 dark:text-amber-400 font-extrabold uppercase">{{ actGroup.materia_nombre }}</span>
                     <span v-if="actGroup.periodo_nombre">· {{ actGroup.periodo_nombre }}</span>
@@ -1572,7 +1932,152 @@ onMounted(() => {
             </div>
           </div>
 
-          <!-- MODE 3: DETAILED FLAT TABLE -->
+          <!-- MODE 3: GROUPED BY TEACHER (EXECUTIVE DIRECTORIAL MATRIX) -->
+          <div v-else-if="coherenciaViewMode === 'groupedTeacher'" class="grid grid-cols-1 gap-4">
+            <div 
+              v-for="tGroup in groupedCoherenciaByTeacher" 
+              :key="tGroup.docente_nombre"
+              class="rounded-3xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 md:p-6 space-y-4 hover:border-slate-200 transition-all shadow-sm"
+            >
+              <!-- Teacher Card Header -->
+              <div 
+                @click="toggleTeacherCard(tGroup.docente_nombre)"
+                class="flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer select-none group"
+                :class="!isTeacherCardCollapsed(tGroup.docente_nombre) ? 'pb-4 border-b border-slate-100 dark:border-slate-800' : ''"
+              >
+                <div class="flex items-start gap-3.5">
+                  <div class="w-11 h-11 rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 font-black text-sm flex items-center justify-center shrink-0 border border-amber-200/50 shadow-xs">
+                    {{ getTeacherInitials(tGroup.docente_nombre) }}
+                  </div>
+                  <div>
+                    <div class="flex flex-wrap items-center gap-2">
+                      <h4 class="text-base font-black text-slate-900 dark:text-white group-hover:text-amber-600 transition-colors">
+                        {{ tGroup.docente_nombre }}
+                      </h4>
+                      <!-- Badge Estado General -->
+                      <span 
+                        v-if="tGroup.estado_general === 'COMPLETO'"
+                        class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 flex items-center gap-1 shadow-xs"
+                      >
+                        <Check class="w-3 h-3 text-emerald-600" /> Al Día (100% Calificado)
+                      </span>
+                      <span 
+                        v-else-if="tGroup.estado_general === 'PARCIAL'"
+                        class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200 flex items-center gap-1 shadow-xs border border-amber-300/40"
+                      >
+                        <AlertTriangle class="w-3 h-3 text-amber-600" /> Calificación Parcial (Faltan {{ tGroup.total_estudiantes_pendientes }} notas)
+                      </span>
+                      <span 
+                        v-else
+                        class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 flex items-center gap-1 shadow-xs border border-rose-300/40"
+                      >
+                        <AlertTriangle class="w-3 h-3 text-rose-600" /> Sin Calificar ({{ tGroup.total_estudiantes_pendientes }} pendientes)
+                      </span>
+                    </div>
+
+                    <!-- Materias y Cursos asignados -->
+                    <div class="flex flex-wrap items-center gap-2 mt-1 text-xs text-slate-500 dark:text-slate-400 font-semibold">
+                      <span class="text-amber-700 dark:text-amber-400 font-black uppercase">
+                        {{ tGroup.materias.join(', ') || 'Sin materia registrada' }}
+                      </span>
+                      <span>·</span>
+                      <span>{{ tGroup.grupos.length }} {{ tGroup.grupos.length === 1 ? 'grupo asignado' : 'grupos asignados' }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Right side: Quick stats & chevron -->
+                <div class="flex items-center gap-4 shrink-0">
+                  <!-- Progress mini bar -->
+                  <div class="hidden sm:flex flex-col items-end gap-1 min-w-[140px]">
+                    <div class="flex items-center gap-2 text-xs font-black">
+                      <span class="text-slate-700 dark:text-slate-200">{{ tGroup.total_estudiantes_calificados }} / {{ tGroup.total_estudiantes_evaluables }}</span>
+                      <span class="text-amber-600 dark:text-amber-400">({{ tGroup.tasa_calificacion }}%)</span>
+                    </div>
+                    <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                      <div 
+                        class="h-1.5 rounded-full transition-all duration-500" 
+                        :class="tGroup.tasa_calificacion === 100 ? 'bg-emerald-500' : tGroup.tasa_calificacion > 0 ? 'bg-amber-500' : 'bg-rose-500'" 
+                        :style="{ width: `${tGroup.tasa_calificacion}%` }"
+                      ></div>
+                    </div>
+                  </div>
+
+                  <div class="text-right">
+                    <p class="text-xs font-black text-slate-800 dark:text-slate-200">{{ tGroup.total_actividades }}</p>
+                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Actividades</p>
+                  </div>
+
+                  <div class="p-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 group-hover:border-amber-400 group-hover:text-amber-600 transition-colors">
+                    <ChevronUp v-if="!isTeacherCardCollapsed(tGroup.docente_nombre)" class="w-4 h-4" />
+                    <ChevronDown v-else class="w-4 h-4" />
+                  </div>
+                </div>
+              </div>
+
+              <!-- Collapsible Activities List for Teacher -->
+              <div v-if="!isTeacherCardCollapsed(tGroup.docente_nombre)" class="space-y-3 pt-1 animate-in fade-in duration-200">
+                <div class="flex items-center justify-between">
+                  <p class="text-[11px] font-black uppercase tracking-widest text-slate-400">
+                    Actividades Evaluativas Asignadas ({{ tGroup.actividades.length }})
+                  </p>
+                  <button 
+                    @click.stop="filterByTeacherAndSwitch(tGroup.docente_nombre)"
+                    type="button"
+                    class="text-[11px] font-black text-amber-600 hover:text-amber-700 underline cursor-pointer"
+                  >
+                    Ver actividades en detalle &rarr;
+                  </button>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <div 
+                    v-for="act in tGroup.actividades" 
+                    :key="act.id_actividadmateria + '_' + act.grupo_nombre"
+                    class="p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/60 flex flex-col justify-between gap-2"
+                  >
+                    <div>
+                      <div class="flex items-center justify-between gap-2 mb-1">
+                        <span class="font-extrabold text-xs text-slate-800 dark:text-slate-200 truncate">{{ act.actividad_nombre }}</span>
+                        <span 
+                          v-if="act.estado_calificacion === 'COMPLETO'"
+                          class="px-2 py-0.5 rounded-md text-[9px] font-black uppercase bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 shrink-0"
+                        >
+                          100%
+                        </span>
+                        <span 
+                          v-else-if="act.estado_calificacion === 'PARCIAL'"
+                          class="px-2 py-0.5 rounded-md text-[9px] font-black uppercase bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 shrink-0"
+                        >
+                          Faltan {{ act.estudiantes_pendientes }}
+                        </span>
+                        <span 
+                          v-else
+                          class="px-2 py-0.5 rounded-md text-[9px] font-black uppercase bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 shrink-0"
+                        >
+                          Sin nota
+                        </span>
+                      </div>
+                      
+                      <p class="text-[11px] font-bold text-indigo-600 dark:text-indigo-400">{{ act.grupo_nombre }}</p>
+                      <p class="text-[10px] font-semibold text-slate-400 mt-0.5">{{ act.materia_nombre }} · {{ act.periodo_nombre }}</p>
+                      
+                      <div v-if="act.competencia_nombre || act.competencia_descripcion" class="mt-2 text-[10px] text-slate-500 dark:text-slate-400 line-clamp-2 bg-white/60 dark:bg-slate-900/40 p-1.5 rounded-lg">
+                        <span class="font-bold text-slate-700 dark:text-slate-300">{{ act.competencia_nombre || 'Competencia' }}:</span> {{ act.competencia_descripcion }}
+                      </div>
+                    </div>
+
+                    <div class="flex items-center justify-between pt-2 border-t border-slate-200/50 dark:border-slate-700/50 text-[10px] font-bold text-slate-500">
+                      <span>Calificados:</span>
+                      <span class="font-black text-slate-700 dark:text-slate-200">{{ act.estudiantes_calificados }} de {{ act.total_estudiantes }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- MODE 4: DETAILED FLAT TABLE -->
           <DataTable v-else>
             <template #header>
               <tr>

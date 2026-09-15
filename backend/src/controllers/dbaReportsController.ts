@@ -13,7 +13,7 @@ const parseSchoolId = (val: any): number => {
 // ============================================================================
 export const obtenerReporteCoherenciaCurricular = async (req: Request, res: Response): Promise<void> => {
   const schoolId = parseSchoolId(req.params.schoolId);
-  const { id_anio, yearId, id_periodo, id_grupo, grado, id_materia, id_docente } = req.query;
+  const { id_anio, yearId, id_periodo, id_grupo, grado, id_materia, id_docente, solo_con_estudiantes } = req.query;
   const targetYear = id_anio || yearId;
   const targetGrade = (grado || id_grupo) as string;
 
@@ -34,6 +34,7 @@ export const obtenerReporteCoherenciaCurricular = async (req: Request, res: Resp
       .innerJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
       .innerJoin("nivel_escolar as ne", "ne.id_nivel", "tg.id_nivel")
       .innerJoin("secciones as s", "s.id_seccion", "g.id_seccion")
+      .innerJoin("jornada as j", "j.id_jornada", "g.id_jornada")
       .innerJoin("materias as m", "m.id_materia", "c.id_materia")
       .leftJoin(
         (eb) =>
@@ -68,7 +69,8 @@ export const obtenerReporteCoherenciaCurricular = async (req: Request, res: Resp
         "p.id_periodo",
         "p.nombre as periodo_nombre",
         "g.id_grupo",
-        sql<string>`ne.nombre || ' - ' || tg.nombre || ' (' || s.nombre || ')'`.as("grupo_nombre"),
+        "j.nombre as jornada_nombre",
+        sql<string>`ne.nombre || ' - ' || tg.nombre || ' (' || s.nombre || ') [' || j.nombre || ']'`.as("grupo_nombre"),
         "m.id_materia",
         "m.nombre as materia_nombre",
         "d.id_docente",
@@ -171,9 +173,19 @@ export const obtenerReporteCoherenciaCurricular = async (req: Request, res: Resp
       query = query.where("d.id_docente", "=", Number(id_docente));
     }
 
+    if (solo_con_estudiantes === "true" || solo_con_estudiantes === "1") {
+      query = query.where(sql`(
+        SELECT COUNT(*)::int
+        FROM matricula m_sub
+        WHERE m_sub.id_grupo = g.id_grupo
+          AND m_sub.id_anio = c.id_anio
+          AND m_sub.estado = 'ACTIVA'
+      )`, ">", 0);
+    }
+
     query = query
       .orderBy("p.id_periodo", "asc")
-      .orderBy(sql`ne.nombre || ' - ' || tg.nombre || ' (' || s.nombre || ')'`, "asc")
+      .orderBy(sql`ne.nombre || ' - ' || tg.nombre || ' (' || s.nombre || ') [' || j.nombre || ']'`, "asc")
       .orderBy("m.nombre", "asc")
       .orderBy("am.id_actividadmateria", "asc")
       .orderBy("edba.orden", "asc");
@@ -368,6 +380,7 @@ export const obtenerReporteCoberturaDba = async (req: Request, res: Response): P
       .leftJoin("detalle_grados as dg", "dg.id_detallegrado", "am.id_detallegrado")
       .leftJoin("grupos as g", "g.id_grupo", "dg.id_grupo")
       .leftJoin("secciones as s", "s.id_seccion", "g.id_seccion")
+      .leftJoin("jornada as j", "j.id_jornada", "g.id_jornada")
       .leftJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
       .leftJoin("nivel_escolar as ne", "ne.id_nivel", "tg.id_nivel")
       .leftJoin("docente as doc", "doc.id_docente", "dg.id_docente")
@@ -397,7 +410,7 @@ export const obtenerReporteCoberturaDba = async (req: Request, res: Response): P
         "am.id_actividadmateria",
         "am.nombre as actividad_nombre",
         "am.porcentaje as actividad_porcentaje",
-        sql<string>`ne.nombre || ' - ' || tg.nombre || COALESCE(' (' || s.nombre || ')', '')`.as("grupo_nombre"),
+        sql<string>`ne.nombre || ' - ' || tg.nombre || COALESCE(' (' || s.nombre || ')', '') || COALESCE(' [' || j.nombre || ']', '')`.as("grupo_nombre"),
         sql<string>`u.nombre || ' ' || u.apellido`.as("docente_nombre"),
         "p.nombre as periodo_nombre",
         sql<number>`COALESCE((
@@ -624,7 +637,7 @@ export const obtenerCatalogoDbaDirectivo = async (req: Request, res: Response): 
                         'id_materia', m.id_materia,
                         'materia_nombre', m.nombre,
                         'id_grupo', g.id_grupo,
-                        'grupo_nombre', ne.nombre || ' - ' || tg.nombre || ' (' || s.nombre || ')'
+                        'grupo_nombre', ne.nombre || ' - ' || tg.nombre || ' (' || s.nombre || ') [' || j.nombre || ']'
                       )
                     )
                     FROM evidencia_aprendizaje ea
@@ -635,6 +648,7 @@ export const obtenerCatalogoDbaDirectivo = async (req: Request, res: Response): 
                     JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado
                     JOIN nivel_escolar ne ON ne.id_nivel = tg.id_nivel
                     JOIN secciones s ON s.id_seccion = g.id_seccion
+                    JOIN jornada j ON j.id_jornada = g.id_jornada
                     WHERE ea.id_evidencia_dba = edba.id_evidencia_dba
                       AND c.id_colegio = ${schoolId}
                       AND (${yearParam}::int IS NULL OR c.id_anio = ${yearParam}::int)

@@ -263,10 +263,23 @@ graph LR
    - 🔴 **`SIN_CALIFICAR`**: La actividad está vinculada a DBA, pero el docente no ha asentado ninguna nota (`calificados = 0`).
 
 #### Herramientas para el Directivo en la Interfaz:
+- **Desambiguación de Jornadas y Cursos:** Cada grupo incorpora la jornada escolar (ej: `MEDIA - DECIMO (A) [MAÑANA]`), evitando que grupos de jornadas distintas lucren duplicados o generen confusión.
+- **Visualización de la Competencia Evaluada:** Cada tarjeta de actividad muestra un pill distintivo con la competencia curricular y su objetivo pedagógico, permitiendo distinguir actividades evaluativas homónimas del mismo periodo.
+- **Filtro de Cursos Vacíos:** Toggle `Ocultar cursos vacíos` (activo por defecto) que suprime actividades asociadas a grupos sin matrícula activa (`0/0 Evaluados`).
 - **Badge en Cada Tarjeta de Actividad:** En la vista agrupada de *Coherencia Curricular*, cada actividad muestra su estado con colores contrastados:
   - 🟢 `[✓] 30/30 Evaluados (100%)`
   - 🟡 `[⚠] 12/30 Evaluados · Faltan 18`
   - 🔴 `[⚠] 0/30 Evaluados · Sin Calificar`
 - **Preset de Filtro Rápido:** Botón `🚨 Pendientes por Evaluar` en la barra de auditoría. Permite al directivo aislar en 1 clic todas las actividades donde los profesores adeudan calificaciones.
+- **Guía Rápida Directiva:** Botón `ℹ️ Guía Directiva` en la cabecera superior que despliega un panel explicativo en lenguaje sencillo con los conceptos esenciales: Coherencia Curricular, Cobertura DBA y Auditoría de Calificación en Aula.
+- **Semáforo Directivo de Cumplimiento Institucional:** Barra de auditoría en la parte superior que cuantifica:
+  - Total de Docentes al Día (100% calificados).
+  - Total de Docentes con Calificaciones Pendientes (botón interactivo para filtrar).
+  - Tasa Global de Calificación Institucional en Aula (% de notas asentadas vs alumnos esperados).
+- **Modo Matriz Ejecutiva "Por Docente":** Modo de visualización dedicado (`Por Docente (Matriz)`) que consolida la información por profesor:
+  - Avatar, nombre completo, materias y grupos asignados.
+  - Conteo total de actividades y alumnos evaluables.
+  - Barra de progreso de calificación y badge de estado (`🟢 AL DÍA`, `🟡 CALIFICACIÓN PARCIAL`, `🔴 SIN CALIFICAR`).
+  - Acordeón de actividades asignadas y botón directo para saltar al detalle de ese docente.
 - **Desglose en Cobertura:** Al desplegar cualquier evidencia DBA en la pestaña de *Cobertura del Catálogo*, cada actividad listada muestra el indicador `X/Y notas` junto al nombre del docente y grupo evaluador.
 

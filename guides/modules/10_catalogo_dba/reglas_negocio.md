@@ -106,4 +106,20 @@ Este documento detalla las reglas de negocio técnicas y funcionales del módulo
   - `GET /api/academic-admin/settings/dba-reportes/cobertura/:schoolId`
 - **Historias de usuario relacionadas:** HU-DBA-004
 
+### RN-DBA-008: Desambiguación de Jornadas y Supresión de Grupos Vacíos en Reportes
+- **Descripción:** En reportes analíticos curriculares y de DBA, la proyección de la denominación de los grupos debe incluir obligatoriamente la jornada escolar (`[MAÑANA]`, `[TARDE]`, `[UNICA]`). Adicionalmente, por defecto se deben ocultar aquellas actividades asociadas a grupos sin matrícula activa (`total_estudiantes = 0`), evitando la saturación con tarjetas vacías o registros fantasma.
+- **Motivo:** Evita confusiones al directivo cuando existen grupos homónimos en distintas jornadas (ej: Décimo A Mañana vs Décimo A Tarde) y garantiza que el reporte refleje el trabajo pedagógico con estudiantes reales.
+- **Módulos afectados:** Catálogo DBA, Matrículas, Grupos Escolares.
+- **Archivos donde se implementa:** 
+  - [dbaReportsController.ts](file:///c:/Users/alejo/Downloads/proyectos-dev/AcademiaNeiva/backend/src/controllers/dbaReportsController.ts)
+  - [DbaReportsView.vue](file:///c:/Users/alejo/Downloads/proyectos-dev/AcademiaNeiva/frontend/src/views/admin/DbaReportsView.vue)
+
+### RN-DBA-009: Matriz Ejecutiva de Supervisión Docente
+- **Descripción:** La plataforma debe proveer una vista ejecutiva orientada a directivos que consolide el desempeño de cada docente: total de asignaturas a cargo, grupos, actividades creadas, porcentaje global de notas asentadas y un semáforo de estado (`AL DÍA`, `CALIFICACIÓN PARCIAL`, `SIN CALIFICAR`).
+- **Motivo:** Facilita a rectores y coordinadores la toma rápida de decisiones y la auditoría institucional sin requerir la navegación individual de cientos de actividades sueltas.
+- **Módulos afectados:** Catálogo DBA, Supervisión Directiva, Calificaciones.
+- **Archivos donde se implementa:** 
+  - [DbaReportsView.vue](file:///c:/Users/alejo/Downloads/proyectos-dev/AcademiaNeiva/frontend/src/views/admin/DbaReportsView.vue)
+
+
 
