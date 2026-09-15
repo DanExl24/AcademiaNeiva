@@ -434,7 +434,7 @@ const formatDateTime = (date: string | null | undefined) => {
                     </div>
                     <div>
                       <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Nombre Completo</p>
-                      <p class="font-bold text-slate-900 dark:text-white">{{ matricula.parent_firstname ? (matricula.parent_firstname + ' ' + matricula.parent_lastname) : 'Acudiente Registrado' }}</p>
+                      <p class="font-bold text-slate-900 dark:text-white">{{ (matricula.parent_firstname && matricula.parent_firstname !== 'Padre') ? (matricula.parent_firstname + ' ' + (matricula.parent_lastname === 'Familia' ? '' : matricula.parent_lastname)) : 'Pendiente de Formalización' }}</p>
                     </div>
                     <div>
                       <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Correo Electrónico</p>

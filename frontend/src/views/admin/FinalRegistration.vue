@@ -100,11 +100,17 @@ const fetchDetails = async () => {
       studentData.value.id_tipodocumento = Number(st.id_tipodocumento) || 2
     }
 
-    // Pre-populate parent data
-    if (data.parent_firstname) {
+    // Pre-populate parent data (si el padre es nuevo o tiene placeholder, campos vacíos)
+    const isParentPlaceholder = !data.parent_firstname || data.parent_firstname === 'Padre'
+    if (!isParentPlaceholder) {
       parentData.value.nombre = data.parent_firstname
-      parentData.value.apellido = data.parent_lastname
-      parentData.value.documento = data.parent_document
+      parentData.value.apellido = (data.parent_lastname === 'Familia' ? '' : data.parent_lastname) || ''
+      parentData.value.documento = data.parent_document || ''
+      parentData.value.id_tipodocumento = Number(data.parent_id_tipodocumento) || 3
+    } else {
+      parentData.value.nombre = ''
+      parentData.value.apellido = ''
+      parentData.value.documento = data.parent_document || ''
       parentData.value.id_tipodocumento = Number(data.parent_id_tipodocumento) || 3
     }
     if (data.parent_telefono) {
@@ -174,19 +180,23 @@ const selectNewStudent = () => {
   academicWarning.value = null
 
   // Preservar y asegurar datos del acudiente si ya los tenemos en matricula
-  if (matricula.value?.parent_firstname) {
+  const isParentPlaceholder = !matricula.value?.parent_firstname || matricula.value.parent_firstname === 'Padre'
+  if (!isParentPlaceholder) {
     parentData.value.nombre = matricula.value.parent_firstname
-    parentData.value.apellido = matricula.value.parent_lastname
-    if (matricula.value.parent_document) {
-      parentData.value.documento = matricula.value.parent_document
-      verifyDocument()
-    }
-    if (matricula.value.parent_id_tipodocumento) {
-      parentData.value.id_tipodocumento = Number(matricula.value.parent_id_tipodocumento)
-    }
-    if (matricula.value.parent_telefono) {
-      parentData.value.telefono = matricula.value.parent_telefono
-    }
+    parentData.value.apellido = (matricula.value.parent_lastname === 'Familia' ? '' : matricula.value.parent_lastname) || ''
+  } else {
+    parentData.value.nombre = ''
+    parentData.value.apellido = ''
+  }
+  if (matricula.value?.parent_document) {
+    parentData.value.documento = matricula.value.parent_document
+    verifyDocument()
+  }
+  if (matricula.value?.parent_id_tipodocumento) {
+    parentData.value.id_tipodocumento = Number(matricula.value.parent_id_tipodocumento)
+  }
+  if (matricula.value?.parent_telefono) {
+    parentData.value.telefono = matricula.value.parent_telefono
   }
 }
 
@@ -307,8 +317,9 @@ const verifyDocument = async () => {
       docMatchInfo.value = data
       lastMatchedDoc = doc
       isParentDocManuallyUnlocked.value = false
-      parentData.value.nombre = data.user.nombre || ''
-      parentData.value.apellido = data.user.apellido || ''
+      const isDocPlaceholder = !data.user.nombre || data.user.nombre === 'Padre'
+      parentData.value.nombre = isDocPlaceholder ? '' : (data.user.nombre || '')
+      parentData.value.apellido = (isDocPlaceholder || data.user.apellido === 'Familia') ? '' : (data.user.apellido || '')
       if (data.user.id_tipodocumento) {
         parentData.value.id_tipodocumento = Number(data.user.id_tipodocumento)
       }
@@ -704,7 +715,7 @@ const getStatusColor = (estado: string) => {
 
           <!-- Banner: Existing Registered Parent Detected -->
           <div
-            v-else-if="docMatchInfo || (matricula?.parent_firstname && matricula?.renovacion?.is_renovacion)"
+            v-else-if="docMatchInfo || (matricula?.parent_firstname && matricula.parent_firstname !== 'Padre' && matricula?.renovacion?.is_renovacion)"
             class="p-4 sm:p-5 bg-sky-50 border border-sky-200 rounded-xl sm:rounded-2xl flex items-start gap-3 sm:gap-4 shadow-sm"
           >
             <div class="p-2 sm:p-2.5 bg-sky-600 text-white rounded-xl shrink-0">

@@ -463,7 +463,7 @@ const formatRenewalStateLabel = (state?: string) => {
             <div class="space-y-5">
               <div>
                 <p class="text-xs font-black text-slate-400 uppercase tracking-widest mb-1.5">Nombre Completo</p>
-                <p class="text-lg font-bold text-slate-900 dark:text-white">{{ matricula.parent_firstname }} {{ matricula.parent_lastname }}</p>
+                <p class="text-lg font-bold text-slate-900 dark:text-white">{{ (matricula.parent_firstname && matricula.parent_firstname !== 'Padre') ? `${matricula.parent_firstname} ${(matricula.parent_lastname === 'Familia' ? '' : matricula.parent_lastname) || ''}`.trim() : 'Pendiente de Registro' }}</p>
               </div>
               <div>
                 <p class="text-xs font-black text-slate-400 uppercase tracking-widest mb-1.5">Identificación</p>
@@ -938,11 +938,11 @@ const formatRenewalStateLabel = (state?: string) => {
             <tbody>
               <tr style="border-bottom: 1px solid #f1f5f9;">
                 <td style="font-weight: 700; color: #64748b; padding: 6px 0; width: 45%;">Nombres:</td>
-                <td style="font-weight: 800; color: #0f172a; padding: 6px 0;">{{ matricula.parent_firstname }}</td>
+                <td style="font-weight: 800; color: #0f172a; padding: 6px 0;">{{ (matricula.parent_firstname && matricula.parent_firstname !== 'Padre') ? matricula.parent_firstname : '—' }}</td>
               </tr>
               <tr style="border-bottom: 1px solid #f1f5f9;">
                 <td style="font-weight: 700; color: #64748b; padding: 6px 0;">Apellidos:</td>
-                <td style="font-weight: 800; color: #0f172a; padding: 6px 0;">{{ matricula.parent_lastname }}</td>
+                <td style="font-weight: 800; color: #0f172a; padding: 6px 0;">{{ (matricula.parent_lastname && matricula.parent_lastname !== 'Familia') ? matricula.parent_lastname : '—' }}</td>
               </tr>
               <tr style="border-bottom: 1px solid #f1f5f9;">
                 <td style="font-weight: 700; color: #64748b; padding: 6px 0;">Identificación:</td>
@@ -1018,7 +1018,7 @@ const formatRenewalStateLabel = (state?: string) => {
       <div style="display: flex; justify-content: space-between; margin-top: 100px; padding-left: 20px; padding-right: 20px;">
         <div style="text-align: center; width: 280px;">
           <div style="border-bottom: 1px solid #94a3b8; height: 1px; margin-bottom: 10px;"></div>
-          <p style="font-size: 12px; font-weight: 800; color: #0f172a; margin: 0; text-transform: uppercase;">{{ matricula.parent_firstname }} {{ matricula.parent_lastname }}</p>
+          <p style="font-size: 12px; font-weight: 800; color: #0f172a; margin: 0; text-transform: uppercase;">{{ (matricula.parent_firstname && matricula.parent_firstname !== 'Padre') ? `${matricula.parent_firstname} ${(matricula.parent_lastname === 'Familia' ? '' : matricula.parent_lastname) || ''}`.trim() : 'Acudiente Responsable' }}</p>
           <p style="font-size: 10px; font-weight: 600; color: #64748b; margin: 4px 0 0 0;">Firma del Acudiente Responsable</p>
           <p style="font-size: 9px; font-weight: 500; color: #94a3b8; margin: 2px 0 0 0;">Documento: {{ matricula.parent_document }}</p>
         </div>

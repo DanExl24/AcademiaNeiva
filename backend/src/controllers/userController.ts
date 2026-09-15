@@ -40,11 +40,14 @@ export const checkDocument = async (req: Request, res: Response): Promise<void> 
       let finalApellido = user.apellido;
 
       // Si en usuario está como marcador genérico 'Padre Familia', pero en padre_familia está su nombre real:
-      const isPlaceholder = (finalNombre === 'Padre' && finalApellido === 'Familia') || !finalNombre || !finalApellido;
+      const isPlaceholder = (finalNombre === 'Padre' && (finalApellido === 'Familia' || !finalApellido)) || !finalNombre;
       if (isPlaceholder) {
         if (user.pf_nombre && user.pf_apellido) {
           finalNombre = user.pf_nombre;
           finalApellido = user.pf_apellido;
+        } else {
+          finalNombre = '';
+          finalApellido = '';
         }
 
         // Auto-reparar la tabla usuario para futuras consultas

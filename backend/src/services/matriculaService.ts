@@ -121,8 +121,8 @@ export class MatriculaService {
             .values({
               email: cleanEmail,
               password: dummyPassword,
-              nombre: 'Padre',
-              apellido: 'Familia',
+              nombre: '',
+              apellido: '',
               telefono: String(parentPhone).trim()
             })
             .execute();
@@ -697,6 +697,8 @@ export class MatriculaService {
           parentFullName = `${parentRes.nombre} ${parentRes.apellido || ''}`.trim();
         } else if (parentRes?.nombre) {
           parentFullName = `${parentRes.nombre} ${parentRes.apellido || ''}`.trim();
+        } else if (parentUserRes.nombre === 'Padre' && (parentUserRes.apellido === 'Familia' || !parentUserRes.apellido)) {
+          parentFullName = '';
         }
 
         if (parentRes) {
@@ -898,6 +900,10 @@ export class MatriculaService {
     let resolvedParentIdTipoDoc = mat.parent_id_tipodocumento;
     let resolvedParentTelefono = mat.parent_telefono;
 
+    // Si viene con valor placeholder heredado ('Padre' / 'Familia'), limpiar para que aparezca vacío
+    if (resolvedParentFirstname === 'Padre') resolvedParentFirstname = null;
+    if (resolvedParentLastname === 'Familia') resolvedParentLastname = null;
+
     if (mat.correo_padre) {
       const parentUserMatch = await db
         .selectFrom('usuario as u')
@@ -917,13 +923,17 @@ export class MatriculaService {
         .executeTakeFirst();
 
       if (parentUserMatch) {
-        let bestNombre = parentUserMatch.pf_nombre || parentUserMatch.u_nombre;
-        let bestApellido = parentUserMatch.pf_apellido || parentUserMatch.u_apellido;
+        let bestNombre: string | null = parentUserMatch.pf_nombre || parentUserMatch.u_nombre;
+        let bestApellido: string | null = parentUserMatch.pf_apellido || parentUserMatch.u_apellido;
 
-        if ((bestNombre === 'Padre' && bestApellido === 'Familia') || !bestNombre) {
+        const isUserPlaceholder = (bestNombre === 'Padre' && (bestApellido === 'Familia' || !bestApellido)) || (!bestNombre && !bestApellido);
+        if (isUserPlaceholder) {
           if (parentUserMatch.pf_nombre) {
             bestNombre = parentUserMatch.pf_nombre;
             bestApellido = parentUserMatch.pf_apellido || '';
+          } else {
+            bestNombre = null;
+            bestApellido = null;
           }
         }
 
@@ -939,25 +949,26 @@ export class MatriculaService {
             .execute();
         }
 
-        if (!resolvedParentFirstname || resolvedParentFirstname === 'Padre') {
+        if (!resolvedParentFirstname && bestNombre && bestNombre !== 'Padre') {
           resolvedParentFirstname = bestNombre;
         }
-        if (!resolvedParentLastname || resolvedParentLastname === 'Familia') {
+        if (!resolvedParentLastname && bestApellido && bestApellido !== 'Familia') {
           resolvedParentLastname = bestApellido;
         }
-        if (!resolvedParentDocument) {
+        if (!resolvedParentDocument && parentUserMatch.u_documento) {
           resolvedParentDocument = parentUserMatch.u_documento;
         }
-        if (!resolvedParentIdTipoDoc) {
+        if (!resolvedParentIdTipoDoc && parentUserMatch.u_tipodoc) {
           resolvedParentIdTipoDoc = parentUserMatch.u_tipodoc;
         }
-        if (!resolvedParentTelefono) {
+        if (!resolvedParentTelefono && parentUserMatch.u_telefono) {
           resolvedParentTelefono = parentUserMatch.u_telefono;
         }
 
-        // Si renovacion no tenía parent_name limpio o tenía placeholder, asignarlo
-        if (renovacion.is_renovacion && (!renovacion.parent_name || renovacion.parent_name === 'Padre Familia')) {
-          renovacion.parent_name = `${resolvedParentFirstname || ''} ${resolvedParentLastname || ''}`.trim();
+        // Si renovacion no tenía parent_name limpio o tenía placeholder, asignarlo solo si hay nombre real
+        if (renovacion.is_renovacion && (!renovacion.parent_name || renovacion.parent_name === 'Padre Familia' || renovacion.parent_name === 'Padre')) {
+          const cleanFullName = `${resolvedParentFirstname || ''} ${resolvedParentLastname || ''}`.trim();
+          renovacion.parent_name = cleanFullName || null;
         }
       }
     }

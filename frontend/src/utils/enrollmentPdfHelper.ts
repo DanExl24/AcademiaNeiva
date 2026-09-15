@@ -53,7 +53,7 @@ export const exportEnrollmentToPDF = async (matriculaInput: any, options?: Gener
 
   const schoolName = mat.school_name || 'COLEGIO ACADEMIANEIVA'
   const studentFullname = `${mat.student_firstname || ''} ${mat.student_lastname || ''}`.trim() || 'Estudiante Sin Asignar'
-  const parentFullname = `${mat.parent_firstname || ''} ${mat.parent_lastname || ''}`.trim() || 'Acudiente'
+  const parentFullname = (mat.parent_firstname && mat.parent_firstname !== 'Padre') ? `${mat.parent_firstname} ${(mat.parent_lastname === 'Familia' ? '' : mat.parent_lastname) || ''}`.trim() : 'Acudiente'
   const formattedToday = new Date().toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' })
   const studentCode = mat.student_code || `MAT-${mat.id_matricula}`
 
