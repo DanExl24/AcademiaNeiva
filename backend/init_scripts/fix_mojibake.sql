@@ -43,8 +43,8 @@ WHERE nombre ~ '[\u00C2\u00C3]' OR descripcion ~ '[\u00C2\u00C3]';
 
 -- 7. DBA y Evidencias
 UPDATE dba 
-SET descripcion = convert_from(convert_to(descripcion, 'latin1'), 'utf8')
-WHERE descripcion ~ '[\u00C2\u00C3]';
+SET enunciado = convert_from(convert_to(enunciado, 'latin1'), 'utf8')
+WHERE enunciado ~ '[\u00C2\u00C3]';
 
 UPDATE evidencia_aprendizaje 
 SET descripcion = convert_from(convert_to(descripcion, 'latin1'), 'utf8')
