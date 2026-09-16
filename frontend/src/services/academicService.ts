@@ -212,6 +212,11 @@ export const academicService = {
     return res.data
   },
 
+  async updateJornada(id: number | string, payload: any): Promise<any> {
+    const res = await api.patch(`/academic-admin/jornadas/${id}`, payload)
+    return res.data
+  },
+
   async deleteJornada(id: number | string, schoolId: number | string): Promise<any> {
     const res = await api.delete(`/academic-admin/jornadas/${id}`, { params: { schoolId } })
     return res.data

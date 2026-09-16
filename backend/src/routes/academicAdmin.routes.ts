@@ -65,6 +65,7 @@ import {
   renameSingleCourse,
   bulkRenameCourses,
   createJornada,
+  updateJornada,
   deleteJornada,
   reassignGroupJornada,
   getDbaPlaneacionDisponibles,
@@ -120,6 +121,7 @@ router.patch("/groups/:id/jornada", reassignGroupJornada);
 router.patch("/grade-types/:id/bulk-rename", bulkRenameCourses);
 router.delete("/groups/:id", deleteGroup);
 router.post("/jornadas", createJornada);
+router.patch("/jornadas/:id", updateJornada);
 router.delete("/jornadas/:id", deleteJornada);
 router.get("/subjects/:schoolId", getSubjects);
 router.get("/subjects/:id/curriculum-details", getSubjectCurriculumDetails);

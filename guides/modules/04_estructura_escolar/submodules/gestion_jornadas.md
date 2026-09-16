@@ -47,6 +47,9 @@ En la arquitectura del sistema, la **Jornada** es una entidad de primer orden qu
 | `id_jornada` | `SERIAL` | `PRIMARY KEY` | Identificador único secuencial de la jornada. |
 | `id_colegio` | `INTEGER` | `FOREIGN KEY -> colegio(id_colegio) ON DELETE CASCADE` | Institución educativa propietaria del turno. |
 | `nombre` | `VARCHAR(20)` | `CHECK (nombre IN ('MAÑANA', 'TARDE', 'UNICA', 'NOCTURNA'))` | Nombre normalizado de la jornada. |
+| `hora_inicio` | `TIME` | `NULL` | Hora de apertura o ingreso de estudiantes (ej: `06:30:00` o `06:00:00`). |
+| `hora_fin` | `TIME` | `NULL` | Hora de finalización o salida de la jornada (ej: `12:30:00` o `14:00:00`). |
+| `descripcion` | `VARCHAR(100)` | `NULL` | Detalle o alias institucional de la jornada (ej: `Jornada Única (6:00 AM - 2:00 PM)`). |
 
 > [!NOTE]
 > **Restricción de Unicidad:** Existe un índice único en PostgreSQL `UNIQUE (id_colegio, nombre)` que previene registrar dos jornadas con el mismo nombre para una misma institución.
@@ -63,16 +66,16 @@ En la arquitectura del sistema, la **Jornada** es una entidad de primer orden qu
 - **Descripción:** Solo se permite habilitar las cuatro jornadas oficiales del estándar educativo:
   - `MAÑANA`: Jornada diurna matutina (habitual 6:30 AM a 12:30 PM).
   - `TARDE`: Jornada diurna vespertina (habitual 12:30 PM a 6:30 PM).
-  - `UNICA`: Jornada única continua con permanencia extendida y PAE (habitual 7:00 AM a 3:00 PM).
+  - `UNICA`: Jornada única continua con permanencia extendida y PAE (habitual 6:30 AM a 2:30 PM o 6:00 AM a 2:00 PM).
   - `NOCTURNA`: Jornada nocturna orientada a educación de adultos y modelos flexibles (habitual 6:00 PM a 10:00 PM).
 - **Control:** El backend valida el valor recibido contra el arreglo `["MAÑANA", "TARDE", "UNICA", "NOCTURNA"]`. Si no coincide, retorna `400 Bad Request`.
-- **Implementación:** [gradeGroupController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdmin/gradeGroupController.ts) (`createJornada`).
+- **Implementación:** [gradeGroupController.ts](file:///c:/Users/alejo/Downloads/proyectos-dev/AcademiaNeiva/backend/src/controllers/academicAdmin/gradeGroupController.ts) (`createJornada`).
 
 ---
 
 ### RN-JOR-002: Unicidad e Inmutabilidad Nominal Institucional
 - **Descripción:** Una institución educativa no puede registrar jornadas duplicadas. Si se intenta habilitar una jornada que ya existe en el colegio, el backend intercepta la verificación previa y retorna `409 Conflict` con el mensaje: *"La jornada '{nombre}' ya se encuentra registrada en esta institución."*
-- **Implementación:** [gradeGroupController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdmin/gradeGroupController.ts) (`createJornada`).
+- **Implementación:** [gradeGroupController.ts](file:///c:/Users/alejo/Downloads/proyectos-dev/AcademiaNeiva/backend/src/controllers/academicAdmin/gradeGroupController.ts) (`createJornada`).
 
 ---
 
@@ -85,7 +88,7 @@ En la arquitectura del sistema, la **Jornada** es una entidad de primer orden qu
   WHERE id_jornada = :idJornada AND id_colegio = :schoolId
   ```
   Si `count > 0`, responde con `409 Conflict`: *"No es posible eliminar la jornada '{nombre}' porque tiene N curso(s) asociado(s). Reasigna o elimina los cursos antes de retirar la jornada."*
-- **Implementación:** [gradeGroupController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdmin/gradeGroupController.ts) (`deleteJornada`).
+- **Implementación:** [gradeGroupController.ts](file:///c:/Users/alejo/Downloads/proyectos-dev/AcademiaNeiva/backend/src/controllers/academicAdmin/gradeGroupController.ts) (`deleteJornada`).
 
 ---
 
@@ -96,7 +99,19 @@ En la arquitectura del sistema, la **Jornada** es una entidad de primer orden qu
   1. Verifica que el curso pertenezca a la institución.
   2. Valida que la nueva jornada destino exista en el colegio.
   3. Verifica que no exista colisión con un curso homólogo en la jornada destino (`id_tipo_grado`, `id_seccion`, `id_jornada_destino`), bloqueando con `409 Conflict` si ya existe un curso idéntico en esa jornada.
-- **Implementación:** [gradeGroupController.ts](file:///c:/Users/alejo/Downloads/segundoProyecto/backend/src/controllers/academicAdmin/gradeGroupController.ts) (`reassignGroupJornada`).
+- **Implementación:** [gradeGroupController.ts](file:///c:/Users/alejo/Downloads/proyectos-dev/AcademiaNeiva/backend/src/controllers/academicAdmin/gradeGroupController.ts) (`reassignGroupJornada`).
+
+---
+
+### RN-JOR-005: Parametrización y Flexibilidad de Franja Horaria Institucional
+- **Descripción:** Aunque el tipo de jornada se mantenga estandarizado según la norma oficial MEN (`MAÑANA`, `TARDE`, `UNICA`, `NOCTURNA`), cada institución puede parametrizar y editar libremente su **hora de inicio (`hora_inicio`)** y **hora de finalización (`hora_fin`)**.
+- **Valores predeterminados:**
+  - `MAÑANA`: `06:30` – `12:30`
+  - `TARDE`: `12:30` – `18:30`
+  - `UNICA`: `06:30` – `14:30` (personalizable ej: `06:00` a `14:00`)
+  - `NOCTURNA`: `18:00` – `22:00`
+- **Exposición en UI:** Las tarjetas del módulo de administración escolar muestran siempre el chip horario formateado (ej: `🕒 6:30 AM – 12:30 PM`) y ofrecen un botón de acción rápida para ajustar la franja en cualquier momento.
+- **Implementación:** [gradeGroupController.ts](file:///c:/Users/alejo/Downloads/proyectos-dev/AcademiaNeiva/backend/src/controllers/academicAdmin/gradeGroupController.ts) (`createJornada`, `updateJornada`).
 
 ---
 
@@ -104,10 +119,11 @@ En la arquitectura del sistema, la **Jornada** es una entidad de primer orden qu
 
 | Método | Endpoint | Permiso | Parámetros / Body | Respuestas | Descripción |
 |---|---|---|---|---|---|
-| `POST` | `/api/academic-admin/jornadas` | JWT Directivo | `{ schoolId: number, nombre: 'MAÑANA' \| 'TARDE' \| 'UNICA' \| 'NOCTURNA' }` | `201 Created`<br>`400 Bad Request`<br>`409 Conflict` | Habilita un nuevo turno operativo en la institución. |
+| `POST` | `/api/academic-admin/jornadas` | JWT Directivo | `{ schoolId: number, nombre: 'MAÑANA' \| 'TARDE' \| 'UNICA' \| 'NOCTURNA', hora_inicio?: string, hora_fin?: string, descripcion?: string }` | `201 Created`<br>`400 Bad Request`<br>`409 Conflict` | Habilita un nuevo turno operativo con horas por defecto o personalizadas. |
+| `PATCH` | `/api/academic-admin/jornadas/:id` | JWT Directivo | `id` (URL), `{ schoolId: number, hora_inicio?: string, hora_fin?: string, descripcion?: string }` | `200 OK`<br>`400 Bad Request`<br>`404 Not Found` | Actualiza la franja horaria o alias de una jornada institucional. |
 | `DELETE` | `/api/academic-admin/jornadas/:id` | JWT Directivo | `id` (URL), Query: `schoolId` | `200 OK`<br>`404 Not Found`<br>`409 Conflict` | Retira una jornada sin cursos vinculados. |
 | `PATCH` | `/api/academic-admin/groups/:id/jornada` | JWT Directivo | `id` (URL), `{ schoolId: number, id_jornada: number }` | `200 OK`<br>`403 Forbidden`<br>`409 Conflict` | Reasigna un curso a otra jornada bajo guarda rectoral. |
-| `GET` | `/api/academic-admin/grades/:schoolId` | JWT Directivo | `schoolId` (URL), Query: `yearId?` | `200 OK` (incluye array `jornadas`) | Consulta las jornadas activas junto con la estructura de grados. |
+| `GET` | `/api/academic-admin/grades/:schoolId` | JWT Directivo | `schoolId` (URL), Query: `yearId?` | `200 OK` (incluye array `jornadas` con `hora_inicio`, `hora_fin`, `descripcion`) | Consulta las jornadas activas junto con la estructura de grados. |
 | `GET` | `/api/grados/available/:idColegio` | Pública | `idColegio` (URL) | `200 OK` | Expone las jornadas disponibles para el formulario de matrícula. |
 
 ---

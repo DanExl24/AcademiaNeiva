@@ -379,6 +379,9 @@ export interface Grupos {
 }
 
 export interface Jornada {
+  descripcion: string | null;
+  hora_fin: string | null;
+  hora_inicio: string | null;
   id_colegio: number;
   id_jornada: Generated<number>;
   nombre: TipoJornada;

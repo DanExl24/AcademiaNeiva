@@ -402,7 +402,7 @@ export const getGradeManagementData = async (req: Request, res: Response): Promi
 
     const jornadasPromise = db
       .selectFrom("jornada")
-      .select(["id_jornada", "nombre"])
+      .select(["id_jornada", "nombre", "hora_inicio", "hora_fin", "descripcion"])
       .where("id_colegio", "=", schoolId)
       .orderBy("nombre", "asc")
       .execute();
@@ -1143,9 +1143,33 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
   }
 };
 
+export const DEFAULT_JORNADA_SCHEDULES: Record<string, { hora_inicio: string; hora_fin: string; descripcion: string }> = {
+  MAÑANA: {
+    hora_inicio: "06:30:00",
+    hora_fin: "12:30:00",
+    descripcion: "Jornada Mañana (6:30 AM - 12:30 PM)",
+  },
+  TARDE: {
+    hora_inicio: "12:30:00",
+    hora_fin: "18:30:00",
+    descripcion: "Jornada Tarde (12:30 PM - 6:30 PM)",
+  },
+  UNICA: {
+    hora_inicio: "06:30:00",
+    hora_fin: "14:30:00",
+    descripcion: "Jornada Única (6:30 AM - 2:30 PM)",
+  },
+  NOCTURNA: {
+    hora_inicio: "18:00:00",
+    hora_fin: "22:00:00",
+    descripcion: "Jornada Nocturna (6:00 PM - 10:00 PM)",
+  },
+};
+
 export const createJornada = async (req: Request, res: Response): Promise<void> => {
   const schoolId = parseSchoolId(req.body.schoolId);
   const rawNombre = String(req.body.nombre || "").trim().toUpperCase();
+  const { hora_inicio, hora_fin, descripcion } = req.body;
 
   if (!schoolId || !rawNombre) {
     res.status(400).json({ error: "Colegio y nombre de la jornada son requeridos." });
@@ -1165,6 +1189,16 @@ export const createJornada = async (req: Request, res: Response): Promise<void> 
     return;
   }
 
+  const defaultSchedule = DEFAULT_JORNADA_SCHEDULES[rawNombre] || {
+    hora_inicio: "07:00:00",
+    hora_fin: "13:00:00",
+    descripcion: `Jornada ${rawNombre}`,
+  };
+
+  const finalHoraInicio = hora_inicio ? String(hora_inicio).trim() : defaultSchedule.hora_inicio;
+  const finalHoraFin = hora_fin ? String(hora_fin).trim() : defaultSchedule.hora_fin;
+  const finalDescripcion = descripcion ? String(descripcion).trim() : defaultSchedule.descripcion;
+
   try {
     const existing = await db
       .selectFrom("jornada")
@@ -1182,14 +1216,70 @@ export const createJornada = async (req: Request, res: Response): Promise<void> 
       .insertInto("jornada")
       .values({
         id_colegio: schoolId,
-        nombre: rawNombre as any
+        nombre: rawNombre as any,
+        hora_inicio: finalHoraInicio,
+        hora_fin: finalHoraFin,
+        descripcion: finalDescripcion,
       })
-      .returning(["id_jornada", "nombre", "id_colegio"])
+      .returning(["id_jornada", "nombre", "id_colegio", "hora_inicio", "hora_fin", "descripcion"])
       .executeTakeFirstOrThrow();
 
     res.status(201).json(created);
   } catch (error: any) {
     console.error("Error creating jornada:", error);
+    res.status(500).json({ error: formatFriendlyErrorMessage(error) });
+  }
+};
+
+export const updateJornada = async (req: Request, res: Response): Promise<void> => {
+  const idJornada = Number(req.params.id);
+  const schoolId = parseSchoolId(req.body.schoolId || req.query.schoolId);
+  const { hora_inicio, hora_fin, descripcion } = req.body;
+
+  if (!idJornada || isNaN(idJornada)) {
+    res.status(400).json({ error: "ID de jornada inválido." });
+    return;
+  }
+
+  const authReq = req as AuthRequest;
+  const isSupervision = authReq.user && authReq.user.roles.includes("admin_general");
+  if (!isSupervision && authReq.user?.schoolId && authReq.user.schoolId !== schoolId) {
+    res.status(403).json({ error: "No tiene permiso para modificar jornadas en este colegio." });
+    return;
+  }
+
+  try {
+    const existing = await db
+      .selectFrom("jornada")
+      .selectAll()
+      .where("id_jornada", "=", idJornada)
+      .executeTakeFirst();
+
+    if (!existing) {
+      res.status(404).json({ error: "Jornada no encontrada." });
+      return;
+    }
+
+    if (schoolId && existing.id_colegio !== schoolId) {
+      res.status(403).json({ error: "La jornada no pertenece a esta institución." });
+      return;
+    }
+
+    const updatePayload: any = {};
+    if (hora_inicio !== undefined) updatePayload.hora_inicio = String(hora_inicio).trim();
+    if (hora_fin !== undefined) updatePayload.hora_fin = String(hora_fin).trim();
+    if (descripcion !== undefined) updatePayload.descripcion = String(descripcion).trim();
+
+    const updated = await db
+      .updateTable("jornada")
+      .set(updatePayload)
+      .where("id_jornada", "=", idJornada)
+      .returning(["id_jornada", "nombre", "id_colegio", "hora_inicio", "hora_fin", "descripcion"])
+      .executeTakeFirstOrThrow();
+
+    res.json(updated);
+  } catch (error: any) {
+    console.error("Error updating jornada:", error);
     res.status(500).json({ error: formatFriendlyErrorMessage(error) });
   }
 };

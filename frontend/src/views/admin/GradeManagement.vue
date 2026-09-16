@@ -4,7 +4,7 @@ import { academicService } from '../../services/academicService'
 import { 
   Layers3, Plus, Search, School2, Trash2, Info, Pencil, Tag, RefreshCw, Lock, 
   Calendar, Eye, Users, GraduationCap, X, Sun, Sunset, Moon, Globe, 
-  SlidersHorizontal, Layers
+  SlidersHorizontal, Layers, Clock
 } from 'lucide-vue-next'
 
 import { useAuthStore } from '../../stores/auth'
@@ -30,6 +30,9 @@ interface Nivel {
 interface Jornada {
   id_jornada: number
   nombre: string
+  hora_inicio?: string | null
+  hora_fin?: string | null
+  descripcion?: string | null
 }
 
 interface Seccion {
@@ -624,6 +627,9 @@ const openCourseMembersModal = async (group: Grupo) => {
 interface JornadaStat {
   id_jornada: number
   nombre: string
+  hora_inicio?: string | null
+  hora_fin?: string | null
+  descripcion?: string | null
   grupos_count: number
   cupos_totales: number
   matriculas_count: number
@@ -644,6 +650,9 @@ const jornadasStats = computed<JornadaStat[]>(() => {
     return {
       id_jornada: j.id_jornada,
       nombre: j.nombre,
+      hora_inicio: j.hora_inicio,
+      hora_fin: j.hora_fin,
+      descripcion: j.descripcion,
       grupos_count,
       cupos_totales,
       matriculas_count,
@@ -733,6 +742,63 @@ const getJornadaColorConfig = (nombre: string) => {
   }
 }
 
+const DEFAULT_JORNADA_HOURS: Record<string, { start: string; end: string }> = {
+  MAÑANA: { start: '06:30', end: '12:30' },
+  TARDE: { start: '12:30', end: '18:30' },
+  UNICA: { start: '06:30', end: '14:30' },
+  NOCTURNA: { start: '18:00', end: '22:00' },
+}
+
+const formatTimeTo12h = (timeStr?: string | null): string => {
+  if (!timeStr) return ''
+  const parts = timeStr.split(':')
+  if (parts.length < 2) return timeStr
+  let hours = parseInt(parts[0], 10)
+  const minutes = parts[1]
+  if (isNaN(hours)) return timeStr
+  const ampm = hours >= 12 ? 'PM' : 'AM'
+  hours = hours % 12
+  hours = hours ? hours : 12
+  return `${hours}:${minutes} ${ampm}`
+}
+
+const getJornadaDisplayHours = (j: { hora_inicio?: string | null; hora_fin?: string | null; nombre: string }) => {
+  const norm = String(j.nombre || '').toUpperCase()
+  const defaults = DEFAULT_JORNADA_HOURS[norm] || { start: '07:00', end: '13:00' }
+  const start = j.hora_inicio ? formatTimeTo12h(j.hora_inicio) : formatTimeTo12h(defaults.start)
+  const end = j.hora_fin ? formatTimeTo12h(j.hora_fin) : formatTimeTo12h(defaults.end)
+  return `${start} – ${end}`
+}
+
+const editJornadaHoursModal = ref(false)
+const targetJornadaToEdit = ref<Jornada | null>(null)
+const editingJornada = ref(false)
+
+const openEditJornadaModal = (j: Jornada) => {
+  targetJornadaToEdit.value = j
+  editJornadaHoursModal.value = true
+}
+
+const handleUpdateJornadaHours = async (payload: { id_jornada: number; hora_inicio: string; hora_fin: string; descripcion?: string }) => {
+  if (editingJornada.value) return
+  editingJornada.value = true
+  try {
+    await academicService.updateJornada(payload.id_jornada, {
+      schoolId: schoolId.value,
+      hora_inicio: payload.hora_inicio,
+      hora_fin: payload.hora_fin,
+      descripcion: payload.descripcion
+    })
+    notify.addNotification('Horario de jornada actualizado exitosamente.', 'success')
+    editJornadaHoursModal.value = false
+    await loadData()
+  } catch (error: any) {
+    notify.addNotification(error.response?.data?.error || 'Error al actualizar horario de jornada', 'error')
+  } finally {
+    editingJornada.value = false
+  }
+}
+
 const openCreateJornadaModal = () => {
   if (availableJornadasToAdd.value.length > 0) {
     newJornadaName.value = availableJornadasToAdd.value[0]
@@ -740,15 +806,18 @@ const openCreateJornadaModal = () => {
   showCreateJornadaModal.value = true
 }
 
-const handleCreateJornada = async () => {
-  if (!newJornadaName.value || savingJornada.value) return
+const handleCreateJornada = async (payload: { nombre: string; hora_inicio?: string; hora_fin?: string; descripcion?: string }) => {
+  if (savingJornada.value) return
   savingJornada.value = true
   try {
     await academicService.createJornada({
       schoolId: schoolId.value,
-      nombre: newJornadaName.value
+      nombre: payload.nombre,
+      hora_inicio: payload.hora_inicio,
+      hora_fin: payload.hora_fin,
+      descripcion: payload.descripcion
     })
-    notify.addNotification(`Jornada ${newJornadaName.value} habilitada exitosamente.`, 'success')
+    notify.addNotification(`Jornada ${payload.nombre} habilitada exitosamente.`, 'success')
     showCreateJornadaModal.value = false
     await loadData()
   } catch (error: any) {
@@ -1399,32 +1468,48 @@ watch(() => yearStore.selectedYearId, () => {
         >
           <div>
             <!-- Header of card -->
-            <div class="flex items-center justify-between mb-3">
-              <div class="flex items-center gap-3">
-                <div :class="['p-2 sm:p-2.5 rounded-xl sm:rounded-2xl', getJornadaColorConfig(j.nombre).iconBg]">
+            <div class="flex items-start justify-between mb-3 gap-2">
+              <div class="flex items-center gap-3 min-w-0">
+                <div :class="['p-2 sm:p-2.5 rounded-xl sm:rounded-2xl shrink-0', getJornadaColorConfig(j.nombre).iconBg]">
                   <Sun v-if="j.nombre === 'MAÑANA'" :size="20" />
                   <Sunset v-else-if="j.nombre === 'TARDE'" :size="20" />
                   <Globe v-else-if="j.nombre === 'UNICA'" :size="20" />
                   <Moon v-else :size="20" />
                 </div>
-                <div>
-                  <h3 class="text-sm sm:text-base font-black text-slate-900 dark:text-white leading-tight">
+                <div class="min-w-0">
+                  <h3 class="text-sm sm:text-base font-black text-slate-900 dark:text-white leading-tight truncate">
                     {{ j.nombre }}
                   </h3>
-                  <span :class="['px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider', getJornadaColorConfig(j.nombre).badge]">
-                    {{ getJornadaColorConfig(j.nombre).label }}
-                  </span>
+                  <div class="flex flex-wrap items-center gap-1.5 mt-0.5">
+                    <span :class="['px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider', getJornadaColorConfig(j.nombre).badge]">
+                      {{ getJornadaColorConfig(j.nombre).label }}
+                    </span>
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                      <Clock :size="10" class="text-indigo-500" />
+                      {{ getJornadaDisplayHours(j) }}
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              <button 
-                v-if="!yearStore.isClosedYear && j.grupos_count === 0"
-                @click.stop="openDeleteJornadaModal(j)"
-                class="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl transition-all cursor-pointer"
-                title="Eliminar jornada sin cursos"
-              >
-                <Trash2 :size="16" />
-              </button>
+              <div class="flex items-center gap-1 shrink-0">
+                <button 
+                  v-if="!yearStore.isClosedYear"
+                  @click.stop="openEditJornadaModal(j)"
+                  class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-xl transition-all cursor-pointer"
+                  title="Configurar horario de la jornada"
+                >
+                  <Clock :size="15" />
+                </button>
+                <button 
+                  v-if="!yearStore.isClosedYear && j.grupos_count === 0"
+                  @click.stop="openDeleteJornadaModal(j)"
+                  class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl transition-all cursor-pointer"
+                  title="Eliminar jornada sin cursos"
+                >
+                  <Trash2 :size="15" />
+                </button>
+              </div>
             </div>
 
             <!-- Stats in Card -->
@@ -1662,7 +1747,7 @@ watch(() => yearStore.selectedYearId, () => {
         @close="membersModalOpen = false"
       />
 
-      <!-- Jornada Management Modals (Create, Delete, Reassign) -->
+      <!-- Jornada Management Modals (Create, Delete, Reassign, Edit Hours) -->
       <JornadaManagementModals
         :show-create="showCreateJornadaModal"
         :available-jornadas-to-add="availableJornadasToAdd"
@@ -1673,6 +1758,9 @@ watch(() => yearStore.selectedYearId, () => {
         :show-reassign="reassignJornadaModal"
         :target-group-to-reassign="targetGroupToReassign"
         :reassigning-jornada="reassigningJornada"
+        :show-edit-hours="editJornadaHoursModal"
+        :target-jornada-to-edit="targetJornadaToEdit"
+        :editing-jornada="editingJornada"
         :jornadas="jornadas"
         @close-create="showCreateJornadaModal = false"
         @confirm-create="handleCreateJornada"
@@ -1680,6 +1768,8 @@ watch(() => yearStore.selectedYearId, () => {
         @confirm-delete="confirmDeleteJornada"
         @close-reassign="reassignJornadaModal = false"
         @confirm-reassign="confirmReassignJornada"
+        @close-edit-hours="editJornadaHoursModal = false"
+        @confirm-edit-hours="handleUpdateJornadaHours"
       />
     </Teleport>
 

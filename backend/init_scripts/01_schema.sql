@@ -1644,7 +1644,10 @@ ALTER SEQUENCE public.grupos_id_grupo_seq OWNED BY public.grupos.id_grupo;
 CREATE TABLE public.jornada (
     id_jornada integer NOT NULL,
     nombre public.tipo_jornada NOT NULL,
-    id_colegio integer NOT NULL
+    id_colegio integer NOT NULL,
+    hora_inicio time without time zone,
+    hora_fin time without time zone,
+    descripcion character varying(100)
 );
 
 
