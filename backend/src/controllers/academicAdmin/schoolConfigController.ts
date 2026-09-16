@@ -182,24 +182,33 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
 
     // 3. Attendance % Today
     const todayStr = new Date().toLocaleDateString("en-CA");
-    const attendanceTodayRes = await sql<{ rate: string | number | null }>`
-      SELECT 
-        (COUNT(*) FILTER (WHERE estado = 'PRESENTE')::numeric / NULLIF(COUNT(*), 0) * 100) as rate
-      FROM registro_asistencia 
-      WHERE id_colegio = ${schoolId} AND fecha::date = ${todayStr}::date
-    `.execute(db);
+    const attendanceTodayRes = await db
+      .selectFrom("registro_asistencia")
+      .select(
+        sql<string | number | null>`(COUNT(*) FILTER (WHERE estado = 'PRESENTE')::numeric / NULLIF(COUNT(*), 0) * 100)`.as("rate")
+      )
+      .where("id_colegio", "=", schoolId)
+      .where(sql<boolean>`fecha::date = ${todayStr}::date`)
+      .executeTakeFirst();
 
-    const attendanceByGradeRes = await sql<{ grade: string; rate: string | number | null }>`
-      SELECT 
-        tg.nombre as grade,
-        (COUNT(*) FILTER (WHERE ra.estado = 'PRESENTE')::numeric / NULLIF(COUNT(*), 0) * 100) as rate
-      FROM registro_asistencia ra
-      JOIN matricula m ON ra.id_estudiante = m.id_estudiante AND m.id_anio = ${targetYearId}
-      JOIN grupos g ON m.id_grupo = g.id_grupo
-      JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-      WHERE ra.id_colegio = ${schoolId} AND ra.fecha::date = ${todayStr}::date AND m.estado NOT IN ('CANCELADA', 'RECHAZADA', 'TRASLADADA')
-      GROUP BY tg.nombre
-    `.execute(db);
+    const attendanceByGradeRes = await db
+      .selectFrom("registro_asistencia as ra")
+      .innerJoin("matricula as m", (join) =>
+        join
+          .onRef("ra.id_estudiante", "=", "m.id_estudiante")
+          .on("m.id_anio", "=", targetYearId)
+      )
+      .innerJoin("grupos as g", "m.id_grupo", "g.id_grupo")
+      .innerJoin("tipo_grado as tg", "g.id_tipo_grado", "tg.id_tipo_grado")
+      .select([
+        "tg.nombre as grade",
+        sql<string | number | null>`(COUNT(*) FILTER (WHERE ra.estado = 'PRESENTE')::numeric / NULLIF(COUNT(*), 0) * 100)`.as("rate")
+      ])
+      .where("ra.id_colegio", "=", schoolId)
+      .where(sql<boolean>`ra.fecha::date = ${todayStr}::date`)
+      .where("m.estado", "not in", ["CANCELADA", "RECHAZADA", "TRASLADADA"])
+      .groupBy("tg.nombre")
+      .execute();
 
     // Compile summaryByGrade
     const summaryByGrade: Record<string, any> = {};
@@ -232,69 +241,98 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
       summaryByGrade[r.grade].desertionRate = Number(r.total);
     });
 
-    attendanceByGradeRes.rows.forEach(r => {
+    attendanceByGradeRes.forEach(r => {
       if (!summaryByGrade[r.grade]) {
         summaryByGrade[r.grade] = { totalStudents: 0, totalTeachers: 0, attendanceToday: 0, generalAverage: 0, studentsAtRisk: 0, disciplinaryReports: 0, desertionRate: 0 };
       }
-      summaryByGrade[r.grade].attendanceToday = Number(Number(r.rate || 0).toFixed(1));    });
+      summaryByGrade[r.grade].attendanceToday = Number(Number(r.rate || 0).toFixed(1));
+    });
 
     // 4. Academic Performance & Risk (Live calculation fallback)
     let performanceMetrics: { average: number; atRisk: number } = { average: 0, atRisk: 0 };
-    
-    const buildLiveCTE = (extraCTEs = '') => `
-      WITH current_results AS (
-        SELECT ra.id_estudiante, ra.id_detallegrado, ra.id_periodo, ra.promedio
-        FROM resultado_academico ra
-        JOIN detalle_grados dg_ra ON ra.id_detallegrado = dg_ra.id_detallegrado
-        JOIN matricula m ON ra.id_estudiante = m.id_estudiante AND m.id_anio = ${targetYearId} AND m.estado NOT IN ('CANCELADA', 'RECHAZADA', 'TRASLADADA')
-        WHERE dg_ra.id_colegio = ${schoolId} AND ra.id_periodo = ${targetPeriodId}
 
-        UNION ALL
-
-        SELECT na.id_estudiante, am.id_detallegrado, am.id_periodo,
-               ROUND(SUM(na.nota * am.porcentaje / 100.0)::numeric, 2) as promedio
-        FROM notas_actividad na
-        JOIN actividad_materia am ON na.id_actividadmateria = am.id_actividadmateria
-        JOIN matricula m ON na.id_estudiante = m.id_estudiante AND m.id_anio = ${targetYearId} AND m.estado NOT IN ('CANCELADA', 'RECHAZADA', 'TRASLADADA')
-        WHERE am.id_periodo = ${targetPeriodId} AND am.id_colegio = ${schoolId}
-        AND NOT EXISTS (
-          SELECT 1 FROM resultado_academico ra3
-          WHERE ra3.id_estudiante = na.id_estudiante
-          AND ra3.id_detallegrado = am.id_detallegrado
-          AND ra3.id_periodo = am.id_periodo
-        )
-        GROUP BY na.id_estudiante, am.id_detallegrado, am.id_periodo
-      )${extraCTEs}
-    `;
-
+    let currentResultsQuery: any = null;
     if (targetPeriodId) {
-      const perfRes = await sql<any>`
-        ${sql.raw(buildLiveCTE())}
-        SELECT 
-          AVG(promedio) as avg_general,
-          COUNT(DISTINCT id_estudiante) FILTER (WHERE promedio < ${notaAprobacion}) as at_risk
-        FROM current_results cr
-        JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
-        WHERE dg.id_colegio = ${schoolId}
-      `.execute(db);
-      performanceMetrics.average = Number(Number(perfRes.rows[0]?.avg_general || 0).toFixed(2));
-      performanceMetrics.atRisk = Number(perfRes.rows[0]?.at_risk || 0);
+      const periodIdVal = targetPeriodId;
+      const qResultados = db
+        .selectFrom("resultado_academico as ra")
+        .innerJoin("detalle_grados as dg_ra", "ra.id_detallegrado", "dg_ra.id_detallegrado")
+        .innerJoin("matricula as m", (join) =>
+          join
+            .onRef("ra.id_estudiante", "=", "m.id_estudiante")
+            .on("m.id_anio", "=", targetYearId)
+            .on("m.estado", "not in", ["CANCELADA", "RECHAZADA", "TRASLADADA"])
+        )
+        .select([
+          "ra.id_estudiante",
+          "ra.id_detallegrado",
+          "ra.id_periodo",
+          "ra.promedio"
+        ])
+        .where("dg_ra.id_colegio", "=", schoolId)
+        .where("ra.id_periodo", "=", periodIdVal);
 
-      const perfByGradeRes = await sql<any>`
-        ${sql.raw(buildLiveCTE())}
-        SELECT 
-          tg.nombre as grade,
-          AVG(cr.promedio) as avg_general,
-          COUNT(DISTINCT cr.id_estudiante) FILTER (WHERE cr.promedio < ${notaAprobacion}) as at_risk
-        FROM current_results cr
-        JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
-        JOIN grupos g ON dg.id_grupo = g.id_grupo
-        JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-        WHERE dg.id_colegio = ${schoolId}
-        GROUP BY tg.nombre
-      `.execute(db);
+      const qNotasCalculadas = db
+        .selectFrom("notas_actividad as na")
+        .innerJoin("actividad_materia as am", "na.id_actividadmateria", "am.id_actividadmateria")
+        .innerJoin("matricula as m", (join) =>
+          join
+            .onRef("na.id_estudiante", "=", "m.id_estudiante")
+            .on("m.id_anio", "=", targetYearId)
+            .on("m.estado", "not in", ["CANCELADA", "RECHAZADA", "TRASLADADA"])
+        )
+        .select([
+          "na.id_estudiante",
+          "am.id_detallegrado",
+          "am.id_periodo",
+          sql<any>`ROUND(SUM(na.nota * am.porcentaje / 100.0)::numeric, 2)`.as("promedio")
+        ])
+        .where("am.id_periodo", "=", periodIdVal)
+        .where("am.id_colegio", "=", schoolId)
+        .where((eb) =>
+          eb.not(
+            eb.exists(
+              eb
+                .selectFrom("resultado_academico as ra3")
+                .select(sql`1`.as("one"))
+                .whereRef("ra3.id_estudiante", "=", "na.id_estudiante")
+                .whereRef("ra3.id_detallegrado", "=", "am.id_detallegrado")
+                .whereRef("ra3.id_periodo", "=", "am.id_periodo")
+            )
+          )
+        )
+        .groupBy(["na.id_estudiante", "am.id_detallegrado", "am.id_periodo"]);
 
-      perfByGradeRes.rows.forEach(r => {
+      currentResultsQuery = qResultados.unionAll(qNotasCalculadas);
+
+      const perfRes = await db
+        .selectFrom(currentResultsQuery.as("cr"))
+        .innerJoin("detalle_grados as dg", "cr.id_detallegrado", "dg.id_detallegrado")
+        .select([
+          sql<number>`AVG(cr.promedio)`.as("avg_general"),
+          sql<number>`COUNT(DISTINCT cr.id_estudiante) FILTER (WHERE cr.promedio < ${notaAprobacion})`.as("at_risk")
+        ])
+        .where("dg.id_colegio", "=", schoolId)
+        .executeTakeFirst();
+
+      performanceMetrics.average = Number(Number(perfRes?.avg_general || 0).toFixed(2));
+      performanceMetrics.atRisk = Number(perfRes?.at_risk || 0);
+
+      const perfByGradeRes = await db
+        .selectFrom(currentResultsQuery.as("cr"))
+        .innerJoin("detalle_grados as dg", "cr.id_detallegrado", "dg.id_detallegrado")
+        .innerJoin("grupos as g", "dg.id_grupo", "g.id_grupo")
+        .innerJoin("tipo_grado as tg", "g.id_tipo_grado", "tg.id_tipo_grado")
+        .select([
+          "tg.nombre as grade",
+          sql<number>`AVG(cr.promedio)`.as("avg_general"),
+          sql<number>`COUNT(DISTINCT cr.id_estudiante) FILTER (WHERE cr.promedio < ${notaAprobacion})`.as("at_risk")
+        ])
+        .where("dg.id_colegio", "=", schoolId)
+        .groupBy("tg.nombre")
+        .execute();
+
+      perfByGradeRes.forEach(r => {
         if (!summaryByGrade[r.grade]) {
           summaryByGrade[r.grade] = { totalStudents: 0, totalTeachers: 0, attendanceToday: 0, generalAverage: 0, studentsAtRisk: 0, disciplinaryReports: 0, desertionRate: 0 };
         }
@@ -311,49 +349,67 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
     });
 
     // 5. Observations & Convivencia Summary
-    const obsRes = await sql<any>`
-      SELECT 
-        COUNT(*)::int as total,
-        COUNT(*) FILTER (WHERE o.tipo::text IN ('ACADEMICA', 'ACADEMICO'))::int as academicas,
-        COUNT(*) FILTER (WHERE o.tipo::text IN ('DISCIPLINARIA', 'DISCIPLINARIO'))::int as disciplinarias,
-        COUNT(*) FILTER (WHERE o.tipo::text IN ('CONVIVENCIA', 'CONVIVENCIAL'))::int as convivenciales
-      FROM observacion_estudiante o
-      JOIN detalle_grados dg ON o.id_detallegrado = dg.id_detallegrado
-      WHERE dg.id_colegio = ${schoolId} ${targetPeriodId ? sql`AND o.id_periodo = ${targetPeriodId}` : sql``}
-    `.execute(db);
+    let obsQuery = db
+      .selectFrom("observacion_estudiante as o")
+      .innerJoin("detalle_grados as dg", "o.id_detallegrado", "dg.id_detallegrado")
+      .select([
+        sql<number>`COUNT(*)::int`.as("total"),
+        sql<number>`COUNT(*) FILTER (WHERE o.tipo::text IN ('ACADEMICA', 'ACADEMICO'))::int`.as("academicas"),
+        sql<number>`COUNT(*) FILTER (WHERE o.tipo::text IN ('DISCIPLINARIA', 'DISCIPLINARIO'))::int`.as("disciplinarias"),
+        sql<number>`COUNT(*) FILTER (WHERE o.tipo::text IN ('CONVIVENCIA', 'CONVIVENCIAL'))::int`.as("convivenciales")
+      ])
+      .where("dg.id_colegio", "=", schoolId);
 
-    const sancionRes = await sql<any>`
-      SELECT COUNT(DISTINCT s.id_sancion)::int as total
-      FROM sancion s
-      JOIN estudiante e ON s.id_estudiante = e.id_estudiante
-      JOIN matricula m ON e.id_estudiante = m.id_estudiante AND m.id_anio = ${targetYearId} AND m.estado NOT IN ('CANCELADA', 'RECHAZADA', 'TRASLADADA')
-      JOIN detalle_grados dg ON m.id_grupo = dg.id_grupo
-      WHERE dg.id_colegio = ${schoolId} AND s.estado = 'ACTIVA'
-    `.execute(db);
+    if (targetPeriodId) {
+      obsQuery = obsQuery.where("o.id_periodo", "=", targetPeriodId);
+    }
+    const obsRes = await obsQuery.executeTakeFirst();
 
-    const obsByGradeRes = await sql<any>`
-      SELECT 
-        tg.nombre as grado,
-        COUNT(*)::int as total,
-        COUNT(*) FILTER (WHERE o.tipo::text IN ('ACADEMICA', 'ACADEMICO'))::int as academicas,
-        COUNT(*) FILTER (WHERE o.tipo::text IN ('DISCIPLINARIA', 'DISCIPLINARIO'))::int as disciplinarias,
-        COUNT(*) FILTER (WHERE o.tipo::text IN ('CONVIVENCIA', 'CONVIVENCIAL'))::int as convivenciales
-      FROM observacion_estudiante o
-      JOIN detalle_grados dg ON o.id_detallegrado = dg.id_detallegrado
-      JOIN grupos g ON dg.id_grupo = g.id_grupo
-      JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-      WHERE dg.id_colegio = ${schoolId} ${targetPeriodId ? sql`AND o.id_periodo = ${targetPeriodId}` : sql``}
-      GROUP BY tg.id_tipo_grado, tg.nombre
-      ORDER BY tg.id_tipo_grado
-    `.execute(db);
+    const sancionRes = await db
+      .selectFrom("sancion as s")
+      .innerJoin("estudiante as e", "s.id_estudiante", "e.id_estudiante")
+      .innerJoin("matricula as m", (join) =>
+        join
+          .onRef("e.id_estudiante", "=", "m.id_estudiante")
+          .on("m.id_anio", "=", targetYearId)
+          .on("m.estado", "not in", ["CANCELADA", "RECHAZADA", "TRASLADADA"])
+      )
+      .innerJoin("detalle_grados as dg", "m.id_grupo", "dg.id_grupo")
+      .select(sql<number>`COUNT(DISTINCT s.id_sancion)::int`.as("total"))
+      .where("dg.id_colegio", "=", schoolId)
+      .where("s.estado", "=", "ACTIVA")
+      .executeTakeFirst();
+
+    let obsByGradeQuery = db
+      .selectFrom("observacion_estudiante as o")
+      .innerJoin("detalle_grados as dg", "o.id_detallegrado", "dg.id_detallegrado")
+      .innerJoin("grupos as g", "dg.id_grupo", "g.id_grupo")
+      .innerJoin("tipo_grado as tg", "g.id_tipo_grado", "tg.id_tipo_grado")
+      .select([
+        "tg.nombre as grado",
+        sql<number>`COUNT(*)::int`.as("total"),
+        sql<number>`COUNT(*) FILTER (WHERE o.tipo::text IN ('ACADEMICA', 'ACADEMICO'))::int`.as("academicas"),
+        sql<number>`COUNT(*) FILTER (WHERE o.tipo::text IN ('DISCIPLINARIA', 'DISCIPLINARIO'))::int`.as("disciplinarias"),
+        sql<number>`COUNT(*) FILTER (WHERE o.tipo::text IN ('CONVIVENCIA', 'CONVIVENCIAL'))::int`.as("convivenciales")
+      ])
+      .where("dg.id_colegio", "=", schoolId);
+
+    if (targetPeriodId) {
+      obsByGradeQuery = obsByGradeQuery.where("o.id_periodo", "=", targetPeriodId);
+    }
+
+    const obsByGradeRes = await obsByGradeQuery
+      .groupBy(["tg.id_tipo_grado", "tg.nombre"])
+      .orderBy("tg.id_tipo_grado", "asc")
+      .execute();
 
     const observationsSummary = {
-      total: Number(obsRes.rows[0]?.total || 0),
-      academicas: Number(obsRes.rows[0]?.academicas || 0),
-      disciplinarias: Number(obsRes.rows[0]?.disciplinarias || 0),
-      convivenciales: Number(obsRes.rows[0]?.convivenciales || 0),
-      sancionesActivas: Number(sancionRes.rows[0]?.total || 0),
-      byGrade: obsByGradeRes.rows
+      total: Number(obsRes?.total || 0),
+      academicas: Number(obsRes?.academicas || 0),
+      disciplinarias: Number(obsRes?.disciplinarias || 0),
+      convivenciales: Number(obsRes?.convivenciales || 0),
+      sancionesActivas: Number(sancionRes?.total || 0),
+      byGrade: obsByGradeRes
     };
 
     // 6. Charts Data
@@ -365,85 +421,94 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
       evolution: [],
       evolutionByCourse: []
     };
-    if (targetPeriodId) {
+    if (targetPeriodId && currentResultsQuery) {
       const [gradePerfRes, subjectPerfRes, coursePerfRes, subjectCoursePerfRes] = await Promise.all([
-        sql<any>`
-          ${sql.raw(buildLiveCTE())}
-          SELECT tg.nombre, ROUND(AVG(cr.promedio), 2) as average
-          FROM current_results cr
-          JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
-          JOIN grupos g ON dg.id_grupo = g.id_grupo
-          JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-          WHERE dg.id_colegio = ${schoolId}
-          GROUP BY tg.id_tipo_grado, tg.nombre
-          ORDER BY tg.id_tipo_grado
-        `.execute(db),
-        sql<any>`
-          ${sql.raw(buildLiveCTE())}
-          SELECT m.nombre, ROUND(AVG(cr.promedio), 2) as average
-          FROM current_results cr
-          JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
-          JOIN materias m ON dg.id_materia = m.id_materia
-          WHERE dg.id_colegio = ${schoolId}
-          GROUP BY m.id_materia, m.nombre
-          ORDER BY average DESC
-          LIMIT 10
-        `.execute(db),
-        sql<any>`
-          ${sql.raw(buildLiveCTE())}
-          SELECT 
-            g.id_grupo,
-            tg.nombre as grado_nombre,
-            s.nombre as seccion_nombre,
-            j.nombre as jornada_nombre,
-            ROUND(AVG(cr.promedio), 2) as average
-          FROM current_results cr
-          JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
-          JOIN grupos g ON dg.id_grupo = g.id_grupo
-          JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-          JOIN secciones s ON g.id_seccion = s.id_seccion
-          JOIN jornada j ON g.id_jornada = j.id_jornada
-          WHERE dg.id_colegio = ${schoolId}
-          GROUP BY g.id_grupo, tg.nombre, s.nombre, j.nombre
-          ORDER BY tg.nombre, LENGTH(s.nombre), s.nombre
-        `.execute(db),
-        sql<any>`
-          ${sql.raw(buildLiveCTE())}
-          SELECT 
-            g.id_grupo,
-            m.nombre as subject_nombre, 
-            tg.nombre as grado_nombre,
-            s.nombre as seccion_nombre,
-            j.nombre as jornada_nombre,
-            ROUND(AVG(cr.promedio), 2) as average
-          FROM current_results cr
-          JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
-          JOIN materias m ON dg.id_materia = m.id_materia
-          JOIN grupos g ON dg.id_grupo = g.id_grupo
-          JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-          JOIN secciones s ON g.id_seccion = s.id_seccion
-          JOIN jornada j ON g.id_jornada = j.id_jornada
-          WHERE dg.id_colegio = ${schoolId}
-          GROUP BY m.id_materia, m.nombre, g.id_grupo, tg.nombre, s.nombre, j.nombre
-          ORDER BY tg.nombre, LENGTH(s.nombre), s.nombre, average DESC
-        `.execute(db)
+        db
+          .selectFrom(currentResultsQuery.as("cr"))
+          .innerJoin("detalle_grados as dg", "cr.id_detallegrado", "dg.id_detallegrado")
+          .innerJoin("grupos as g", "dg.id_grupo", "g.id_grupo")
+          .innerJoin("tipo_grado as tg", "g.id_tipo_grado", "tg.id_tipo_grado")
+          .select([
+            "tg.nombre",
+            sql<number>`ROUND(AVG(cr.promedio), 2)`.as("average")
+          ])
+          .where("dg.id_colegio", "=", schoolId)
+          .groupBy(["tg.id_tipo_grado", "tg.nombre"])
+          .orderBy("tg.id_tipo_grado", "asc")
+          .execute(),
+        db
+          .selectFrom(currentResultsQuery.as("cr"))
+          .innerJoin("detalle_grados as dg", "cr.id_detallegrado", "dg.id_detallegrado")
+          .innerJoin("materias as m", "dg.id_materia", "m.id_materia")
+          .select([
+            "m.nombre",
+            sql<number>`ROUND(AVG(cr.promedio), 2)`.as("average")
+          ])
+          .where("dg.id_colegio", "=", schoolId)
+          .groupBy(["m.id_materia", "m.nombre"])
+          .orderBy(sql`average`, "desc")
+          .limit(10)
+          .execute(),
+        db
+          .selectFrom(currentResultsQuery.as("cr"))
+          .innerJoin("detalle_grados as dg", "cr.id_detallegrado", "dg.id_detallegrado")
+          .innerJoin("grupos as g", "dg.id_grupo", "g.id_grupo")
+          .innerJoin("tipo_grado as tg", "g.id_tipo_grado", "tg.id_tipo_grado")
+          .innerJoin("secciones as s", "g.id_seccion", "s.id_seccion")
+          .innerJoin("jornada as j", "g.id_jornada", "j.id_jornada")
+          .select([
+            "g.id_grupo",
+            "tg.nombre as grado_nombre",
+            "s.nombre as seccion_nombre",
+            "j.nombre as jornada_nombre",
+            sql<number>`ROUND(AVG(cr.promedio), 2)`.as("average")
+          ])
+          .where("dg.id_colegio", "=", schoolId)
+          .groupBy(["g.id_grupo", "tg.nombre", "s.nombre", "j.nombre"])
+          .orderBy("tg.nombre", "asc")
+          .orderBy(sql`LENGTH(s.nombre)`, "asc")
+          .orderBy("s.nombre", "asc")
+          .execute(),
+        db
+          .selectFrom(currentResultsQuery.as("cr"))
+          .innerJoin("detalle_grados as dg", "cr.id_detallegrado", "dg.id_detallegrado")
+          .innerJoin("materias as m", "dg.id_materia", "m.id_materia")
+          .innerJoin("grupos as g", "dg.id_grupo", "g.id_grupo")
+          .innerJoin("tipo_grado as tg", "g.id_tipo_grado", "tg.id_tipo_grado")
+          .innerJoin("secciones as s", "g.id_seccion", "s.id_seccion")
+          .innerJoin("jornada as j", "g.id_jornada", "j.id_jornada")
+          .select([
+            "g.id_grupo",
+            "m.nombre as subject_nombre",
+            "tg.nombre as grado_nombre",
+            "s.nombre as seccion_nombre",
+            "j.nombre as jornada_nombre",
+            sql<number>`ROUND(AVG(cr.promedio), 2)`.as("average")
+          ])
+          .where("dg.id_colegio", "=", schoolId)
+          .groupBy(["m.id_materia", "m.nombre", "g.id_grupo", "tg.nombre", "s.nombre", "j.nombre"])
+          .orderBy("tg.nombre", "asc")
+          .orderBy(sql`LENGTH(s.nombre)`, "asc")
+          .orderBy("s.nombre", "asc")
+          .orderBy(sql`average`, "desc")
+          .execute()
       ]);
-      charts.performanceByGrade = gradePerfRes.rows.map(r => ({
+      charts.performanceByGrade = gradePerfRes.map((r: any) => ({
         nombre: r.nombre,
         average: Number(r.average || 0)
       }));
-      charts.performanceBySubject = subjectPerfRes.rows.map(r => ({
+      charts.performanceBySubject = subjectPerfRes.map((r: any) => ({
         nombre: r.nombre,
         average: Number(r.average || 0)
       }));
-      charts.performanceByCourse = coursePerfRes.rows.map(r => ({
+      charts.performanceByCourse = coursePerfRes.map((r: any) => ({
         id_grupo: Number(r.id_grupo),
         grado_nombre: r.grado_nombre,
         seccion_nombre: r.seccion_nombre,
         jornada_nombre: r.jornada_nombre,
         average: Number(r.average || 0)
       }));
-      charts.performanceBySubjectCourse = subjectCoursePerfRes.rows.map(r => ({
+      charts.performanceBySubjectCourse = subjectCoursePerfRes.map((r: any) => ({
         id_grupo: Number(r.id_grupo),
         subject_nombre: r.subject_nombre,
         grado_nombre: r.grado_nombre,
@@ -455,40 +520,51 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
 
     // Evolution (all periods of the current year) - Historical promedios
     // For evolution, we use already calculated averages when possible
-    const evolutionRes = await sql<any>`
-      SELECT p.nombre, ROUND(AVG(ra.promedio), 2) as average
-      FROM resultado_academico ra
-      JOIN periodo_academico p ON ra.id_periodo = p.id_periodo
-      JOIN detalle_grados dg ON ra.id_detallegrado = dg.id_detallegrado
-      WHERE dg.id_colegio = ${schoolId} AND p.id_anio = ${targetYearId}
-      GROUP BY p.id_periodo, p.nombre
-      ORDER BY p.id_periodo
-    `.execute(db);
-    charts.evolution = evolutionRes.rows.map(r => ({
+    const evolutionRes = await db
+      .selectFrom("resultado_academico as ra")
+      .innerJoin("periodo_academico as p", "ra.id_periodo", "p.id_periodo")
+      .innerJoin("detalle_grados as dg", "ra.id_detallegrado", "dg.id_detallegrado")
+      .select([
+        "p.nombre",
+        sql<number>`ROUND(AVG(ra.promedio), 2)`.as("average")
+      ])
+      .where("dg.id_colegio", "=", schoolId)
+      .where("p.id_anio", "=", targetYearId)
+      .groupBy(["p.id_periodo", "p.nombre"])
+      .orderBy("p.id_periodo", "asc")
+      .execute();
+
+    charts.evolution = evolutionRes.map((r: any) => ({
       nombre: r.nombre,
       average: Number(r.average || 0)
     }));
 
-    const evolutionByCourseRes = await sql<any>`
-      SELECT 
-        p.nombre as periodo_nombre, 
-        g.id_grupo,
-        tg.nombre as grado_nombre,
-        s.nombre as seccion_nombre,
-        j.nombre as jornada_nombre,
-        ROUND(AVG(ra.promedio), 2) as average
-      FROM resultado_academico ra
-      JOIN periodo_academico p ON ra.id_periodo = p.id_periodo
-      JOIN detalle_grados dg ON ra.id_detallegrado = dg.id_detallegrado
-      JOIN grupos g ON dg.id_grupo = g.id_grupo
-      JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-      JOIN secciones s ON g.id_seccion = s.id_seccion
-      JOIN jornada j ON g.id_jornada = j.id_jornada
-      WHERE dg.id_colegio = ${schoolId} AND p.id_anio = ${targetYearId}
-      GROUP BY p.id_periodo, p.nombre, g.id_grupo, tg.nombre, s.nombre, j.nombre
-      ORDER BY p.id_periodo, tg.nombre, LENGTH(s.nombre), s.nombre
-    `.execute(db);
-    charts.evolutionByCourse = evolutionByCourseRes.rows.map(r => ({
+    const evolutionByCourseRes = await db
+      .selectFrom("resultado_academico as ra")
+      .innerJoin("periodo_academico as p", "ra.id_periodo", "p.id_periodo")
+      .innerJoin("detalle_grados as dg", "ra.id_detallegrado", "dg.id_detallegrado")
+      .innerJoin("grupos as g", "dg.id_grupo", "g.id_grupo")
+      .innerJoin("tipo_grado as tg", "g.id_tipo_grado", "tg.id_tipo_grado")
+      .innerJoin("secciones as s", "g.id_seccion", "s.id_seccion")
+      .innerJoin("jornada as j", "g.id_jornada", "j.id_jornada")
+      .select([
+        "p.nombre as periodo_nombre",
+        "g.id_grupo",
+        "tg.nombre as grado_nombre",
+        "s.nombre as seccion_nombre",
+        "j.nombre as jornada_nombre",
+        sql<number>`ROUND(AVG(ra.promedio), 2)`.as("average")
+      ])
+      .where("dg.id_colegio", "=", schoolId)
+      .where("p.id_anio", "=", targetYearId)
+      .groupBy(["p.id_periodo", "p.nombre", "g.id_grupo", "tg.nombre", "s.nombre", "j.nombre"])
+      .orderBy("p.id_periodo", "asc")
+      .orderBy("tg.nombre", "asc")
+      .orderBy(sql`LENGTH(s.nombre)`, "asc")
+      .orderBy("s.nombre", "asc")
+      .execute();
+
+    charts.evolutionByCourse = evolutionByCourseRes.map((r: any) => ({
       periodo_nombre: r.periodo_nombre,
       id_grupo: Number(r.id_grupo),
       grado_nombre: r.grado_nombre,
@@ -536,109 +612,118 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
       studentsAtRiskList: []
     };
 
-    if (targetPeriodId) {
+    if (targetPeriodId && currentResultsQuery) {
+      const studentStatusQuery = db
+        .selectFrom(currentResultsQuery.as("cr"))
+        .innerJoin("detalle_grados as dg", "cr.id_detallegrado", "dg.id_detallegrado")
+        .select([
+          "cr.id_estudiante",
+          "dg.id_grupo",
+          sql<boolean>`bool_or(cr.promedio < ${notaAprobacion})`.as("is_at_risk")
+        ])
+        .where("dg.id_colegio", "=", schoolId)
+        .groupBy(["cr.id_estudiante", "dg.id_grupo"]);
+
       const [criticalRes, gradeAlertsRes, groupRiskRes, studentsAtRiskRes] = await Promise.all([
         // Top 5 subjects with most students failing
-        sql<any>`
-          ${sql.raw(buildLiveCTE())}
-          SELECT 
-            m.nombre, 
-            COUNT(DISTINCT cr.id_estudiante)::int as failures,
-            JSON_AGG(
+        db
+          .selectFrom(currentResultsQuery.as("cr"))
+          .innerJoin("detalle_grados as dg", "cr.id_detallegrado", "dg.id_detallegrado")
+          .innerJoin("materias as m", "dg.id_materia", "m.id_materia")
+          .innerJoin("estudiante as e", "cr.id_estudiante", "e.id_estudiante")
+          .innerJoin("grupos as g", "dg.id_grupo", "g.id_grupo")
+          .innerJoin("tipo_grado as tg", "g.id_tipo_grado", "tg.id_tipo_grado")
+          .innerJoin("secciones as s", "g.id_seccion", "s.id_seccion")
+          .select([
+            "m.nombre",
+            sql<number>`COUNT(DISTINCT cr.id_estudiante)::int`.as("failures"),
+            sql<any[]>`JSON_AGG(
               JSON_BUILD_OBJECT(
                 'id_estudiante', e.id_estudiante,
                 'nombre_completo', e.nombre || ' ' || e.apellido,
                 'promedio', cr.promedio,
                 'curso', tg.nombre || ' ' || s.nombre
               )
-            ) as estudiantes_reprobados
-          FROM current_results cr
-          JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
-          JOIN materias m ON dg.id_materia = m.id_materia
-          JOIN estudiante e ON cr.id_estudiante = e.id_estudiante
-          JOIN grupos g ON dg.id_grupo = g.id_grupo
-          JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-          JOIN secciones s ON g.id_seccion = s.id_seccion
-          WHERE dg.id_colegio = ${schoolId} AND cr.promedio < ${notaAprobacion}
-          GROUP BY m.id_materia, m.nombre
-          ORDER BY failures DESC
-          LIMIT 5
-        `.execute(db),
+            )`.as("estudiantes_reprobados")
+          ])
+          .where("dg.id_colegio", "=", schoolId)
+          .where(sql<boolean>`cr.promedio < ${notaAprobacion}`)
+          .groupBy(["m.id_materia", "m.nombre"])
+          .orderBy(sql`failures`, "desc")
+          .limit(5)
+          .execute(),
+
         // Concentration of unique students at risk by grade level
-        sql<any>`
-          ${sql.raw(buildLiveCTE())}
-          SELECT tg.nombre, COUNT(DISTINCT cr.id_estudiante) as alerts
-          FROM current_results cr
-          JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
-          JOIN grupos g ON dg.id_grupo = g.id_grupo
-          JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-          WHERE dg.id_colegio = ${schoolId} AND cr.promedio < ${notaAprobacion}
-          GROUP BY tg.id_tipo_grado, tg.nombre
-          ORDER BY alerts DESC
-        `.execute(db),
+        db
+          .selectFrom(currentResultsQuery.as("cr"))
+          .innerJoin("detalle_grados as dg", "cr.id_detallegrado", "dg.id_detallegrado")
+          .innerJoin("grupos as g", "dg.id_grupo", "g.id_grupo")
+          .innerJoin("tipo_grado as tg", "g.id_tipo_grado", "tg.id_tipo_grado")
+          .select([
+            "tg.nombre",
+            sql<number>`COUNT(DISTINCT cr.id_estudiante)`.as("alerts")
+          ])
+          .where("dg.id_colegio", "=", schoolId)
+          .where(sql<boolean>`cr.promedio < ${notaAprobacion}`)
+          .groupBy(["tg.id_tipo_grado", "tg.nombre"])
+          .orderBy(sql`alerts`, "desc")
+          .execute(),
+
         // Per-group risk: students failing at least one subject vs students passing everything
-        sql<any>`
-          ${sql.raw(buildLiveCTE(`,
-          student_status AS (
-            SELECT 
-              cr.id_estudiante,
-              dg.id_grupo,
-              bool_or(cr.promedio < ${notaAprobacion}) as is_at_risk
-            FROM current_results cr
-            JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
-            WHERE dg.id_colegio = ${schoolId}
-            GROUP BY cr.id_estudiante, dg.id_grupo
-          )`))}
-          SELECT 
-            g.id_grupo,
-            tg.nombre as grado_nombre,
-            s.nombre as seccion_nombre,
-            j.nombre as jornada_nombre,
-            tg.nombre || ' ' || s.nombre as curso,
-            COUNT(*) FILTER (WHERE ss.is_at_risk) as at_risk,
-            COUNT(*) FILTER (WHERE NOT ss.is_at_risk) as safe
-          FROM student_status ss
-          JOIN grupos g ON ss.id_grupo = g.id_grupo
-          JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-          JOIN secciones s ON g.id_seccion = s.id_seccion
-          JOIN jornada j ON g.id_jornada = j.id_jornada
-          GROUP BY g.id_grupo, tg.nombre, s.nombre, j.nombre
-          ORDER BY at_risk DESC
-        `.execute(db),
-        sql<any>`
-          ${sql.raw(buildLiveCTE())}
-          SELECT 
-            cr.id_estudiante,
-            e.nombre || ' ' || e.apellido as nombre_completo,
-            dg.id_grupo,
-            tg.nombre as grado_nombre,
-            (tg.nombre || ' ' || s.nombre) as curso,
-            COUNT(*) FILTER (WHERE cr.promedio < ${notaAprobacion})::int as materias_reprobadas,
-            ROUND(AVG(cr.promedio), 2)::numeric as promedio_general,
-            JSON_AGG(
+        db
+          .selectFrom(studentStatusQuery.as("ss"))
+          .innerJoin("grupos as g", "ss.id_grupo", "g.id_grupo")
+          .innerJoin("tipo_grado as tg", "g.id_tipo_grado", "tg.id_tipo_grado")
+          .innerJoin("secciones as s", "g.id_seccion", "s.id_seccion")
+          .innerJoin("jornada as j", "g.id_jornada", "j.id_jornada")
+          .select([
+            "g.id_grupo",
+            "tg.nombre as grado_nombre",
+            "s.nombre as seccion_nombre",
+            "j.nombre as jornada_nombre",
+            sql<string>`tg.nombre || ' ' || s.nombre`.as("curso"),
+            sql<number>`COUNT(*) FILTER (WHERE ss.is_at_risk)`.as("at_risk"),
+            sql<number>`COUNT(*) FILTER (WHERE NOT ss.is_at_risk)`.as("safe")
+          ])
+          .groupBy(["g.id_grupo", "tg.nombre", "s.nombre", "j.nombre"])
+          .orderBy(sql`at_risk`, "desc")
+          .execute(),
+
+        db
+          .selectFrom(currentResultsQuery.as("cr"))
+          .innerJoin("detalle_grados as dg", "cr.id_detallegrado", "dg.id_detallegrado")
+          .innerJoin("materias as m", "dg.id_materia", "m.id_materia")
+          .innerJoin("estudiante as e", "cr.id_estudiante", "e.id_estudiante")
+          .innerJoin("grupos as g", "dg.id_grupo", "g.id_grupo")
+          .innerJoin("tipo_grado as tg", "g.id_tipo_grado", "tg.id_tipo_grado")
+          .innerJoin("secciones as s", "g.id_seccion", "s.id_seccion")
+          .select([
+            "cr.id_estudiante",
+            sql<string>`e.nombre || ' ' || e.apellido`.as("nombre_completo"),
+            "dg.id_grupo",
+            "tg.nombre as grado_nombre",
+            sql<string>`tg.nombre || ' ' || s.nombre`.as("curso"),
+            sql<number>`COUNT(*) FILTER (WHERE cr.promedio < ${notaAprobacion})::int`.as("materias_reprobadas"),
+            sql<number>`ROUND(AVG(cr.promedio), 2)::numeric`.as("promedio_general"),
+            sql<any>`JSON_AGG(
               JSON_BUILD_OBJECT('materia_nombre', m.nombre, 'promedio', cr.promedio)
-            ) FILTER (WHERE cr.promedio < ${notaAprobacion}) as detalles_materias
-          FROM current_results cr
-          JOIN detalle_grados dg ON cr.id_detallegrado = dg.id_detallegrado
-          JOIN materias m ON dg.id_materia = m.id_materia
-          JOIN estudiante e ON cr.id_estudiante = e.id_estudiante
-          JOIN grupos g ON dg.id_grupo = g.id_grupo
-          JOIN tipo_grado tg ON g.id_tipo_grado = tg.id_tipo_grado
-          JOIN secciones s ON g.id_seccion = s.id_seccion
-          WHERE dg.id_colegio = ${schoolId}
-          GROUP BY cr.id_estudiante, e.nombre, e.apellido, dg.id_grupo, tg.nombre, s.nombre
-          HAVING bool_or(cr.promedio < ${notaAprobacion})
-          ORDER BY materias_reprobadas DESC, promedio_general ASC
-        `.execute(db)
+            ) FILTER (WHERE cr.promedio < ${notaAprobacion})`.as("detalles_materias")
+          ])
+          .where("dg.id_colegio", "=", schoolId)
+          .groupBy(["cr.id_estudiante", "e.nombre", "e.apellido", "dg.id_grupo", "tg.nombre", "s.nombre"])
+          .having(sql<boolean>`bool_or(cr.promedio < ${notaAprobacion})`)
+          .orderBy(sql`materias_reprobadas`, "desc")
+          .orderBy(sql`promedio_general`, "asc")
+          .execute()
       ]);
 
-      lowPerformance.criticalSubjects = criticalRes.rows.map(r => ({
+      lowPerformance.criticalSubjects = criticalRes.map((r: any) => ({
         nombre: r.nombre,
         failures: Number(r.failures),
         estudiantes_reprobados: Array.isArray(r.estudiantes_reprobados) ? r.estudiantes_reprobados : []
       }));
-      lowPerformance.gradeAlerts = gradeAlertsRes.rows;
-      lowPerformance.groupRisk = groupRiskRes.rows.map(r => ({
+      lowPerformance.gradeAlerts = gradeAlertsRes;
+      lowPerformance.groupRisk = groupRiskRes.map((r: any) => ({
         curso: r.curso,
         id_grupo: Number(r.id_grupo),
         grado_nombre: r.grado_nombre,
@@ -647,7 +732,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
         at_risk: Number(r.at_risk),
         safe: Number(r.safe)
       }));
-      lowPerformance.studentsAtRiskList = studentsAtRiskRes.rows.map(r => ({
+      lowPerformance.studentsAtRiskList = studentsAtRiskRes.map((r: any) => ({
         id_estudiante: Number(r.id_estudiante),
         nombre_completo: r.nombre_completo,
         id_grupo: Number(r.id_grupo),
@@ -666,7 +751,7 @@ export const getDirectivoDashboard = async (req: Request, res: Response): Promis
     const summaryData = {
       totalStudents: totalStuds,
       totalTeachers: Number(teachersCountRes?.total || 0),
-      attendanceToday: Number(Number(attendanceTodayRes?.rows?.[0]?.rate || 0).toFixed(1)),
+      attendanceToday: Number(Number(attendanceTodayRes?.rate || 0).toFixed(1)),
       generalAverage: performanceMetrics.average,
       approvalRate: calcApprovalRate,
       studentsAtRisk: atRiskStuds,
