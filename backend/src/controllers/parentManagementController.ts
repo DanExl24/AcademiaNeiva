@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { db } from "../config/kysely";
-import { sql, CompiledQuery } from "kysely";
+import { sql } from "kysely";
 import { validateDocumentUniqueness } from "../utils/documentValidation";
 import { formatFriendlyErrorMessage } from "../utils/errorHelper";
 
@@ -73,160 +73,224 @@ export const getParentsManagementData = async (req: Request, res: Response): Pro
 
   try {
     const selectedYearId = yearId ? Number(yearId) : null;
-    const params: any[] = [id_colegio, selectedYearId];
-    let whereClauses = [];
+
+    const parentStatsQuery = db
+      .selectFrom("padre_familia as pf")
+      .leftJoin("usuario as u", "pf.id_usuario", "u.id_usuario")
+      .leftJoin("tipo_documento as td", "u.id_tipodocumento", "td.id_tipodocumento")
+      .leftJoin("docente as doc", (join) =>
+        join
+          .onRef("doc.id_usuario", "=", "pf.id_usuario")
+          .onRef("doc.id_colegio", "=", "pf.id_colegio")
+          .on("doc.id_usuario", "is not", null)
+          .on("pf.id_usuario", "is not", null)
+      )
+      .leftJoin("usuario as u_doc", "u_doc.id_usuario", "doc.id_usuario")
+      .leftJoin("detalle_padrefamilia as dpf", (join) =>
+        join
+          .onRef("dpf.id_padrefamilia", "=", "pf.id_padrefamilia")
+          .on((eb) => eb.or([eb("dpf.id_colegio", "=", id_colegio), eb("dpf.id_colegio", "is", null)]))
+      )
+      .leftJoin("estudiante as e", (join) =>
+        join
+          .onRef("e.id_estudiante", "=", "dpf.id_estudiante")
+          .on("e.id_colegio", "=", id_colegio)
+      )
+      .leftJoin("matricula as m", (join) => {
+        let j = join
+          .onRef("m.id_estudiante", "=", "e.id_estudiante")
+          .on("m.id_colegio", "=", id_colegio);
+        if (selectedYearId !== null) {
+          j = j.on("m.id_anio", "=", selectedYearId);
+        }
+        return j;
+      })
+      .leftJoin("grupos as g", "g.id_grupo", "m.id_grupo")
+      .leftJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
+      .leftJoin("nivel_escolar as ne", (join) =>
+        join.onRef("ne.id_nivel", "=", sql`COALESCE(m.id_nivel, tg.id_nivel)`)
+      )
+      .select([
+        "pf.id_padrefamilia",
+        "pf.nombre",
+        "pf.apellido",
+        "u.documento",
+        "u.id_tipodocumento",
+        "td.tipo as tipo_documento",
+        "u.email",
+        "u.id_usuario",
+        "u.activo as usuario_activo",
+        (selectedYearId !== null
+          ? sql<number>`COUNT(DISTINCT m.id_estudiante)::int`
+          : sql<number>`COUNT(DISTINCT dpf.id_estudiante)::int`
+        ).as("hijos_count"),
+        sql<boolean>`(doc.id_docente IS NOT NULL)`.as("es_docente"),
+        "u_doc.email as email_docente",
+        sql<boolean>`BOOL_OR(
+          e.id_estudiante IS NOT NULL AND (${selectedYearId}::int IS NULL OR m.id_matricula IS NOT NULL) AND EXISTS (
+            SELECT 1 FROM sancion sa 
+            WHERE sa.id_estudiante = e.id_estudiante 
+              AND sa.estado = 'ACTIVA'
+              AND (
+                ${selectedYearId}::int IS NULL OR EXISTS (
+                  SELECT 1 FROM anio_lectivo al_s 
+                  WHERE al_s.id_anio = ${selectedYearId}::int 
+                    AND EXTRACT(YEAR FROM sa.fecha_inicio) = NULLIF(regexp_replace(al_s.calendario, '\\D', '', 'g'), '')::int
+                )
+              )
+          )
+        )`.as("tiene_hijo_sancionado"),
+        sql<boolean>`BOOL_OR(
+          e.id_estudiante IS NOT NULL AND (${selectedYearId}::int IS NULL OR m.id_matricula IS NOT NULL) AND (
+            (SELECT COUNT(*) FROM registro_asistencia ra 
+             JOIN detalle_grados dg_ra ON dg_ra.id_detallegrado = ra.id_detallegrado 
+             WHERE ra.id_estudiante = e.id_estudiante 
+               AND ra.estado = 'AUSENTE'
+               AND (${selectedYearId}::int IS NULL OR dg_ra.id_anio = ${selectedYearId}::int)
+            ) >= 3
+          )
+        )`.as("tiene_hijo_inasistencias"),
+        sql<boolean>`BOOL_OR(
+          e.id_estudiante IS NOT NULL AND (${selectedYearId}::int IS NULL OR m.id_matricula IS NOT NULL) AND (
+            (SELECT AVG(ra_nota.promedio) FROM resultado_academico ra_nota 
+             JOIN periodo_academico pa ON pa.id_periodo = ra_nota.id_periodo 
+             WHERE ra_nota.id_estudiante = e.id_estudiante 
+               AND pa.estado != 'PENDIENTE'
+               AND (${selectedYearId}::int IS NULL OR pa.id_anio = ${selectedYearId}::int)
+            ) < 3.0
+          )
+        )`.as("tiene_hijo_riesgo"),
+        sql<number[]>`ARRAY_REMOVE(ARRAY_AGG(DISTINCT COALESCE(m.id_nivel, tg.id_nivel)), NULL)`.as("niveles_hijos"),
+        sql<string[]>`ARRAY_REMOVE(ARRAY_AGG(DISTINCT ne.nombre), NULL)`.as("nombres_niveles_hijos"),
+        sql<number[]>`ARRAY_REMOVE(ARRAY_AGG(DISTINCT g.id_tipo_grado), NULL)`.as("grados_hijos"),
+        sql<string[]>`ARRAY_REMOVE(ARRAY_AGG(DISTINCT tg.nombre), NULL)`.as("nombres_grados_hijos"),
+        sql<string[]>`ARRAY_REMOVE(ARRAY_AGG(DISTINCT m.estado::text), NULL)`.as("estados_matricula_hijos")
+      ])
+      .where((eb) =>
+        eb.or([
+          eb("pf.id_colegio", "=", id_colegio),
+          eb.exists(
+            eb
+              .selectFrom("usuario_colegio as uc")
+              .select(sql`1`.as("one"))
+              .whereRef("uc.id_usuario", "=", "u.id_usuario")
+              .where("uc.id_colegio", "=", id_colegio)
+              .where("uc.estado", "=", "ACTIVO")
+          ),
+          eb.exists(
+            eb
+              .selectFrom("detalle_padrefamilia as dpf_c")
+              .innerJoin("estudiante as e_c", "e_c.id_estudiante", "dpf_c.id_estudiante")
+              .select(sql`1`.as("one"))
+              .whereRef("dpf_c.id_padrefamilia", "=", "pf.id_padrefamilia")
+              .where((subEb) =>
+                subEb.or([
+                  subEb("dpf_c.id_colegio", "=", id_colegio),
+                  subEb("e_c.id_colegio", "=", id_colegio)
+                ])
+              )
+          )
+        ])
+      )
+      .groupBy([
+        "pf.id_padrefamilia",
+        "pf.nombre",
+        "pf.apellido",
+        "u.documento",
+        "u.id_tipodocumento",
+        "td.tipo",
+        "u.email",
+        "u.id_usuario",
+        "u.activo",
+        "doc.id_docente",
+        "u_doc.email"
+      ]);
+
+    let query = db
+      .selectFrom(parentStatsQuery.as("ps"))
+      .selectAll("ps");
 
     if (busqueda && typeof busqueda === "string" && busqueda.trim()) {
-      params.push(`%${busqueda.trim()}%`);
-      const idx = params.length;
-      whereClauses.push(`(
-        ps.nombre ILIKE $${idx}
-        OR ps.apellido ILIKE $${idx}
-        OR ps.documento ILIKE $${idx}
-        OR ps.email ILIKE $${idx}
-      )`);
+      const term = `%${busqueda.trim()}%`;
+      query = query.where((eb) =>
+        eb.or([
+          eb("ps.nombre", "ilike", term),
+          eb("ps.apellido", "ilike", term),
+          eb("ps.documento", "ilike", term),
+          eb("ps.email", "ilike", term)
+        ])
+      );
     }
 
     const { soloDocentes } = req.query;
 
     if (estadoCuenta === "ACTIVO" || estadoCuenta === "CON_USUARIO") {
-      whereClauses.push("ps.id_usuario IS NOT NULL AND ps.usuario_activo = true");
+      query = query
+        .where("ps.id_usuario", "is not", null)
+        .where("ps.usuario_activo", "=", true);
     } else if (estadoCuenta === "INACTIVO" || estadoCuenta === "SIN_USUARIO") {
-      whereClauses.push("(ps.id_usuario IS NULL OR ps.usuario_activo = false)");
+      query = query.where((eb) =>
+        eb.or([
+          eb("ps.id_usuario", "is", null),
+          eb("ps.usuario_activo", "=", false)
+        ])
+      );
     }
 
     if (soloDocentes === "true" || soloDocentes === "1") {
-      whereClauses.push("ps.es_docente = true");
+      query = query.where("ps.es_docente", "=", true);
     }
 
     if (alertaHijo === "RIESGO_ACADEMICO") {
-      whereClauses.push("ps.tiene_hijo_riesgo = true");
+      query = query.where("ps.tiene_hijo_riesgo", "=", true);
     } else if (alertaHijo === "ALTA_INASISTENCIA") {
-      whereClauses.push("ps.tiene_hijo_inasistencias = true");
+      query = query.where("ps.tiene_hijo_inasistencias", "=", true);
     } else if (alertaHijo === "CON_SANCION") {
-      whereClauses.push("ps.tiene_hijo_sancionado = true");
+      query = query.where("ps.tiene_hijo_sancionado", "=", true);
     }
 
     if (id_nivel) {
-      params.push(Number(id_nivel));
-      whereClauses.push(`EXISTS (
-        SELECT 1 FROM nivel_escolar ne_ref
-        WHERE ne_ref.id_nivel = $${params.length}
-          AND ne_ref.nombre = ANY(ps.nombres_niveles_hijos)
-      )`);
+      const nivelId = Number(id_nivel);
+      query = query.where((eb) =>
+        eb.exists(
+          eb
+            .selectFrom("nivel_escolar as ne_ref")
+            .select(sql`1`.as("one"))
+            .where("ne_ref.id_nivel", "=", nivelId)
+            .where(sql<boolean>`ne_ref.nombre = ANY(ps.nombres_niveles_hijos)`)
+        )
+      );
     }
 
     if (id_tipo_grado) {
-      params.push(Number(id_tipo_grado));
-      whereClauses.push(`EXISTS (
-        SELECT 1 FROM tipo_grado tg_ref
-        WHERE tg_ref.id_tipo_grado = $${params.length}
-          AND tg_ref.nombre = ANY(ps.nombres_grados_hijos)
-      )`);
+      const tipoGradoId = Number(id_tipo_grado);
+      query = query.where((eb) =>
+        eb.exists(
+          eb
+            .selectFrom("tipo_grado as tg_ref")
+            .select(sql`1`.as("one"))
+            .where("tg_ref.id_tipo_grado", "=", tipoGradoId)
+            .where(sql<boolean>`tg_ref.nombre = ANY(ps.nombres_grados_hijos)`)
+        )
+      );
     }
 
     if (cantHijos === "UN_HIJO") {
-      whereClauses.push("ps.hijos_count = 1");
+      query = query.where("ps.hijos_count", "=", 1);
     } else if (cantHijos === "MULTIPLES") {
-      whereClauses.push("ps.hijos_count >= 2");
+      query = query.where("ps.hijos_count", ">=", 2);
     } else if (cantHijos === "SIN_HIJOS") {
-      whereClauses.push("ps.hijos_count = 0");
+      query = query.where("ps.hijos_count", "=", 0);
     }
 
     if (estadoMatricula && estadoMatricula !== "TODAS") {
-      params.push(String(estadoMatricula));
-      whereClauses.push(`$${params.length} = ANY(ps.estados_matricula_hijos)`);
+      query = query.where(sql<boolean>`${String(estadoMatricula)} = ANY(ps.estados_matricula_hijos)`);
     }
 
-    const whereString = whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
-
-    const query = `
-      WITH parent_stats AS (
-        SELECT
-          pf.id_padrefamilia,
-          pf.nombre,
-          pf.apellido,
-          u.documento,
-          u.id_tipodocumento,
-          td.tipo AS tipo_documento,
-          u.email,
-          u.id_usuario,
-          u.activo AS usuario_activo,
-          COUNT(DISTINCT CASE WHEN $2::int IS NULL THEN dpf.id_estudiante ELSE m.id_estudiante END) AS hijos_count,
-          (doc.id_docente IS NOT NULL) AS es_docente,
-          u_doc.email AS email_docente,
-
-          BOOL_OR(
-            e.id_estudiante IS NOT NULL AND ($2::int IS NULL OR m.id_matricula IS NOT NULL) AND EXISTS (
-              SELECT 1 FROM sancion sa 
-              WHERE sa.id_estudiante = e.id_estudiante 
-                AND sa.estado = 'ACTIVA'
-                AND (
-                  $2::int IS NULL OR EXISTS (
-                    SELECT 1 FROM anio_lectivo al_s 
-                    WHERE al_s.id_anio = $2::int 
-                      AND EXTRACT(YEAR FROM sa.fecha_inicio) = NULLIF(regexp_replace(al_s.calendario, '\D', '', 'g'), '')::int
-                  )
-                )
-            )
-          ) AS tiene_hijo_sancionado,
-
-          BOOL_OR(
-            e.id_estudiante IS NOT NULL AND ($2::int IS NULL OR m.id_matricula IS NOT NULL) AND (
-              (SELECT COUNT(*) FROM registro_asistencia ra 
-               JOIN detalle_grados dg_ra ON dg_ra.id_detallegrado = ra.id_detallegrado 
-               WHERE ra.id_estudiante = e.id_estudiante 
-                 AND ra.estado = 'AUSENTE'
-                 AND ($2::int IS NULL OR dg_ra.id_anio = $2::int)
-              ) >= 3
-            )
-          ) AS tiene_hijo_inasistencias,
-
-          BOOL_OR(
-            e.id_estudiante IS NOT NULL AND ($2::int IS NULL OR m.id_matricula IS NOT NULL) AND (
-              (SELECT AVG(ra_nota.promedio) FROM resultado_academico ra_nota 
-               JOIN periodo_academico pa ON pa.id_periodo = ra_nota.id_periodo 
-               WHERE ra_nota.id_estudiante = e.id_estudiante 
-                 AND pa.estado != 'PENDIENTE'
-                 AND ($2::int IS NULL OR pa.id_anio = $2::int)
-              ) < 3.0
-            )
-          ) AS tiene_hijo_riesgo,
-
-          ARRAY_REMOVE(ARRAY_AGG(DISTINCT COALESCE(m.id_nivel, tg.id_nivel)), NULL) AS niveles_hijos,
-          ARRAY_REMOVE(ARRAY_AGG(DISTINCT ne.nombre), NULL) AS nombres_niveles_hijos,
-          ARRAY_REMOVE(ARRAY_AGG(DISTINCT g.id_tipo_grado), NULL) AS grados_hijos,
-          ARRAY_REMOVE(ARRAY_AGG(DISTINCT tg.nombre), NULL) AS nombres_grados_hijos,
-          ARRAY_REMOVE(ARRAY_AGG(DISTINCT m.estado::text), NULL) AS estados_matricula_hijos
-
-        FROM padre_familia pf
-        LEFT JOIN usuario u ON pf.id_usuario = u.id_usuario
-        LEFT JOIN tipo_documento td ON u.id_tipodocumento = td.id_tipodocumento
-        LEFT JOIN docente doc ON (
-          doc.id_usuario IS NOT NULL AND pf.id_usuario IS NOT NULL AND doc.id_usuario = pf.id_usuario AND doc.id_colegio = pf.id_colegio
-        )
-        LEFT JOIN usuario u_doc ON u_doc.id_usuario = doc.id_usuario
-        LEFT JOIN detalle_padrefamilia dpf ON (dpf.id_padrefamilia = pf.id_padrefamilia AND (dpf.id_colegio = $1 OR dpf.id_colegio IS NULL))
-        LEFT JOIN estudiante e ON (e.id_estudiante = dpf.id_estudiante AND e.id_colegio = $1)
-        LEFT JOIN matricula m ON (m.id_estudiante = e.id_estudiante AND m.id_colegio = $1 AND ($2::int IS NULL OR m.id_anio = $2::int))
-        LEFT JOIN grupos g ON g.id_grupo = m.id_grupo
-        LEFT JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado
-        LEFT JOIN nivel_escolar ne ON ne.id_nivel = COALESCE(m.id_nivel, tg.id_nivel)
-        WHERE (
-          pf.id_colegio = $1 
-          OR EXISTS (SELECT 1 FROM usuario_colegio uc WHERE uc.id_usuario = u.id_usuario AND uc.id_colegio = $1 AND uc.estado = 'ACTIVO')
-          OR EXISTS (SELECT 1 FROM detalle_padrefamilia dpf_c JOIN estudiante e_c ON e_c.id_estudiante = dpf_c.id_estudiante WHERE dpf_c.id_padrefamilia = pf.id_padrefamilia AND (dpf_c.id_colegio = $1 OR e_c.id_colegio = $1))
-        )
-        GROUP BY pf.id_padrefamilia, pf.nombre, pf.apellido, u.documento,
-                 u.id_tipodocumento, td.tipo, u.email, u.id_usuario, u.activo, doc.id_docente, u_doc.email
-      )
-      SELECT *
-      FROM parent_stats ps
-      ${whereString}
-      ORDER BY ps.apellido ASC, ps.nombre ASC
-    `;
-
-    const result = await db.executeQuery<any>(CompiledQuery.raw(query, params));
+    const parents = await query
+      .orderBy("ps.apellido", "asc")
+      .orderBy("ps.nombre", "asc")
+      .execute();
 
     // Catalogs for filters
     const nivelesRes = await db
@@ -245,8 +309,8 @@ export const getParentsManagementData = async (req: Request, res: Response): Pro
       .execute();
 
     res.json({
-      parents: result.rows,
-      padres: result.rows,
+      parents,
+      padres: parents,
       catalogs: {
         niveles: nivelesRes,
         grados: gradosRes
