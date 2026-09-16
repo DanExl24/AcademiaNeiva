@@ -1,5 +1,6 @@
-import { pool } from "./db";
+import { sql } from "kysely";
 import { randomUUID } from "crypto";
+import { db } from "./kysely";
 
 // Re-export all domain logic and types from competencyService for backwards compatibility
 export * from "../services/competencyService";
@@ -11,30 +12,37 @@ export * from "../services/competencyService";
  * si existen competencias previas sin identificador de sincronización.
  */
 export const ensureCompetencySchema = async (): Promise<void> => {
-  const client = await pool.connect();
   try {
     // 1. Verificar conexión activa con PostgreSQL
-    await client.query("SELECT 1;");
+    await sql`SELECT 1`.execute(db);
     console.log("ℹ️ Conexión con PostgreSQL verificada.");
 
     // 2. Backfill seguro de sync_uuid para competencias existentes sin UUID asignado
-    const unmigratedRes = await client.query(`
-      SELECT id_colegio, id_anio, id_materia, id_periodo, descripcion, ARRAY_AGG(id_competencia) AS ids
-      FROM public.competencias
-      WHERE sync_uuid IS NULL
-      GROUP BY id_colegio, id_anio, id_materia, id_periodo, descripcion
-    `);
-    for (const group of unmigratedRes.rows) {
+    const unmigrated = await db
+      .selectFrom("competencias")
+      .select([
+        "id_colegio",
+        "id_anio",
+        "id_materia",
+        "id_periodo",
+        "descripcion",
+        sql<number[]>`ARRAY_AGG(id_competencia)`.as("ids"),
+      ])
+      .where("sync_uuid", "is", null)
+      .groupBy(["id_colegio", "id_anio", "id_materia", "id_periodo", "descripcion"])
+      .execute();
+
+    for (const group of unmigrated) {
+      if (!group.ids || group.ids.length === 0) continue;
       const uuid = randomUUID();
-      await client.query(
-        `UPDATE public.competencias SET sync_uuid = $1 WHERE id_competencia = ANY($2::int[])`,
-        [uuid, group.ids]
-      );
+      await db
+        .updateTable("competencias")
+        .set({ sync_uuid: uuid })
+        .where("id_competencia", "in", group.ids)
+        .execute();
     }
   } catch (error) {
     console.error("Error en ensureCompetencySchema:", error);
     throw error;
-  } finally {
-    client.release();
   }
 };

@@ -146,39 +146,21 @@ export async function validateDocumentUniqueness(
 
   const normDoc = check.normalizedDocument;
 
-  if (client && typeof client.query === "function") {
-    let usrQuery = `SELECT id_usuario, nombre, apellido FROM usuario WHERE UPPER(TRIM(documento)) = $1`;
-    const usrParams: any[] = [normDoc];
+  const executor = (client && typeof client.selectFrom === "function") ? client : db;
+  let query = executor
+    .selectFrom("usuario")
+    .select(["id_usuario", "nombre", "apellido"])
+    .where(sql<boolean>`UPPER(TRIM(documento)) = ${normDoc}`);
 
-    if (exclude?.excludeUsuarioId) {
-      usrQuery += ` AND id_usuario != $2`;
-      usrParams.push(exclude.excludeUsuarioId);
-    }
+  if (exclude?.excludeUsuarioId) {
+    query = query.where("id_usuario", "!=", exclude.excludeUsuarioId);
+  }
 
-    const usrRes = await client.query(usrQuery, usrParams);
-    if (usrRes.rows.length > 0) {
-      throw new Error(
-        `El número de documento de identidad '${documentNum}' ya se encuentra registrado en el sistema. Sus datos personales serán preservados al vincularse.`
-      );
-    }
-  } else {
-    // Kysely querybuilder (db / trx)
-    const executor = client || db;
-    let query = executor
-      .selectFrom("usuario")
-      .select(["id_usuario", "nombre", "apellido"])
-      .where(sql<boolean>`UPPER(TRIM(documento)) = ${normDoc}`);
-
-    if (exclude?.excludeUsuarioId) {
-      query = query.where("id_usuario", "!=", exclude.excludeUsuarioId);
-    }
-
-    const usrRes = await query.executeTakeFirst();
-    if (usrRes) {
-      throw new Error(
-        `El número de documento de identidad '${documentNum}' ya se encuentra registrado en el sistema. Sus datos personales serán preservados al vincularse.`
-      );
-    }
+  const usrRes = await query.executeTakeFirst();
+  if (usrRes) {
+    throw new Error(
+      `El número de documento de identidad '${documentNum}' ya se encuentra registrado en el sistema. Sus datos personales serán preservados al vincularse.`
+    );
   }
 }
 

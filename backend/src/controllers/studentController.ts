@@ -268,7 +268,7 @@ export const updateStudent = async (req: Request, res: Response) => {
       }
 
       if (documento) {
-        await validateDocumentUniqueness(pool, documento, "estudiante", { excludeUsuarioId: oldStudent.id_usuario }, id_tipodocumento);
+        await validateDocumentUniqueness(trx, documento, "estudiante", { excludeUsuarioId: oldStudent.id_usuario }, id_tipodocumento);
       }
 
       const result = await trx

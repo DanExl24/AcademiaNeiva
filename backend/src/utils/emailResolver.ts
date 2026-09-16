@@ -53,42 +53,28 @@ export async function upsertInstitutionalEmail(
   const normalized = email.trim().toLowerCase();
   const normalizedPersonal = (personalEmail || '').trim().toLowerCase();
 
+  const executor = (client && typeof client.selectFrom === 'function') ? client : db;
+
   if (!normalized || normalized === normalizedPersonal) {
-    if (client && typeof client.query === 'function') {
-      await client.query(
-        'DELETE FROM usuario_colegio_email WHERE id_usuario = $1 AND id_colegio = $2',
-        [userId, schoolId]
-      );
-    } else {
-      const executor = client || db;
-      await executor
-        .deleteFrom('usuario_colegio_email')
-        .where('id_usuario', '=', userId)
-        .where('id_colegio', '=', schoolId)
-        .execute();
-    }
+    await executor
+      .deleteFrom('usuario_colegio_email')
+      .where('id_usuario', '=', userId)
+      .where('id_colegio', '=', schoolId)
+      .execute();
     return;
   }
 
-  if (client && typeof client.query === 'function') {
-    await client.query(
-      'INSERT INTO usuario_colegio_email (id_usuario, id_colegio, email_institucional) VALUES ($1, $2, $3) ON CONFLICT (id_usuario, id_colegio) DO UPDATE SET email_institucional = EXCLUDED.email_institucional',
-      [userId, schoolId, normalized]
-    );
-  } else {
-    const executor = client || db;
-    await executor
-      .insertInto('usuario_colegio_email')
-      .values({
-        id_usuario: userId,
-        id_colegio: schoolId,
+  await executor
+    .insertInto('usuario_colegio_email')
+    .values({
+      id_usuario: userId,
+      id_colegio: schoolId,
+      email_institucional: normalized,
+    })
+    .onConflict((oc: any) =>
+      oc.constraint('uq_usuario_colegio_email').doUpdateSet({
         email_institucional: normalized,
       })
-      .onConflict((oc: any) =>
-        oc.constraint('uq_usuario_colegio_email').doUpdateSet({
-          email_institucional: normalized,
-        })
-      )
-      .execute();
-  }
+    )
+    .execute();
 }

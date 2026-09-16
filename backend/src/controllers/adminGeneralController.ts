@@ -2331,39 +2331,43 @@ export const listarAuditoriasAcciones = async (req: AuthRequest, res: Response):
  */
 export const listarNotificacionesSistema = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const supervisionRes = await sql<any>`
-      SELECT MIN(ns.id_notificacion) as id_notificacion, 
-             ns.tipo_notificacion as tipo, 
-             ns.mensaje, 
-             ns.fecha_notificacion as fecha,
-             'SUPERVISION' as origen, 
-             c.nombre as colegio_nombre, 
-             string_agg(u.nombre || ' ' || COALESCE(u.apellido, ''), ', ') as directivo_nombre
-      FROM notificacion_supervision ns
-      JOIN directivo d ON ns.id_directivo = d.id
-      JOIN usuario u ON d.id_usuario = u.id_usuario
-      JOIN auditoria_supervision aus ON ns.id_auditoria = aus.id_auditoria
-      JOIN colegio c ON aus.id_colegio = c.id_colegio
-      GROUP BY ns.tipo_notificacion, ns.mensaje, ns.fecha_notificacion, c.nombre
-    `.execute(db);
+    const supervisionList = await db
+      .selectFrom("notificacion_supervision as ns")
+      .innerJoin("directivo as d", "ns.id_directivo", "d.id")
+      .innerJoin("usuario as u", "d.id_usuario", "u.id_usuario")
+      .innerJoin("auditoria_supervision as aus", "ns.id_auditoria", "aus.id_auditoria")
+      .innerJoin("colegio as c", "aus.id_colegio", "c.id_colegio")
+      .select([
+        (eb) => eb.fn.min("ns.id_notificacion").as("id_notificacion"),
+        "ns.tipo_notificacion as tipo",
+        "ns.mensaje",
+        "ns.fecha_notificacion as fecha",
+        sql<string>`'SUPERVISION'`.as("origen"),
+        "c.nombre as colegio_nombre",
+        sql<string>`string_agg(u.nombre || ' ' || COALESCE(u.apellido, ''), ', ')`.as("directivo_nombre"),
+      ])
+      .groupBy(["ns.tipo_notificacion", "ns.mensaje", "ns.fecha_notificacion", "c.nombre"])
+      .execute();
 
-    const colegioRes = await sql<any>`
-      SELECT MIN(nc.id_notificacion) as id_notificacion, 
-             nc.tipo, 
-             nc.mensaje, 
-             nc.fecha_notificacion as fecha,
-             'COLEGIO' as origen, 
-             c.nombre as colegio_nombre, 
-             string_agg(u.nombre || ' ' || COALESCE(u.apellido, ''), ', ') as directivo_nombre
-      FROM notificacion_colegio nc
-      JOIN directivo d ON nc.id_directivo = d.id
-      JOIN usuario u ON d.id_usuario = u.id_usuario
-      JOIN colegio c ON nc.id_colegio = c.id_colegio
-      GROUP BY nc.tipo, nc.mensaje, nc.fecha_notificacion, c.nombre
-    `.execute(db);
+    const colegioList = await db
+      .selectFrom("notificacion_colegio as nc")
+      .innerJoin("directivo as d", "nc.id_directivo", "d.id")
+      .innerJoin("usuario as u", "d.id_usuario", "u.id_usuario")
+      .innerJoin("colegio as c", "nc.id_colegio", "c.id_colegio")
+      .select([
+        (eb) => eb.fn.min("nc.id_notificacion").as("id_notificacion"),
+        "nc.tipo",
+        "nc.mensaje",
+        "nc.fecha_notificacion as fecha",
+        sql<string>`'COLEGIO'`.as("origen"),
+        "c.nombre as colegio_nombre",
+        sql<string>`string_agg(u.nombre || ' ' || COALESCE(u.apellido, ''), ', ')`.as("directivo_nombre"),
+      ])
+      .groupBy(["nc.tipo", "nc.mensaje", "nc.fecha_notificacion", "c.nombre"])
+      .execute();
 
-    const allNotificaciones = [...supervisionRes.rows, ...colegioRes.rows];
-    allNotificaciones.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+    const allNotificaciones = [...supervisionList, ...colegioList];
+    allNotificaciones.sort((a, b) => new Date(b.fecha as any).getTime() - new Date(a.fecha as any).getTime());
 
     res.json(allNotificaciones);
   } catch (error: any) {
