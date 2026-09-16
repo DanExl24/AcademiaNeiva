@@ -618,96 +618,127 @@ export const getUserEligibleAcademicYears = async (
 
   // 3. Teacher participation in academic activities/evaluations/competencies/assignments
   if (userRoles.includes('docente')) {
-    const teacherYears = await sql<{ id_anio: number }>`
-      SELECT DISTINCT dg.id_anio
-      FROM detalle_grados dg
-      JOIN docente d ON d.id_docente = dg.id_docente
-      LEFT JOIN usuario u ON u.id_usuario = d.id_usuario
-      WHERE (d.id_usuario = ${userId} OR UPPER(u.email) = UPPER(${userEmail}))
-        AND dg.id_colegio = ${schoolId}
-        AND dg.id_anio IS NOT NULL
+    const teacherCondition = (eb: any) =>
+      eb.or([
+        eb("d.id_usuario", "=", userId),
+        eb(sql`UPPER(u.email)`, "=", userEmail.toUpperCase())
+      ]);
 
-      UNION
+    const q1 = db
+      .selectFrom("detalle_grados as dg")
+      .innerJoin("docente as d", "d.id_docente", "dg.id_docente")
+      .leftJoin("usuario as u", "u.id_usuario", "d.id_usuario")
+      .select("dg.id_anio")
+      .distinct()
+      .where(teacherCondition)
+      .where("dg.id_colegio", "=", schoolId)
+      .where("dg.id_anio", "is not", null);
 
-      SELECT DISTINCT p.id_anio
-      FROM periodo_academico p
-      JOIN actividad_materia am ON am.id_periodo = p.id_periodo
-      JOIN detalle_grados dg ON dg.id_detallegrado = am.id_detallegrado
-      JOIN docente d ON d.id_docente = dg.id_docente
-      LEFT JOIN usuario u ON u.id_usuario = d.id_usuario
-      WHERE (d.id_usuario = ${userId} OR UPPER(u.email) = UPPER(${userEmail})) AND p.id_colegio = ${schoolId}
-      
-      UNION
-      
-      SELECT DISTINCT p.id_anio
-      FROM registro_asistencia ra
-      JOIN detalle_grados dg ON dg.id_detallegrado = ra.id_detallegrado
-      JOIN periodo_academico p ON p.id_colegio = dg.id_colegio
-      JOIN docente d ON d.id_docente = dg.id_docente
-      LEFT JOIN usuario u ON u.id_usuario = d.id_usuario
-      WHERE (d.id_usuario = ${userId} OR UPPER(u.email) = UPPER(${userEmail})) AND p.id_colegio = ${schoolId}
-      
-      UNION
-      
-      SELECT DISTINCT p.id_anio
-      FROM cierre_materia cm
-      JOIN periodo_academico p ON p.id_periodo = cm.id_periodo
-      JOIN detalle_grados dg ON dg.id_detallegrado = cm.id_detallegrado
-      JOIN docente d ON d.id_docente = dg.id_docente
-      LEFT JOIN usuario u ON u.id_usuario = d.id_usuario
-      WHERE (d.id_usuario = ${userId} OR UPPER(u.email) = UPPER(${userEmail})) AND p.id_colegio = ${schoolId}
+    const q2 = db
+      .selectFrom("periodo_academico as p")
+      .innerJoin("actividad_materia as am", "am.id_periodo", "p.id_periodo")
+      .innerJoin("detalle_grados as dg", "dg.id_detallegrado", "am.id_detallegrado")
+      .innerJoin("docente as d", "d.id_docente", "dg.id_docente")
+      .leftJoin("usuario as u", "u.id_usuario", "d.id_usuario")
+      .select("p.id_anio")
+      .distinct()
+      .where(teacherCondition)
+      .where("p.id_colegio", "=", schoolId);
 
-      UNION
+    const q3 = db
+      .selectFrom("registro_asistencia as ra")
+      .innerJoin("detalle_grados as dg", "dg.id_detallegrado", "ra.id_detallegrado")
+      .innerJoin("periodo_academico as p", "p.id_colegio", "dg.id_colegio")
+      .innerJoin("docente as d", "d.id_docente", "dg.id_docente")
+      .leftJoin("usuario as u", "u.id_usuario", "d.id_usuario")
+      .select("p.id_anio")
+      .distinct()
+      .where(teacherCondition)
+      .where("p.id_colegio", "=", schoolId);
 
-      SELECT DISTINCT p.id_anio
-      FROM observacion_estudiante oe
-      JOIN detalle_grados dg ON dg.id_detallegrado = oe.id_detallegrado
-      JOIN periodo_academico p ON p.id_periodo = oe.id_periodo
-      JOIN docente d ON d.id_docente = dg.id_docente
-      LEFT JOIN usuario u ON u.id_usuario = d.id_usuario
-      WHERE (d.id_usuario = ${userId} OR UPPER(u.email) = UPPER(${userEmail})) AND p.id_colegio = ${schoolId}
-    `.execute(db);
-    teacherYears.rows.forEach(r => eligibleYearIds.add(Number(r.id_anio)));
+    const q4 = db
+      .selectFrom("cierre_materia as cm")
+      .innerJoin("periodo_academico as p", "p.id_periodo", "cm.id_periodo")
+      .innerJoin("detalle_grados as dg", "dg.id_detallegrado", "cm.id_detallegrado")
+      .innerJoin("docente as d", "d.id_docente", "dg.id_docente")
+      .leftJoin("usuario as u", "u.id_usuario", "d.id_usuario")
+      .select("p.id_anio")
+      .distinct()
+      .where(teacherCondition)
+      .where("p.id_colegio", "=", schoolId);
+
+    const q5 = db
+      .selectFrom("observacion_estudiante as oe")
+      .innerJoin("detalle_grados as dg", "dg.id_detallegrado", "oe.id_detallegrado")
+      .innerJoin("periodo_academico as p", "p.id_periodo", "oe.id_periodo")
+      .innerJoin("docente as d", "d.id_docente", "dg.id_docente")
+      .leftJoin("usuario as u", "u.id_usuario", "d.id_usuario")
+      .select("p.id_anio")
+      .distinct()
+      .where(teacherCondition)
+      .where("p.id_colegio", "=", schoolId);
+
+    const teacherYears = await q1.union(q2).union(q3).union(q4).union(q5).execute();
+    teacherYears.forEach((r) => {
+      if (r.id_anio !== null) eligibleYearIds.add(Number(r.id_anio));
+    });
   }
 
   // Filter out any academic years that ended before the user was registered
   if (eligibleYearIds.size > 0) {
-    const validYearsRes = await sql<{ id_anio: number }>`
-      SELECT al.id_anio
-      FROM anio_lectivo al
-      LEFT JOIN usuario u ON u.id_usuario = ${userId}
-      WHERE al.id_anio = ANY(${Array.from(eligibleYearIds)}::int[])
-        AND (
-          u.fecha_creacion IS NULL OR
-          NOT (
-            EXTRACT(YEAR FROM u.fecha_creacion) > NULLIF(regexp_replace(al.calendario, '\\D', '', 'g'), '')::int
-            OR (al.fecha_fin IS NOT NULL AND DATE(u.fecha_creacion) > al.fecha_fin)
+    const eligibleArr = Array.from(eligibleYearIds);
+    const validYearsRes = await db
+      .selectFrom("anio_lectivo as al")
+      .leftJoin("usuario as u", (join) => join.on("u.id_usuario", "=", userId))
+      .select("al.id_anio")
+      .where("al.id_anio", "in", eligibleArr)
+      .where((eb) =>
+        eb.or([
+          eb("u.fecha_creacion", "is", null),
+          eb.not(
+            eb.or([
+              sql<boolean>`EXTRACT(YEAR FROM u.fecha_creacion) > NULLIF(regexp_replace(al.calendario, '\\D', '', 'g'), '')::int`,
+              eb.and([
+                eb("al.fecha_fin", "is not", null),
+                sql<boolean>`DATE(u.fecha_creacion) > al.fecha_fin`
+              ])
+            ])
           )
-        )
-    `.execute(db);
+        ])
+      )
+      .execute();
     eligibleYearIds.clear();
-    validYearsRes.rows.forEach(r => eligibleYearIds.add(Number(r.id_anio)));
+    validYearsRes.forEach((r) => eligibleYearIds.add(Number(r.id_anio)));
   }
 
   // Fallback: If no history found or filtered out, return active open year valid for creation date
   if (eligibleYearIds.size === 0) {
-    const openYear = await sql<{ id_anio: number }>`
-      SELECT al.id_anio
-      FROM anio_lectivo al
-      LEFT JOIN usuario u ON u.id_usuario = ${userId}
-      WHERE al.id_colegio = ${schoolId}
-        AND (
-          u.fecha_creacion IS NULL OR
-          NOT (
-            EXTRACT(YEAR FROM u.fecha_creacion) > NULLIF(regexp_replace(al.calendario, '\\D', '', 'g'), '')::int
-            OR (al.fecha_fin IS NOT NULL AND DATE(u.fecha_creacion) > al.fecha_fin)
+    const openYear = await db
+      .selectFrom("anio_lectivo as al")
+      .leftJoin("usuario as u", (join) => join.on("u.id_usuario", "=", userId))
+      .select("al.id_anio")
+      .where("al.id_colegio", "=", schoolId)
+      .where((eb) =>
+        eb.or([
+          eb("u.fecha_creacion", "is", null),
+          eb.not(
+            eb.or([
+              sql<boolean>`EXTRACT(YEAR FROM u.fecha_creacion) > NULLIF(regexp_replace(al.calendario, '\\D', '', 'g'), '')::int`,
+              eb.and([
+                eb("al.fecha_fin", "is not", null),
+                sql<boolean>`DATE(u.fecha_creacion) > al.fecha_fin`
+              ])
+            ])
           )
-        )
-      ORDER BY CASE WHEN al.estado = 'ABIERTO' THEN 0 ELSE 1 END, al.id_anio DESC
-      LIMIT 1
-    `.execute(db);
-    if (openYear.rows.length > 0) {
-      eligibleYearIds.add(Number(openYear.rows[0].id_anio));
+        ])
+      )
+      .orderBy(sql`CASE WHEN al.estado = 'ABIERTO' THEN 0 ELSE 1 END`, "asc")
+      .orderBy("al.id_anio", "desc")
+      .limit(1)
+      .executeTakeFirst();
+
+    if (openYear) {
+      eligibleYearIds.add(Number(openYear.id_anio));
     }
   }
 
