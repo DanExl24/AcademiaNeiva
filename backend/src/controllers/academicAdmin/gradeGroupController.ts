@@ -977,97 +977,111 @@ export const getAcademicSettingsData = async (req: Request, res: Response): Prom
 
       // 6: competenciesRes
       includeCompetencies
-        ? sql<any[]>`SELECT
-             c.id_competencia,
-             c.id_grupo,
-             c.id_materia,
-             c.id_periodo,
-             c.descripcion,
-             c.id_dimension,
-             dp.nombre AS dimension_nombre,
-             EXISTS (
-               SELECT 1 
-               FROM colegio_version_curricular cvc
-               WHERE cvc.id_colegio = c.id_colegio
-                 AND (
-                   cvc.area = m.nombre
-                   OR (tg.nombre = 'TRANSICION' AND cvc.area = 'Desarrollo Integral' AND m.nombre = 'Desarrollo Integral (Transición)')
-                   OR (tg.nombre = 'TRANSICION' AND cvc.area = 'Desarrollo Integral (Transición)' AND m.nombre = 'Desarrollo Integral')
-                   OR (tg.nombre = 'TRANSICION' AND cvc.area = 'Transición' AND m.nombre = 'Desarrollo Integral')
-                 )
-                 AND cvc.grado = tg.nombre
-             ) AS usa_dba,
-             CASE
-               WHEN EXISTS (
-                 SELECT 1
-                 FROM competencias c2
-                 JOIN grupos g2 ON g2.id_grupo = c2.id_grupo
-                 WHERE c2.id_colegio = c.id_colegio
-                   AND c2.id_materia = c.id_materia
-                   AND c2.id_periodo = c.id_periodo
-                   AND g2.id_tipo_grado = g.id_tipo_grado
-                   AND UPPER(TRIM(TRAILING '.' FROM c2.descripcion)) <> UPPER(TRIM(TRAILING '.' FROM ${DEFAULT_COMPETENCY_TEXT}))
-               ) THEN 'DEFINIDA'
-               ELSE 'PENDIENTE'
-             END AS estado,
-             m.nombre AS materia_nombre,
-             p.nombre AS periodo_nombre,
-             ne.nombre AS nivel_nombre,
-             tg.nombre AS tipo_grado_nombre,
-             s.nombre AS seccion_nombre,
-             j.nombre AS jornada_nombre,
-             COALESCE(
-               (
-                 SELECT json_agg(
-                   json_build_object(
-                     'id_evidencia', ev.id_evidencia,
-                     'descripcion',  ev.descripcion,
-                     'orden',        ev.orden,
-                     'id_evidencia_dba', ev.id_evidencia_dba,
-                     'numero_dba',   d.numero_dba,
-                     'dba_enunciado', d.enunciado
-                   )
-                   ORDER BY ev.orden, ev.id_evidencia
-                 )
-                 FROM evidencia_aprendizaje ev
-                 LEFT JOIN evidencias_dba edba ON edba.id_evidencia_dba = ev.id_evidencia_dba
-                 LEFT JOIN dba d ON d.id_dba = edba.id_dba
-                 WHERE ev.id_competencia = c.id_competencia
-               ),
-               '[]'::json
-             ) AS evidencias
-           FROM competencias c
-           JOIN materias m ON m.id_materia = c.id_materia
-           JOIN periodo_academico p ON p.id_periodo = c.id_periodo
-           JOIN grupos g ON g.id_grupo = c.id_grupo
-           JOIN tipo_grado tg ON tg.id_tipo_grado = g.id_tipo_grado
-           JOIN nivel_escolar ne ON ne.id_nivel = tg.id_nivel
-           JOIN secciones s ON s.id_seccion = g.id_seccion
-           JOIN jornada j ON j.id_jornada = g.id_jornada
-           LEFT JOIN dimensiones_preescolar dp ON dp.id_dimension = c.id_dimension
-           WHERE c.id_colegio = ${schoolId}
-             AND c.id_anio = ${currentYearId}
-           ORDER BY p.id_periodo, ne.nombre, tg.nombre, m.nombre`.execute(db).then((r) => r.rows)
+        ? db
+            .selectFrom("competencias as c")
+            .innerJoin("materias as m", "m.id_materia", "c.id_materia")
+            .innerJoin("periodo_academico as p", "p.id_periodo", "c.id_periodo")
+            .innerJoin("grupos as g", "g.id_grupo", "c.id_grupo")
+            .innerJoin("tipo_grado as tg", "tg.id_tipo_grado", "g.id_tipo_grado")
+            .innerJoin("nivel_escolar as ne", "ne.id_nivel", "tg.id_nivel")
+            .innerJoin("secciones as s", "s.id_seccion", "g.id_seccion")
+            .innerJoin("jornada as j", "j.id_jornada", "g.id_jornada")
+            .leftJoin("dimensiones_preescolar as dp", "dp.id_dimension", "c.id_dimension")
+            .select([
+              "c.id_competencia",
+              "c.id_grupo",
+              "c.id_materia",
+              "c.id_periodo",
+              "c.descripcion",
+              "c.id_dimension",
+              "dp.nombre as dimension_nombre",
+              sql<boolean>`EXISTS (
+                SELECT 1 
+                FROM colegio_version_curricular cvc
+                WHERE cvc.id_colegio = c.id_colegio
+                  AND (
+                    cvc.area = m.nombre
+                    OR (tg.nombre = 'TRANSICION' AND cvc.area = 'Desarrollo Integral' AND m.nombre = 'Desarrollo Integral (Transición)')
+                    OR (tg.nombre = 'TRANSICION' AND cvc.area = 'Desarrollo Integral (Transición)' AND m.nombre = 'Desarrollo Integral')
+                    OR (tg.nombre = 'TRANSICION' AND cvc.area = 'Transición' AND m.nombre = 'Desarrollo Integral')
+                  )
+                  AND cvc.grado = tg.nombre
+              )`.as("usa_dba"),
+              sql<string>`CASE
+                WHEN EXISTS (
+                  SELECT 1
+                  FROM competencias c2
+                  JOIN grupos g2 ON g2.id_grupo = c2.id_grupo
+                  WHERE c2.id_colegio = c.id_colegio
+                    AND c2.id_materia = c.id_materia
+                    AND c2.id_periodo = c.id_periodo
+                    AND g2.id_tipo_grado = g.id_tipo_grado
+                    AND UPPER(TRIM(TRAILING '.' FROM c2.descripcion)) <> UPPER(TRIM(TRAILING '.' FROM ${DEFAULT_COMPETENCY_TEXT}))
+                ) THEN 'DEFINIDA'
+                ELSE 'PENDIENTE'
+              END`.as("estado"),
+              "m.nombre as materia_nombre",
+              "p.nombre as periodo_nombre",
+              "ne.nombre as nivel_nombre",
+              "tg.nombre as tipo_grado_nombre",
+              "s.nombre as seccion_nombre",
+              "j.nombre as jornada_nombre",
+              sql<any>`COALESCE(
+                (
+                  SELECT json_agg(
+                    json_build_object(
+                      'id_evidencia', ev.id_evidencia,
+                      'descripcion',  ev.descripcion,
+                      'orden',        ev.orden,
+                      'id_evidencia_dba', ev.id_evidencia_dba,
+                      'numero_dba',   d.numero_dba,
+                      'dba_enunciado', d.enunciado
+                    )
+                    ORDER BY ev.orden, ev.id_evidencia
+                  )
+                  FROM evidencia_aprendizaje ev
+                  LEFT JOIN evidencias_dba edba ON edba.id_evidencia_dba = ev.id_evidencia_dba
+                  LEFT JOIN dba d ON d.id_dba = edba.id_dba
+                  WHERE ev.id_competencia = c.id_competencia
+                ),
+                '[]'::json
+              )`.as("evidencias")
+            ])
+            .where("c.id_colegio", "=", schoolId)
+            .where("c.id_anio", "=", currentYearId)
+            .orderBy("p.id_periodo", "asc")
+            .orderBy("ne.nombre", "asc")
+            .orderBy("tg.nombre", "asc")
+            .orderBy("m.nombre", "asc")
+            .execute()
         : Promise.resolve([]),
 
       // 7: closureSummaryRes
       includeClosures
-        ? sql<any[]>`SELECT
-             p.id_periodo,
-             p.nombre,
-             p.estado,
-             COUNT(DISTINCT dg.id_detallegrado)::int AS total_asignaciones,
-             COUNT(DISTINCT CASE WHEN cm.estado = 'CERRADO' THEN cm.id_detallegrado END)::int AS asignaciones_cerradas
-           FROM periodo_academico p
-           LEFT JOIN detalle_grados dg
-             ON dg.id_colegio = p.id_colegio
-            AND dg.id_grupo IS NOT NULL
-           LEFT JOIN cierre_materia cm
-             ON cm.id_periodo = p.id_periodo
-            AND cm.id_detallegrado = dg.id_detallegrado
-           WHERE p.id_colegio = ${schoolId} AND p.id_anio = ${currentYearId}
-           GROUP BY p.id_periodo
-           ORDER BY p.id_periodo`.execute(db).then((r) => r.rows)
+        ? db
+            .selectFrom("periodo_academico as p")
+            .leftJoin("detalle_grados as dg", (join) =>
+              join
+                .onRef("dg.id_colegio", "=", "p.id_colegio")
+                .on("dg.id_grupo", "is not", null)
+            )
+            .leftJoin("cierre_materia as cm", (join) =>
+              join
+                .onRef("cm.id_periodo", "=", "p.id_periodo")
+                .onRef("cm.id_detallegrado", "=", "dg.id_detallegrado")
+            )
+            .select([
+              "p.id_periodo",
+              "p.nombre",
+              "p.estado",
+              sql<number>`COUNT(DISTINCT dg.id_detallegrado)::int`.as("total_asignaciones"),
+              sql<number>`COUNT(DISTINCT CASE WHEN cm.estado = 'CERRADO' THEN cm.id_detallegrado END)::int`.as("asignaciones_cerradas")
+            ])
+            .where("p.id_colegio", "=", schoolId)
+            .where("p.id_anio", "=", currentYearId)
+            .groupBy(["p.id_periodo", "p.nombre", "p.estado"])
+            .orderBy("p.id_periodo", "asc")
+            .execute()
         : Promise.resolve([]),
 
       // 8: dimensionsRes
